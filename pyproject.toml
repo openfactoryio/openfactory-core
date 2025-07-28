@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openfactory"
+version = "0.4.0"
+dependencies = [
+    # Core utilities
+    "click",
+    "pandas",
+    "pydantic",
+    "pyyaml",
+    "python-dotenv",
+
+    # Networking and protocols
+    "asyncua",
+    "confluent-kafka",
+    "httpx[http2]",
+    "paramiko",
+
+    # Infrastructure / Integration
+    "docker",
+    "fsspec",
+    "influxdb-client",
+    "PyGithub",
+
+    # Custom Git dependency
+    "mtc2kafka @ git+https://github.com/rwuthric/python-mtc2kafka.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8"
+]
+
+[tool.setuptools]
+include-package-data = true 
+
+[tool.setuptools.packages]
+find = { where = ["."], include = ["openfactory", "openfactory.*"] }
+
+[project.scripts]
+ofa = "openfactory.ofacli:main"

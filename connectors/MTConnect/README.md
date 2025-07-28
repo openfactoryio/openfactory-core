@@ -75,11 +75,13 @@ Then run it:
 ```bash
 docker run --network factory-net \
   -e KAFKA_BROKER=broker:29092 \
-  -e MTC_AGENT=http://192.168.1.10:5000 \
+  -e MTC_AGENT=https://demo.mtconnect.org \
   -e KAFKA_PRODUCER_UUID=device-001-producer \
   kafka-mtc-producer
 ```
 > 🧠 The `broker:29092` endpoint refers to the internal Kafka listener exposed inside the `factory-net` Docker network.
+>
+> 🧠 https://demo.mtconnect.org is a demo agent run by the MTConnect institute.
 
 ---
 
@@ -90,7 +92,7 @@ For use in CI or production deployments:
 ```bash
 docker run --network factory-net \
   -e KAFKA_BROKER=broker:29092 \
-  -e MTC_AGENT=http://192.168.1.10:5000 \
+  -e MTC_AGENT=https://demo.mtconnect.org \
   -e KAFKA_PRODUCER_UUID=device-001-producer \
   ghcr.io/openfactoryio/kafka-mtc-producer
 ```

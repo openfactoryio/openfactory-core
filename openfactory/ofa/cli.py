@@ -62,6 +62,7 @@ device.add_command(ofa.device.click_connect_influxdb)
 
 apps.add_command(ofa.app.click_up)
 apps.add_command(ofa.app.click_down)
+apps.add_command(ofa.app.click_ls)
 
 asset.add_command(ofa.asset.register)
 asset.add_command(ofa.asset.deregister)

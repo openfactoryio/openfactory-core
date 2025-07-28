@@ -1,0 +1,59 @@
+<!-- =======================================
+       MTConnect Device file for TEST CNC
+     ======================================= -->
+
+
+<MTConnectDevices>
+  <Devices>
+    <Device uuid="TEST_CNC-GEN" id="device" name="TestCNC">
+      <!-- General information -->
+      <Description manufacturer="OpenFactory"/>
+      <DataItems>
+        <DataItem category="EVENT" id="avail" type="AVAILABILITY"/>
+      </DataItems>
+
+      <!-- Components -->
+      <Components>
+
+        <!-- Axes -->
+        <Axes id="axes" name="Axes">
+          <Components>
+            <Linear id="X-axis" name="X">
+              <DataItems>
+                <DataItem category="SAMPLE" id="Xact" name="Xact" nativeUnits="MILLIMETER" subType="ACTUAL" type="POSITION" units="MILLIMETER"/>
+              </DataItems>
+            </Linear>
+            <Linear id="Y-axis" name="Y">
+              <DataItems>
+                <DataItem category="SAMPLE" id="Yact" name="Yact" nativeUnits="MILLIMETER" subType="ACTUAL" type="POSITION" units="MILLIMETER"/>
+              </DataItems>
+            </Linear>
+            <Linear id="Z-axis" name="Z">
+              <DataItems>
+                <DataItem category="SAMPLE" id="Zact" name="Zact" nativeUnits="MILLIMETER" subType="ACTUAL" type="POSITION" units="MILLIMETER"/>
+              </DataItems>
+            </Linear>
+            <Spindle id="Spindle" name="S">
+              <DataItems>
+                <DataItem category="SAMPLE" id="Sspeed" name="Sspeed" type="SPINDLE_SPEED" nativeUnits="REVOLUTION/MINUTE" subType="ACTUAL" units="REVOLUTION/MINUTE"/>
+              </DataItems>
+            </Spindle>
+          </Components>
+        </Axes>
+
+        <!-- Controller -->
+        <Controller id="ctrl" name="controller">
+          <Components>
+            <!-- State of the controller -->
+            <Path id="path" name="path">
+              <DataItems>
+                <DataItem category="SAMPLE" id="Frt" nativeUnits="MILLIMETER/MINUTE" subType="ACTUAL" type="PATH_FEEDRATE" units="MILLIMETER/SECOND"/>
+              </DataItems>
+            </Path>
+          </Components>
+        </Controller>
+
+      </Components>
+    </Device>
+  </Devices>
+</MTConnectDevices>

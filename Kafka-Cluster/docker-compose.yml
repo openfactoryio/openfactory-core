@@ -1,0 +1,138 @@
+# ------------------------------------------------------------------------------
+# Kafka Development Environment (Single Broker, KRaft Mode)
+# ------------------------------------------------------------------------------
+# This Docker Compose file sets up a **development-only** Kafka environment using
+# a single broker in **KRaft (Kafka Raft Metadata mode)**.
+#
+# Included Components:
+# - **Kafka Broker** with JMX monitoring via Prometheus agent
+# - **ksqlDB Server** and CLI for stream processing
+# - **Prometheus JMX Exporter** for Kafka and ksqlDB metrics
+#
+# Notes:
+# - This setup is not suitable for production use.
+# - Data volumes are *not* marked as external by default (can be enabled).
+# - JMX metrics are exposed on ports 9101 (Kafka) and 9102 (ksqlDB).
+#
+# References:
+# - Quickstart: https://developer.confluent.io/quickstart/kafka-docker/
+# - Source Example: https://github.com/confluentinc/cp-all-in-one/blob/7.5.0-post/cp-all-in-one-kraft/docker-compose.yml
+# - Monitoring: https://docs.confluent.io/platform/current/installation/docker/operations/monitoring.html
+# ------------------------------------------------------------------------------
+
+services:
+
+  init:
+    # gets jmx-agent from repo
+    image: busybox
+    container_name: init
+    volumes:
+      - jmx-agent:/mnt
+    entrypoint: sh -c 'wget -O /mnt/jmx_prometheus_javaagent.jar https://repo.maven.apache.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/1.0.1/jmx_prometheus_javaagent-1.0.1.jar'
+
+  broker:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: broker
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      # https://docs.confluent.io/platform/current/installation/docker/config-reference.html#ak-configuration
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://$HOST_IP:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      EXTRA_ARGS: '-javaagent:/mnt/jmx_prometheus_javaagent.jar=9101:/etc/kafka/kafka_broker_config.yml'
+      # To generate a new CLUSTER_ID if desired:
+      #   docker run --rm confluentinc/cp-kafka:7.7.0 kafka-storage random-uuid
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2QkhjfdKKFDdSML'
+    volumes:
+      - ./jmx-exporter/kafka_broker_config.yml:/etc/kafka/kafka_broker_config.yml
+      - jmx-agent:/mnt
+      - kafka-data:/var/lib/kafka/data
+      - kafka-metadata:/var/lib/kafka/metadata
+    networks:
+      - factory-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:7.7.0
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    depends_on:
+      broker:
+         condition: service_healthy
+    ports:
+      - "8088:8088"
+      - "9102:9102"
+    environment:
+      # https://docs.confluent.io/platform/current/installation/docker/config-reference.html#ksqldb-server-configuration
+      KSQL_OPTS: '-javaagent:/mnt/jmx_prometheus_javaagent.jar=9102:/etc/kafka/ksqldb_config.yml'
+      KSQL_CONFIG_DIR: "/etc/ksql"
+      KSQL_BOOTSTRAP_SERVERS: "broker:29092"
+      KSQL_HOST_NAME: ksqldb-server
+      KSQL_LISTENERS: "http://0.0.0.0:8088"
+      KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+      KSQL_KSQL_CONNECT_URL: "http://connect:8083"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+      KSQL_KSQL_SERVICE_ID: ofa_
+    volumes:
+      - ./jmx-exporter/ksqldb_config.yml:/etc/kafka/ksqldb_config.yml
+      - jmx-agent:/mnt
+    healthcheck:
+      test: nc -z localhost 8088 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - factory-net
+
+  ksqldb-cli:
+    # To run interactively:
+    # docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+    image: confluentinc/cp-ksqldb-cli:7.7.0
+    container_name: ksqldb-cli
+    depends_on:
+      broker:
+         condition: service_healthy
+      ksqldb-server:
+         condition: service_healthy
+    environment:
+      - KSQL_START_SCRIPTS=mtcdevices.sql:ofacmds.sql:assets_uns.sql
+      - KSQL_URL=http://ksqldb-server:8088
+    volumes:
+      - "./scripts:/home/appuser/scripts"
+    entrypoint: bash -c "source ./scripts/start_ksql.sh; tail -F anything"
+    tty: true
+    networks:
+      - factory-net
+
+networks:
+  factory-net:
+    name: factory-net
+    external: true
+
+volumes:
+  kafka-data:
+#    external: true
+  kafka-metadata:
+#    external: true
+  jmx-agent:
+#    external: true

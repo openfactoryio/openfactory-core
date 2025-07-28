@@ -1,0 +1,62 @@
+# ------------------------------------------------------------------------------
+# Kafka Monitoring Stack (Prometheus + Grafana)
+# ------------------------------------------------------------------------------
+# This Docker Compose file sets up a monitoring stack for the Kafka development
+# cluster using Prometheus and Grafana. It scrapes metrics from:
+#   - Kafka broker (JMX exporter on port 9101)
+#   - ksqlDB server (JMX exporter on port 9102)
+#
+# Services:
+#   - Prometheus: Scrapes JMX metrics and exposes them at http://localhost:9090
+#   - Grafana:    Dashboards and visualization at http://localhost:9300
+#
+# Pre-configured dashboards are mounted from:
+#   ./grafana/dashboards/
+# and provisioned using:
+#   ./grafana/provisioning/
+#
+# Prometheus config is located at:
+#   ./prometheus/prometheus.yml
+#
+# All services are connected to the shared 'factory-net' Docker network so they
+# can access Kafka and ksqlDB containers.
+#
+# To start the monitoring stack:
+#   docker compose up -d
+#
+# Grafana login:
+#   - URL: http://localhost:9300
+#   - Default credentials: admin / admin (you'll be prompted to change on login)
+#
+# ------------------------------------------------------------------------------
+
+services:
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - factory-net
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    environment:
+      GF_PATHS_CONFIG: /etc/grafana/config.ini
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/config.ini:/etc/grafana/config.ini
+    ports:
+      - "9300:3000"
+    networks:
+      - factory-net
+
+networks:
+  factory-net:
+    name: factory-net
+    external: true

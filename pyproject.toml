@@ -35,6 +35,14 @@ dev = [
     "flake8"
 ]
 
+docs = [
+    "sphinx",
+    "myst-parser",
+    "pydata-sphinx-theme",
+    "sphinx-autodoc-typehints",
+    "sphinx-design"
+]
+
 [tool.setuptools]
 include-package-data = true 
 

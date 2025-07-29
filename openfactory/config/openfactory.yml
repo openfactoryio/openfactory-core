@@ -50,13 +50,6 @@ KSQLDB_URL: ${KSQLDB_URL}
 
 MTCONNECT_AGENT_IMAGE: ghcr.io/demo-smart-factory-concordia-university/mtcagent:v2.5.0.4
 MTCONNECT_PRODUCER_IMAGE: ghcr.io/demo-smart-factory-concordia-university/kafka-mtc-producer:${OPENFACTORY_VERSION}
-INFLUXDB_CONNECTOR_IMAGE: ghcr.io/demo-smart-factory-concordia-university/influxdb_connector:latest
-
-# ---------------------------------------------------------------------------
-# InfluxDB related configurations
-
-INFLUXDB_URL: ${INFLUXDB_URL}
-INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
 
 # Colors for ofa cli
 OFA_SUCCSESS: "\e[0;32m"   # Green for success

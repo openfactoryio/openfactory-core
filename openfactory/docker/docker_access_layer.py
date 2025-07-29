@@ -47,10 +47,8 @@ class DockerAccesLayer:
             self.docker_client: Initialized Docker client instance.
             self.worker_token: Worker join token or 'UNAVAILABLE'.
             self.manager_token: Manager join token or 'UNAVAILABLE'.
-            self.ip: IP address of the manager node.
         """
         self.docker_url = config.OPENFACTORY_MANAGER_NODE_DOCKER_URL
-        self.ip = config.OPENFACTORY_MANAGER_NODE
         self.docker_client = docker.DockerClient(base_url=self.docker_url)
         if 'JoinTokens' not in self.docker_client.swarm.attrs:
             user_notify.warning(f'WARNING: Docker running on {config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} is not a Swarm manager')

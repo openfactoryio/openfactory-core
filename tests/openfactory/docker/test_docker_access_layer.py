@@ -13,7 +13,6 @@ class TestDockerAccessLayer(unittest.TestCase):
     def test_connect_success(self, mock_docker_client, mock_config):
         """ Test successful connection to Docker engine in Swarm mode """
         mock_config.OPENFACTORY_MANAGER_NODE_DOCKER_URL = 'tcp://127.0.0.1:2375'
-        mock_config.OPENFACTORY_MANAGER_NODE = '127.0.0.1'
         mock_swarm_attrs = {
             'JoinTokens': {
                 'Worker': 'worker-token',
@@ -26,7 +25,6 @@ class TestDockerAccessLayer(unittest.TestCase):
         dal.connect()
 
         self.assertEqual(dal.docker_url, 'tcp://127.0.0.1:2375')
-        self.assertEqual(dal.ip, '127.0.0.1')
         self.assertEqual(dal.worker_token, 'worker-token')
         self.assertEqual(dal.manager_token, 'manager-token')
 

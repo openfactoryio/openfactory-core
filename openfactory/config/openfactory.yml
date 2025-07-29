@@ -20,9 +20,6 @@ OPENFACTORY_UNS_SCHEMA: ${OPENFACTORY_UNS_SCHEMA}
 # OpenFactory User
 OPENFACTORY_USER: openfactory
 
-# OpenFactory Manager Node
-OPENFACTORY_MANAGER_NODE: ${MANAGER_NODE_IP}
-
 # OpenFactory Manager Node Docker URL
 
 # Use Docker running on the host via Unix socket

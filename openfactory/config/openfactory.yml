@@ -4,6 +4,8 @@
 # General configurations
 
 # OpenFactory Version
+# This value is injected automatically by OpenFactory at runtime.
+# DO NOT set OPENFACTORY_VERSION manually.
 OPENFACTORY_VERSION: ${OPENFACTORY_VERSION}
 
 # OpenFactory Log Level

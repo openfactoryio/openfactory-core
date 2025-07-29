@@ -67,6 +67,7 @@ apps.add_command(ofa.app.click_ls)
 asset.add_command(ofa.asset.register)
 asset.add_command(ofa.asset.deregister)
 asset.add_command(ofa.asset.click_ls)
+asset.add_command(ofa.asset.click_inspect)
 
 
 @cli.command(name='version')

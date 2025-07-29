@@ -34,9 +34,6 @@ OPENFACTORY_NETWORK: factory-net
 # Traefik configurations
 OPENFACTORY_DOMAIN: ${OPENFACTORY_DOMAIN}
 
-# OpenFactory Database
-SQL_ALCHEMY_CONN: ${SQL_ALCHEMY_CONN}
-
 # ---------------------------------------------------------------------------
 # Kafka related configurations
 

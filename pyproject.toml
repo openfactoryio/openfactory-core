@@ -32,7 +32,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "flake8"
+    "flake8",
+    "tomlkit",
 ]
 
 docs = [
@@ -40,7 +41,7 @@ docs = [
     "myst-parser",
     "pydata-sphinx-theme",
     "sphinx-autodoc-typehints",
-    "sphinx-design"
+    "sphinx-design",
 ]
 
 [tool.setuptools]

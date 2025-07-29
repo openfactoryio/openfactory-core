@@ -58,6 +58,7 @@ agent.add_command(ofa.agent.ls)
 
 device.add_command(ofa.device.click_up)
 device.add_command(ofa.device.click_down)
+device.add_command(ofa.device.click_ls)
 device.add_command(ofa.device.click_connect_influxdb)
 
 apps.add_command(ofa.app.click_up)

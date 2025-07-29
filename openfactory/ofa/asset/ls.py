@@ -1,4 +1,4 @@
-""" ofa app ls command. """
+""" ofa asset ls command. """
 
 import click
 from rich import box
@@ -11,26 +11,28 @@ from openfactory.ofa.ksqldb import ksql
 
 @click.command(name='ls')
 def click_ls() -> None:
-    """ List deployed OpenFactory applications. """
+    """ List deployed OpenFactory assets. """
     ofa = OpenFactory(ksqlClient=ksql.client)
 
     console = Console()
     table = Table(
-        title="Deployed Apps",
+        title="Deployed Assets",
         title_justify="left",
         box=box.HORIZONTALS,
         show_lines=True)
 
     table.add_column("Asset UUID", style="cyan", no_wrap=True)
     table.add_column("Availability", justify="left")
-    table.add_column("Vendor", justify="left")
-    table.add_column("Version", justify="left")
-    table.add_column("License", justify="left")
+    table.add_column("Type", justify="left")
+    table.add_column("Docker container", justify="left")
 
-    for app in ofa.applications():
+    for asset in ofa.assets():
 
         # Availability of device
-        availability = app.avail.value.upper()
+        if asset.type == 'MTConnectAgent':
+            availability = asset.agent_avail.value.upper()
+        else:
+            availability = asset.avail.value.upper()
         if availability == "AVAILABLE":
             status = Text("AVAILABLE", style="bold green")
         elif availability == "UNAVAILABLE":
@@ -38,10 +40,9 @@ def click_ls() -> None:
         else:
             status = Text(availability, style="yellow")
 
-        table.add_row(app.asset_uuid,
+        table.add_row(asset.asset_uuid,
                       status,
-                      app.application_manufacturer.value,
-                      app.application_version.value,
-                      app.application_license.value)
+                      asset.type,
+                      asset.DockerService.value)
 
     console.print(table)

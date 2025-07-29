@@ -28,6 +28,7 @@ from pathlib import Path
 import sys
 from tomlkit import parse, dumps
 
+
 def bump_version(version: str) -> None:
     """
     Update the version string in pyproject.toml.

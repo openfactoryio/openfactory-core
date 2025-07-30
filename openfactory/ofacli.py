@@ -15,6 +15,7 @@ or (during development)
 """
 
 import sys
+import socket
 import paramiko.ssh_exception
 from openfactory.ofa.cli import cli
 from openfactory.models.user_notifications import user_notify
@@ -36,7 +37,8 @@ def init_environment() -> bool:
     try:
         dal.connect()
     except (paramiko.ssh_exception.AuthenticationException,
-            paramiko.ssh_exception.NoValidConnectionsError) as e:
+            paramiko.ssh_exception.NoValidConnectionsError,
+            socket.gaierror) as e:
         user_notify.fail(f"Connection to {Config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} failed: {e}")
         return False
 

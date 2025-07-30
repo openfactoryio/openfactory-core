@@ -28,7 +28,7 @@ class TestOpenFactoryCluster(TestCase):
         dal.docker_client.info = Mock(return_value={})
         dal.docker_client.nodes.list = Mock(return_value=[])
         dal.docker_url = 'manager node url'
-        dal.ip = 'manager node ip'
+        dal.leader_ip = 'manager node ip'
         dal.worker_token = 'worker token'
         dal.manager_token = 'manager token'
 

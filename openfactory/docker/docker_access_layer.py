@@ -23,7 +23,7 @@ class DockerAccesLayer:
             docker_url (Optional[str]): The URL used to connect to the Docker daemon.
             worker_token (Optional[str]): The token used for joining workers to the Swarm.
             manager_token (Optional[str]): The token used for joining managers to the Swarm.
-            ip (Optional[str]): IP address of the OpenFactory manager node.
+            leader_ip (Optional[str]): IP address of the leader manager node.
         """
         self.docker_client: Optional[docker.DockerClient] = None
         self.docker_url: Optional[str] = None
@@ -47,16 +47,35 @@ class DockerAccesLayer:
             self.docker_client: Initialized Docker client instance.
             self.worker_token: Worker join token or 'UNAVAILABLE'.
             self.manager_token: Manager join token or 'UNAVAILABLE'.
+            self.leader_ip: IP address of the leader manager node.
         """
         self.docker_url = config.OPENFACTORY_MANAGER_NODE_DOCKER_URL
-        self.docker_client = docker.DockerClient(base_url=self.docker_url)
-        if 'JoinTokens' not in self.docker_client.swarm.attrs:
+
+        try:
+            self.docker_client = docker.DockerClient(base_url=self.docker_url)
+            swarm_attrs = self.docker_client.swarm.attrs
+        except docker.errors.DockerException as e:
+            user_notify.warning(f"ERROR: Could not connect to Docker at {self.docker_url}: {e}")
+            self.worker_token = 'UNAVAILABLE'
+            self.manager_token = 'UNAVAILABLE'
+            return
+
+        if 'JoinTokens' not in swarm_attrs:
             user_notify.warning(f'WARNING: Docker running on {config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} is not a Swarm manager')
             self.worker_token = 'UNAVAILABLE'
             self.manager_token = 'UNAVAILABLE'
             return
         self.worker_token = self.docker_client.swarm.attrs['JoinTokens']['Worker']
         self.manager_token = self.docker_client.swarm.attrs['JoinTokens']['Manager']
+
+        self.leader_ip = None
+        for node in self.docker_client.nodes.list():
+            if node.attrs['Spec']['Role'] == 'manager' and node.attrs['ManagerStatus']['Leader']:
+                self.leader_ip = node.attrs['Status']['Addr']
+                break
+
+        if not self.leader_ip:
+            user_notify.warning("WARNING: Could not determine the leader manager node IP.")
 
     def get_node_name_labels(self) -> List[str]:
         """

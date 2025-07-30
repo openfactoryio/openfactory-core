@@ -105,7 +105,7 @@ class OpenFactoryCluster():
                 info = client.info()
                 if 'Swarm' in info and info['Swarm']['NodeID']:
                     continue
-                client.swarm.join([dal.ip], join_token=dal.manager_token)
+                client.swarm.join([dal.leader_ip], join_token=dal.manager_token)
                 self.add_label(manager, details)
                 user_notify.success(f'Node "{manager} ({ip})" setup')
             except (gaierror, paramiko.ssh_exception.NoValidConnectionsError, docker.errors.APIError) as err:
@@ -139,7 +139,7 @@ class OpenFactoryCluster():
                 info = client.info()
                 if 'Swarm' in info and info['Swarm']['NodeID']:
                     continue
-                client.swarm.join([dal.ip], join_token=dal.worker_token)
+                client.swarm.join([dal.leader_ip], join_token=dal.worker_token)
                 self.add_label(worker, details)
                 user_notify.success(f'Node "{worker} ({ip})" setup')
             except (gaierror, paramiko.ssh_exception.NoValidConnectionsError, docker.errors.APIError, docker.errors.DockerException) as err:

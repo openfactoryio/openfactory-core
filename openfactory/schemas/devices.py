@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field, ValidationError, field_validator, model_v
 from openfactory.models.user_notifications import user_notify
 from openfactory.config import load_yaml
 from openfactory.schemas.uns import UNSSchema
-import openfactory.config as config
 
 
 class ResourcesDefinition(BaseModel):
@@ -106,45 +105,12 @@ class Supervisor(BaseModel):
     deploy: Optional[Deploy] = None
 
 
-class InfluxDB(BaseModel):
-    """ InfluxDB configuration. """
-    url: str = None
-    organisation: str = None
-    token: str = None
-    bucket: str = None
-
-    def __init__(self, **kwargs: Dict):
-        """
-        Initialize the InfluxDB model.
-
-        Args:
-            **kwargs (Dict): Keyword arguments to initialize the model.
-
-        Raises:
-            ValueError: If 'url' or 'token' is not provided and not defined in the configuration.
-        """
-        super().__init__(**kwargs)
-
-        # Handle the 'url' fallback logic
-        if self.url is None:
-            if not hasattr(config, 'INFLUXDB_URL') or config.INFLUXDB_URL is None:
-                raise ValueError("Configuration error: 'url' is not provided, and 'INFLUXDB_URL' is not defined in openfactory.config")
-            self.url = config.INFLUXDB_URL
-
-        # Handle the 'token' fallback logic
-        if self.token is None:
-            if not hasattr(config, 'INFLUXDB_TOKEN') or config.INFLUXDB_TOKEN is None:
-                raise ValueError("Configuration error: 'token' is not provided, and 'INFLUXDB_TOKEN' is not defined in openfactory.config")
-            self.token = config.INFLUXDB_TOKEN
-
-
 class Device(BaseModel):
     """ OpenFactory Device Schema. """
     uuid: str
     agent: Agent
     supervisor: Optional[Supervisor] = None
     ksql_tables: Optional[List[str]] = None
-    influxdb: Optional[InfluxDB] = None
 
     model_config = {
         "extra": "ignore"

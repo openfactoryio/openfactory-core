@@ -9,65 +9,6 @@ from openfactory.schemas.devices import get_devices_from_config_file
 from openfactory.schemas.uns import UNSSchema
 
 
-class TestInfluxDB(unittest.TestCase):
-    """
-    Unit tests for class InfluxDB
-    """
-
-    @patch("openfactory.config.INFLUXDB_URL", "http://mock-url")
-    @patch("openfactory.config.INFLUXDB_TOKEN", "mock-token")
-    def test_default_values(self, *args):
-        """
-        Test if class InfluxDB assigns default values from config module
-        """
-        reload(devices)
-        from openfactory.schemas.devices import InfluxDB
-        influx_db = InfluxDB()
-
-        self.assertEqual(influx_db.url, "http://mock-url")
-        self.assertEqual(influx_db.token, "mock-token")
-        self.assertIsNone(influx_db.organisation)
-        self.assertIsNone(influx_db.bucket)
-
-    @patch("openfactory.config.INFLUXDB_URL", "http://mock-url")
-    @patch("openfactory.config.INFLUXDB_TOKEN", None)
-    def test_missing_token(self, *args):
-        """
-        Test when token is missing or None in config and not provided explicitly
-        """
-        reload(devices)
-        from openfactory.schemas.devices import InfluxDB
-        with self.assertRaises(ValueError) as context:
-            InfluxDB()
-        self.assertTrue("Configuration error: 'token' is not provided, and 'INFLUXDB_TOKEN' is not defined in openfactory.config" in str(context.exception))
-
-        # test case when INFLUXDB_TOKEN was never defined in config module
-        delattr(devices.config, 'INFLUXDB_TOKEN')
-        reload(devices)
-        with self.assertRaises(ValueError) as context:
-            InfluxDB()
-        self.assertTrue("Configuration error: 'token' is not provided, and 'INFLUXDB_TOKEN' is not defined in openfactory.config" in str(context.exception))
-
-    @patch("openfactory.config.INFLUXDB_URL", None)
-    @patch("openfactory.config.INFLUXDB_TOKEN", "mock-token")
-    def test_missing_url(self, *args):
-        """
-        Test when url is missing or None in config and not provided explicitly
-        """
-        reload(devices)
-        from openfactory.schemas.devices import InfluxDB
-        with self.assertRaises(ValueError) as context:
-            InfluxDB()
-        self.assertTrue("Configuration error: 'url' is not provided, and 'INFLUXDB_URL' is not defined in openfactory.config" in str(context.exception))
-
-        # test case when INFLUXDB_TOKEN was never defined in config module
-        delattr(devices.config, 'INFLUXDB_URL')
-        reload(devices)
-        with self.assertRaises(ValueError) as context:
-            InfluxDB()
-        self.assertTrue("Configuration error: 'url' is not provided, and 'INFLUXDB_URL' is not defined in openfactory.config" in str(context.exception))
-
-
 class TestGetDevicesFromConfigFile(unittest.TestCase):
     """
     Unit tests for get_devices_from_config_file function
@@ -96,8 +37,6 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
     def tearDown(self):
         os.remove(self.uns_schema_file.name)
 
-    @patch("openfactory.config.INFLUXDB_URL", "http://mock-url")
-    @patch("openfactory.config.INFLUXDB_TOKEN", "mock-token")
     def test_get_devices_from_config_file_valid(self, *args):
         """
         Test case where YAML configuration file is valid
@@ -136,8 +75,7 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                         "device_xml": "xml3",
                         "adapter": {"ip": "1.2.3.4", "port": 9092,
                                     "deploy": {"replicas": 3, "resources": {"reservations": {"cpus": 2}, "limits": {"cpus": 4}}}},
-                    },
-                    "influxdb": {},
+                    }
                 }
             }
         }
@@ -159,7 +97,6 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                             },
                         'supervisor': None,
                         'ksql_tables': [],
-                        'influxdb': None,
                         "uns": {
                             "levels": {
                                 "inc": "OpenFactory",
@@ -182,7 +119,6 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                             },
                         'supervisor': None,
                         'ksql_tables': None,
-                        'influxdb': None,
                         "uns": {
                             "levels": {
                                 "inc": "OpenFactory",
@@ -205,7 +141,6 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                             },
                         'supervisor': None,
                         'ksql_tables': None,
-                        'influxdb': {'url': 'http://mock-url', 'organisation': None, 'token': 'mock-token', 'bucket': None},
                         "uns": {
                             "levels": {
                                 "inc": "OpenFactory",

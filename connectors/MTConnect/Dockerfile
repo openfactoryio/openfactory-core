@@ -38,7 +38,7 @@ FROM python:3.13-slim
 LABEL author="Rolf Wuthrich" 
 LABEL organisation="Concordia University"
 LABEL description="Docker image for Kafka producer"
-LABEL documentation="https://github.com/openfactoryio/openfactory-dev/tree/main/connectors/MTConnect"
+LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main/connectors/MTConnect"
 
 ARG UNAME=producer
 ARG UID=1200

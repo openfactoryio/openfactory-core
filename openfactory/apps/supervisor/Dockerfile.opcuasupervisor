@@ -64,8 +64,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir git+https://github.com/Demo-Smart-Factory-Concordia-University/OpenFactory.git
-RUN pip install --no-cache-dir asyncua
+RUN pip install --no-cache-dir git+https://github.com/openfactoryio/openfactory-core.git
 
 # Set environment variable from build argument
 ENV APPLICATION_VERSION=${VERSION}

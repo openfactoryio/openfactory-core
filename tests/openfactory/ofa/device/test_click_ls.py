@@ -28,7 +28,6 @@ class TestClickDeviceLsCommand(unittest.TestCase):
 
         runner = CliRunner()
         result = runner.invoke(click_ls)
-        print(result.output)
 
         self.assertEqual(result.exit_code, 0)
         self.assertIn("dev-123", result.output)

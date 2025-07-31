@@ -23,7 +23,6 @@ dependencies = [
     # Infrastructure / Integration
     "docker",
     "fsspec",
-    "influxdb-client",
     "PyGithub",
 
     # Custom Git dependency

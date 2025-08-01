@@ -2,10 +2,36 @@
 
 import yaml
 import os
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 from importlib.metadata import version
 from typing import Any
+
+
+def expandvars_with_defaults(s: str) -> str:
+    """
+    Expands environment variables in the input string.
+
+    Replaces all occurrences of environment variables in the format `${VAR}` or `${VAR:-default}`
+    within the input string `s`. If the environment variable `VAR` is set, its value is used.
+    If it is not set and a default value is provided (`:-default`), the default is used.
+    If no default is provided and the variable is not set, it is replaced with an empty string.
+
+    Args:
+        s (str): The input string potentially containing environment variable expressions.
+
+    Returns:
+        str: The input string with environment variables expanded to their values or defaults.
+    """
+    pattern = re.compile(r'\$\{([^}:\s]+)(:-([^}]*))?\}')
+
+    def replacer(match):
+        var_name = match.group(1)
+        default_val = match.group(3) or ''
+        return os.environ.get(var_name, default_val)
+
+    return pattern.sub(replacer, s)
 
 
 def load_yaml(yaml_file: str) -> Any:
@@ -32,7 +58,7 @@ def load_yaml(yaml_file: str) -> Any:
     # Read raw YAML and expand env vars before parsing
     with open(yaml_file, 'r') as stream:
         raw_yaml = stream.read()
-        expanded_yaml = os.path.expandvars(raw_yaml)
+        expanded_yaml = expandvars_with_defaults(raw_yaml)
         return yaml.safe_load(expanded_yaml)
 
 

@@ -19,6 +19,9 @@ OPENFACTORY_UNS_SCHEMA: ${OPENFACTORY_UNS_SCHEMA}
 # ---------------------------------------------------------------------------
 # OpenFactory cluster configurations
 
+# Deployment platform
+DEPLOYMENT_PLATFORM: ${DEPLOYMENT_PLATFORM:-swarm}
+
 # OpenFactory User
 OPENFACTORY_USER: openfactory
 

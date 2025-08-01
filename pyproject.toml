@@ -49,5 +49,9 @@ include-package-data = true
 [tool.setuptools.packages]
 find = { where = ["."], include = ["openfactory", "openfactory.*"] }
 
+[project.entry-points."openfactory.deployment_platforms"]
+docker = "openfactory.openfactory_deploy_strategy:LocalDockerDeploymentStrategy"
+swarm = "openfactory.openfactory_deploy_strategy:SwarmDeploymentStrategy"
+
 [project.scripts]
 ofa = "openfactory.ofacli:main"

@@ -13,7 +13,7 @@ into the system, along with error handling, user notifications, and resource man
 import docker
 import os
 from fsspec.core import split_protocol
-from typing import Dict, Optional
+from typing import Dict
 
 import openfactory.config as config
 from openfactory import OpenFactory
@@ -23,9 +23,8 @@ from openfactory.schemas.uns import UNSSchema
 from openfactory.assets import Asset, AssetAttribute
 from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
-from openfactory.utils import get_nested, open_ofa, register_asset, deregister_asset
+from openfactory.utils import get_nested, open_ofa, register_asset, deregister_asset, load_plugin
 from openfactory.kafka.ksql import KSQLDBClient
-from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 
 
 class OpenFactoryManager(OpenFactory):
@@ -42,19 +41,20 @@ class OpenFactoryManager(OpenFactory):
     """
 
     def __init__(self, ksqlClient: KSQLDBClient,
-                 bootstrap_servers: str = config.KAFKA_BROKER,
-                 deployment_strategy: Optional[OpenFactoryServiceDeploymentStrategy] = None):
+                 bootstrap_servers: str = config.KAFKA_BROKER):
         """
         Initializes the OpenFactoryManager.
 
         Args:
             ksqlClient (KSQLDBClient): The client for interacting with ksqlDB.
             bootstrap_servers (str): The Kafka bootstrap server address. Defaults to config.KAFKA_BROKER.
-            deployment_strategy (Optional[OpenFactoryServiceDeploymentStrategy]):
-                The deployment strategy to use (e.g., Swarm or Local). If not provided, defaults to SwarmDeploymentStrategy.
+
+        Note:
+            The deployment strategy to use (e.g., swarm or docker) is selected based on config.DEPLOYMENT_PLATFORM
         """
         super().__init__(ksqlClient, bootstrap_servers)
-        self.deployment_strategy = deployment_strategy or SwarmDeploymentStrategy()
+        platform_cls = load_plugin("openfactory.deployment_platforms", config.DEPLOYMENT_PLATFORM)
+        self.deployment_strategy = platform_cls()
 
     def deploy_mtconnect_agent(self, device_uuid: str, device_xml_uri: str, agent: Dict) -> None:
         """

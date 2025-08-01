@@ -6,6 +6,7 @@ from typing import Dict, List, Any
 from openfactory.config import load_yaml
 from openfactory.utils.open_uris import open_ofa
 from openfactory.utils.assets import register_asset,deregister_asset
+from openfactory.utils.load_plugin import load_plugin
 
 
 def get_nested(data: Dict, keys, default=None) -> Any:

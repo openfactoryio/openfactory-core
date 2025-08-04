@@ -1,0 +1,9 @@
+# Python package requirements for scripts in this folder
+# 
+# These packages are needed to run Python scripts located in the 'scripts' directory,
+# such as 'bump_version.py'. Make sure to install these dependencies before executing the scripts.
+#
+# Example usage:
+#   python3 -m pip install -r scripts/requirements_scripts.txt
+#
+tomlkit

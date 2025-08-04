@@ -131,3 +131,50 @@ class TestDockerAccessLayer(unittest.TestCase):
         ip_addresses = dal.get_node_ip_addresses()
 
         self.assertEqual(ip_addresses, ['192.168.1.1', '192.168.1.2'])
+
+    @patch('openfactory.docker.docker_access_layer.user_notify')
+    @patch('openfactory.docker.docker_access_layer.config')
+    @patch('openfactory.docker.docker_access_layer.docker.DockerClient')
+    def test_swarm_deployment_platform_without_joinkeys(self, mock_docker_client_class, mock_config, mock_user_notify):
+        """ Test behavior when deployment platform is swarm but JoinTokens are missing """
+
+        # Setup config values
+        mock_config.OPENFACTORY_MANAGER_NODE_DOCKER_URL = 'tcp://192.168.1.10:2375'
+        mock_config.DEPLOYMENT_PLATFORM = 'swarm'
+
+        # Prepare DockerClient mock with swarm.attrs lacking 'JoinTokens'
+        mock_docker_client = MagicMock()
+        mock_docker_client.swarm.attrs = {}  # Simulate missing JoinTokens
+        mock_docker_client_class.return_value = mock_docker_client
+
+        dal = DockerAccesLayer()
+        dal.connect()
+
+        # Assertions
+        self.assertEqual(dal.worker_token, 'UNAVAILABLE')
+        self.assertEqual(dal.manager_token, 'UNAVAILABLE')
+        mock_user_notify.warning.assert_called_once()
+        self.assertIn('not a Swarm manager', mock_user_notify.warning.call_args[0][0])
+
+    @patch('openfactory.docker.docker_access_layer.user_notify')
+    @patch('openfactory.docker.docker_access_layer.config')
+    @patch('openfactory.docker.docker_access_layer.docker.DockerClient')
+    def test_non_swarm_deployment_platform_without_joinkeys(self, mock_docker_client_class, mock_config, mock_user_notify):
+        """ Test behavior when deployment platform is not swarm and JoinTokens are missing """
+
+        # Setup config values
+        mock_config.OPENFACTORY_MANAGER_NODE_DOCKER_URL = 'tcp://192.168.1.10:2375'
+        mock_config.DEPLOYMENT_PLATFORM = 'not-swarm'
+
+        # Prepare DockerClient mock with swarm.attrs lacking 'JoinTokens'
+        mock_docker_client = MagicMock()
+        mock_docker_client.swarm.attrs = {}  # Simulate missing JoinTokens
+        mock_docker_client_class.return_value = mock_docker_client
+
+        dal = DockerAccesLayer()
+        dal.connect()
+
+        # Assertions
+        self.assertEqual(dal.worker_token, 'UNAVAILABLE')
+        self.assertEqual(dal.manager_token, 'UNAVAILABLE')
+        mock_user_notify.warning.assert_not_called()  # No warning is emitted

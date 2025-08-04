@@ -61,7 +61,8 @@ class DockerAccesLayer:
             return
 
         if 'JoinTokens' not in swarm_attrs:
-            user_notify.warning(f'WARNING: Docker running on {config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} is not a Swarm manager')
+            if config.DEPLOYMENT_PLATFORM == 'swarm':
+                user_notify.warning(f'WARNING: Docker running on {config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} is not a Swarm manager')
             self.worker_token = 'UNAVAILABLE'
             self.manager_token = 'UNAVAILABLE'
             return

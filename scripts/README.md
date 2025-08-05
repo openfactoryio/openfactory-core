@@ -6,6 +6,7 @@ This directory contains utility scripts used for managing and automating various
 
 - `requirements_scripts.txt`: Lists Python dependencies required by the scripts in this directory.
 - `bump_version.py`: Updates the version number in `pyproject.toml`. Intended for use in release automation pipelines or manual version bumps.
+- `validate_version.sh`: Shell script to verify that a given Git tag matches the version specified in `pyproject.toml`. Intended to be used in CI workflows to ensure release tag consistency.
 - *(Add more entries here as new scripts are added)*
 
 ## Usage Guidelines

@@ -182,20 +182,15 @@ class DevicesConfig(BaseModel):
         Raises:
             ValueError: If the devices configuration is invalid.
         """
-        for device_name, device_data in self.devices_dict.items():
-            if device_data['agent']['ip']:
-                if device_data['agent']['device_xml']:
+        for dev_name, dev in self.devices.items():
+            if dev.agent.ip:
+                if dev.agent.device_xml:
                     raise ValueError("'device_xml' can not be defined for an external agent")
-                if device_data['agent']['adapter']:
+                if dev.agent.adapter:
                     raise ValueError("'adapter' can not be defined for an external agent")
-                return
-            adapter = device_data['agent']['adapter']
-            ip = adapter.get('ip')
-            image = adapter.get('image')
-            if ip is None and image is None:
-                raise ValueError(f"Either 'ip' or 'image' must be specified for the adapter of {device_name}.")
-            if ip is not None and image is not None:
-                raise ValueError(f"Only one of 'ip' or 'image' should be specified for the adapter of {device_name}.")
+            else:
+                if not dev.agent.adapter:
+                    raise ValueError(f"Device '{dev_name}': agent requires an 'adapter' block.")
 
     @property
     def devices_dict(self):

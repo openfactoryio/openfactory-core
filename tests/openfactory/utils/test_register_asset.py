@@ -98,6 +98,20 @@ class TestRegisterAsset(unittest.TestCase):
                 "UPDATED_AT": 1761338400000
             })
         )
+        # Check 'uns_id' attribute was sent, ignoring timestamp differences
+        found_uns_id_attr = False
+        for call in mock_producer.send_asset_attribute.call_args_list:
+            if not call or not call[0]:
+                continue
+            key, attr = call[0][0], call[0][1]
+            if key == "uns_id" and isinstance(attr, AssetAttribute):
+                self.assertEqual(attr.value, uns["uns_id"])
+                self.assertEqual(attr.type, "OpenFactory")
+                self.assertEqual(attr.tag, "UNSId")
+                found_uns_id_attr = True
+                break
+
+        self.assertTrue(found_uns_id_attr)
 
         # Assert flush was called
         mock_producer.flush.assert_called_once()

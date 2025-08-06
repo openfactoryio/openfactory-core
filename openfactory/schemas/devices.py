@@ -1,7 +1,7 @@
 """ Pydantic schemas for validating OpenFactory OpenFactory Adapter, Agent, Supervisor and Device definitions. """
 
 from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator, ConfigDict
 from openfactory.models.user_notifications import user_notify
 from openfactory.config import load_yaml
 from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
@@ -39,6 +39,8 @@ class Adapter(BaseModel):
     environment: List[str] = None
     deploy: Optional[Deploy] = None
 
+    model_config = ConfigDict(extra="forbid")
+
     @model_validator(mode='before')
     def validate_adapter(cls, values: Dict) -> Dict:
         """
@@ -68,6 +70,8 @@ class Agent(BaseModel):
     device_xml: str = None
     adapter: Optional[Adapter] = None
     deploy: Optional[Deploy] = None
+
+    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode='before')
     def validate_agent(cls, values: Dict) -> Dict:
@@ -112,6 +116,8 @@ class Device(AttachUNSMixin, BaseModel):
     agent: Agent
     supervisor: Optional[Supervisor] = None
     ksql_tables: Optional[List[str]] = None
+
+    model_config = ConfigDict(extra="forbid")
 
     def __init__(self, **data: Dict):
         """

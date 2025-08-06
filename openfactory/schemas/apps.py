@@ -1,6 +1,6 @@
 """ Pydantic schemas for validating OpenFactory Application definitions. """
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from typing import List, Dict, Optional, Any
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
@@ -18,6 +18,8 @@ class OpenFactoryApp(AttachUNSMixin, BaseModel):
     environment: Optional[List[str]] = Field(
         default=None, description="List of environment variables"
     )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class OpenFactoryAppsConfig(BaseModel):

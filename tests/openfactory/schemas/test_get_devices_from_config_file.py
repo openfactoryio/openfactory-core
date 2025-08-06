@@ -95,8 +95,6 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
             temp_file.seek(0)
             with patch("openfactory.schemas.devices.user_notify") as mock_user_notify:
                 devices_dict = get_devices_from_config_file(temp_file.name, self.uns_schema)
-                import json
-                print(json.dumps(devices_dict, indent=4))
                 expected = {
                     'device1': {
                         'uuid': 'uuid1',

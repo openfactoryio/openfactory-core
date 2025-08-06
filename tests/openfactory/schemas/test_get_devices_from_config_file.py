@@ -47,8 +47,9 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
             "devices": {
                 "device1": {
                     "uuid": "uuid1",
-                    "workcenter": "WC2",
-                    "asset": "cnc",
+                    "uns": {
+                        "workcenter": "WC2",
+                        "asset": "cnc"},
                     "agent": {
                         "port": 8080,
                         "device_xml": "xml1",
@@ -69,14 +70,23 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                 },
                 "device3": {
                     "uuid": "uuid3",
-                    "asset": "cnc3",
+                    "uns": {"asset": "cnc3"},
                     "agent": {
                         "port": 8082,
                         "device_xml": "xml3",
                         "adapter": {"ip": "1.2.3.4", "port": 9092,
                                     "deploy": {"replicas": 3, "resources": {"reservations": {"cpus": 2}, "limits": {"cpus": 4}}}},
                     }
-                }
+                },
+                "device4": {
+                    "uuid": "uuid4",
+                    "uns": {"workcenter": "WC2"},
+                    "agent": {
+                        "port": 8080,
+                        "device_xml": "xml1",
+                        "adapter": {"image": "ofa/adapter", "port": 9090}
+                    }
+                },
             }
         }
 
@@ -85,6 +95,8 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
             temp_file.seek(0)
             with patch("openfactory.schemas.devices.user_notify") as mock_user_notify:
                 devices_dict = get_devices_from_config_file(temp_file.name, self.uns_schema)
+                import json
+                print(json.dumps(devices_dict, indent=4))
                 expected = {
                     'device1': {
                         'uuid': 'uuid1',
@@ -148,7 +160,27 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                             },
                             "uns_id": "OpenFactory/cnc3"
                             }
-                        }
+                        },
+                    'device4': {
+                        'uuid': 'uuid4',
+                        'agent': {
+                            "ip": None,
+                            'port': 8080,
+                            'device_xml': 'xml1',
+                            'adapter': {'ip': None, 'image': 'ofa/adapter', 'port': 9090, 'environment': None, 'deploy': None},
+                            'deploy': {'replicas': 1, 'resources': None, 'placement': None}
+                            },
+                        'supervisor': None,
+                        'ksql_tables': None,
+                        "uns": {
+                            "levels": {
+                                "inc": "OpenFactory",
+                                "workcenter": "WC2",
+                                "asset": "uuid4"
+                            },
+                            "uns_id": "OpenFactory/WC2/uuid4"
+                            }
+                        },
                     }
 
                 self.assertEqual(devices_dict, expected)

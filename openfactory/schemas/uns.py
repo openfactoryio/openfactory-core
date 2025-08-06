@@ -177,7 +177,7 @@ class UNSSchema:
             item.key(): item.value() for item in model.namespace_structure
         }
 
-    def extract_uns_fields(self, asset_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_uns_fields(self, asset_uuid: str, uns_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extracts all UNS hierarchy fields for an asset, based on the template and schema.
 
@@ -193,7 +193,7 @@ class UNSSchema:
         - If the "asset" field is not provided explicitly, it is populated from the "uuid" field of the asset.
 
         Args:
-            asset_dict (Dict[str, Any]): The dictionary representing a single asset configuration.
+            uns_dict (Dict[str, Any]): The dictionary representing a single asset configuration.
 
         Returns:
             Dict[str, Any]: A dictionary mapping each field (excluding "attribute") to its resolved value,
@@ -212,24 +212,24 @@ class UNSSchema:
             constraint = self.allowed_values.get(field)
 
             if isinstance(constraint, str) and constraint != "ANY":
-                if field in asset_dict and asset_dict[field] != constraint:
+                if field in uns_dict and uns_dict[field] != constraint:
                     raise ValueError(
-                        f"Field '{field}' is constant and must be '{constraint}', but asset config has '{asset_dict[field]}'"
+                        f"Field '{field}' is constant and must be '{constraint}', but asset config has '{uns_dict[field]}'"
                     )
                 result[field] = constraint
             elif constraint == "ANY":
-                if field in asset_dict:
-                    result[field] = asset_dict[field]
+                if field in uns_dict:
+                    result[field] = uns_dict[field]
             elif isinstance(constraint, list):
-                if field in asset_dict:
-                    result[field] = asset_dict[field]
+                if field in uns_dict:
+                    result[field] = uns_dict[field]
             else:
                 raise ValueError(f"Unexpected constraint for field '{field}': {constraint}")
 
         if "asset" not in result:
-            if "uuid" not in asset_dict:
-                raise ValueError("Asset 'uuid' must be defined in the Asset dictionary configuration.")
-            result["asset"] = asset_dict["uuid"]
+            result["asset"] = asset_uuid
+
+        self.validate_uns_fields(asset_uuid, result)
 
         return result
 
@@ -311,3 +311,41 @@ class UNSSchema:
             parts.append(str(fields[field]))
 
         return self.separator.join(parts)
+
+
+class AttachUNSMixin:
+    """
+    Mixin that provides UNS validation and enrichment capabilities.
+
+    Requires the implementing class to have:
+        - uuid: str
+        - uns: Optional[Dict[str, Any]] = None
+    """
+
+    def attach_uns(self, uns_schema: UNSSchema) -> None:
+        """
+        Validate and enrich the object's `uns` block using the provided UNSSchema.
+
+        On success, replaces self.uns with:
+            {
+                "levels": { ... fields as returned by extract_uns_fields ... },
+                "uns_id": "<generated path>"
+            }
+
+        Args:
+            uns_schema (UNSSchema): The UNS schema instance used for validation and path generation.
+
+        Raises:
+            ValueError: if validation fails.
+        """
+        uns_data = dict(self.uns) if isinstance(self.uns, dict) else {}
+
+        # Extract and validate using the UNSSchema instance
+        extracted = uns_schema.extract_uns_fields(asset_uuid=self.uuid, uns_dict=uns_data)
+        uns_id = uns_schema.generate_uns_path(extracted)
+
+        # Store enriched representation
+        self.uns = {
+            "levels": extracted,
+            "uns_id": uns_id
+        }

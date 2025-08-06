@@ -1,15 +1,19 @@
 """ Pydantic schemas for validating OpenFactory Application definitions. """
 
 from pydantic import BaseModel, Field, ValidationError
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
-from openfactory.schemas.uns import UNSSchema
+from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
 
 
-class OpenFactoryApp(BaseModel):
+class OpenFactoryApp(AttachUNSMixin, BaseModel):
     """ OpenFactory Application Schema."""
     uuid: str = Field(..., description="Unique identifier for the app")
+    uns: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Unified Namespace (UNS) configuration for the app"
+    )
     image: str = Field(..., description="Docker image for the app")
     environment: Optional[List[str]] = Field(
         default=None, description="List of environment variables"
@@ -17,7 +21,25 @@ class OpenFactoryApp(BaseModel):
 
 
 class OpenFactoryAppsConfig(BaseModel):
-    """ OpenFactory Applications Configuration Schema."""
+    """
+    Schema for OpenFactory application configurations loaded from YAML files.
+
+    This schema validates the structure of application configuration data.
+
+    Example usage:
+        .. code-block:: python
+
+            apps_config = OpenFactoryAppsConfig(apps=yaml_data['apps'])
+            # or
+            apps_config = OpenFactoryAppsConfig(**yaml_data)
+
+    Args:
+        apps (dict): Dictionary containing application configurations.
+
+    Raises:
+        pydantic.ValidationError: If the input data does not conform to the expected schema.
+    """
+
     apps: Dict[str, OpenFactoryApp] = Field(
         ..., description="Dictionary of OpenFactory applications"
     )
@@ -61,15 +83,14 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
         user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
         return None
 
-    # inject UNS data into the validated apps configurations
-    apps = apps_cfg.apps_dict
-    for app_name, raw_app_data in cfg['apps'].items():
-        uns_fields = uns_schema.extract_uns_fields(raw_app_data)
-        uns_schema.validate_uns_fields(app_name, uns_fields)
-        uns_id = uns_schema.generate_uns_path(uns_fields)
+    # Attach and enrich UNS for each app
+    apps = apps_cfg.apps
+    for app_name, app in apps.items():
+        try:
+            app.attach_uns(uns_schema)
+        except Exception as e:
+            user_notify.fail(f"App '{app_name}': UNS validation failed: {e}")
+            return None
 
-        apps[app_name]["uns"] = {
-            "levels": uns_fields,
-            "uns_id": uns_id,
-        }
-    return apps
+    # return plain dict form (with `uns.levels` and `uns.uns_id`)
+    return {k: v.model_dump() for k, v in apps.items()}

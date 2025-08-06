@@ -1,10 +1,10 @@
 """ Pydantic schemas for validating OpenFactory OpenFactory Adapter, Agent, Supervisor and Device definitions. """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from openfactory.models.user_notifications import user_notify
 from openfactory.config import load_yaml
-from openfactory.schemas.uns import UNSSchema
+from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
 
 
 class ResourcesDefinition(BaseModel):
@@ -105,16 +105,13 @@ class Supervisor(BaseModel):
     deploy: Optional[Deploy] = None
 
 
-class Device(BaseModel):
+class Device(AttachUNSMixin, BaseModel):
     """ OpenFactory Device Schema. """
     uuid: str
+    uns: Optional[Dict[str, Any]] = None
     agent: Agent
     supervisor: Optional[Supervisor] = None
     ksql_tables: Optional[List[str]] = None
-
-    model_config = {
-        "extra": "ignore"
-    }
 
     def __init__(self, **data: Dict):
         """
@@ -232,15 +229,14 @@ def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSS
         user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
         return None
 
-    # inject UNS data into the validated devices configurations
-    devices = devices_cfg.devices_dict
-    for device_name, raw_device_data in cfg['devices'].items():
-        uns_fields = uns_schema.extract_uns_fields(raw_device_data)
-        uns_schema.validate_uns_fields(device_name, uns_fields)
-        uns_id = uns_schema.generate_uns_path(uns_fields)
+    # Attach and enrich UNS for each device
+    devices = devices_cfg.devices
+    for dev_name, device in devices.items():
+        try:
+            device.attach_uns(uns_schema)
+        except Exception as e:
+            user_notify.fail(f"Device '{dev_name}': UNS validation failed: {e}")
+            return None
 
-        devices[device_name]["uns"] = {
-            "levels": uns_fields,
-            "uns_id": uns_id,
-        }
-    return devices
+    # return plain dict form (with `uns.levels` and `uns.uns_id`)
+    return {k: v.model_dump() for k, v in devices.items()}

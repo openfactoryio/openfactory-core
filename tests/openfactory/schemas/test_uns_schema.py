@@ -44,8 +44,8 @@ class TestUNSSchema(unittest.TestCase):
 
     def test_extract_uns_fields_valid(self):
         """ Test extract_uns_fields """
-        asset = {"workcenter": "WC2", "station": "S1", "asset": "my_asset", "uuid": "device123"}
-        result = self.schema.extract_uns_fields(asset)
+        uns = {"workcenter": "WC2", "station": "S1", "asset": "my_asset"}
+        result = self.schema.extract_uns_fields(asset_uuid='device123', uns_dict=uns)
         expected = {
             "inc": "OpenFactory",
             "area": "A1",
@@ -57,29 +57,23 @@ class TestUNSSchema(unittest.TestCase):
 
     def test_extract_uns_fields_invalid_constant(self):
         """ Test extract_uns_fields when a constant field is wrongly redefiend """
-        asset = {"area": "WRONG", "workcenter": "WC2", "station": "S1", "uuid": "device123"}
+        uns = {"area": "WRONG", "workcenter": "WC2", "station": "S1"}
         with self.assertRaises(ValueError) as cm:
-            self.schema.extract_uns_fields(asset)
+            self.schema.extract_uns_fields(asset_uuid='device123', uns_dict=uns)
         self.assertIn("must be 'A1'", str(cm.exception))
 
     def test_extract_uns_fields_missing_asset(self):
         """ Test extract_uns_fields when not asset defined """
-        asset = {"station": "S1", "uuid": "device123"}
-        result = self.schema.extract_uns_fields(asset)
+        uns = {"workcenter": "WC1", "station": "S1"}
+        result = self.schema.extract_uns_fields(asset_uuid='device123', uns_dict=uns)
         expected = {
             "inc": "OpenFactory",
             "area": "A1",
+            "workcenter": "WC1",
             "station": "S1",
             "asset": "device123"
         }
         self.assertEqual(result, expected)
-
-    def test_extract_uns_fields_missing_uuid(self):
-        """ Test extract_uns_fields when not asset defined and asset UUID is missing """
-        asset = {"station": "S1"}
-        with self.assertRaises(ValueError) as cm:
-            self.schema.extract_uns_fields(asset)
-        self.assertIn("'uuid' must be defined", str(cm.exception))
 
     def test_validate_uns_fields_valid(self):
         """ Test validate_uns_fields """

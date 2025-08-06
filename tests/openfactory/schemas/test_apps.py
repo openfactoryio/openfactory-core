@@ -139,7 +139,7 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
             "apps": {
                 "demo1": {
                     "uuid": "DEMO-APP",
-                    "workcenter": "WC2",
+                    "uns": {"workcenter": "WC2"},
                     "image": "demofact/demo1",
                     "environment": ["KAFKA_BROKER=broker:9092"]
                 }

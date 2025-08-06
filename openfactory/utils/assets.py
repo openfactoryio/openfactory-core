@@ -59,6 +59,10 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
                 level_name,
                 AssetAttribute(value=level_value, type="OpenFactory", tag="UNSLevel")
             )
+        producer.send_asset_attribute(
+            'uns_id',
+            AssetAttribute(value=uns['uns_id'], type="OpenFactory", tag="UNSId")
+        )
         # Set UNS map
         producer.produce(
             topic=ksqlClient.get_kafka_topic('asset_to_uns_map_raw'),

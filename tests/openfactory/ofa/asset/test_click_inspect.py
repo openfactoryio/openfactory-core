@@ -15,6 +15,7 @@ class TestClickAssetInspectCommand(unittest.TestCase):
         Test click_inspect outputs samples, events, and conditions from asset
         """
         mock_instance = MockAsset.return_value
+        mock_instance.uns_id.value = 'uns/path'
         mock_instance.samples.return_value = [
             {'ID': 'temp1', 'VALUE': '85', 'TAG': 'Temperature'}
         ]
@@ -30,6 +31,7 @@ class TestClickAssetInspectCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertIn("asset-001", result.output)
+        self.assertIn("uns/path", result.output)
         self.assertIn("temp1", result.output)
         self.assertIn("85", result.output)
         self.assertIn("Sample", result.output)

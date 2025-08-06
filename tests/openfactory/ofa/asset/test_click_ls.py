@@ -19,6 +19,7 @@ class TestClickAssetLsCommand(unittest.TestCase):
         mock_asset.type = "MTConnectAgent"
         mock_asset.agent_avail.value = "AVAILABLE"
         mock_asset.DockerService.value = "mtc-container"
+        mock_asset.uns_id.value = 'uns/path'
 
         instance = MockOpenFactory.return_value
         instance.assets.return_value = [mock_asset]
@@ -28,6 +29,7 @@ class TestClickAssetLsCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertIn("mtc-001", result.output)
+        self.assertIn("uns/path", result.output)
         self.assertIn("AVAILABLE", result.output)
         self.assertIn("MTConnectAgent", result.output)
         self.assertIn("mtc-container", result.output)

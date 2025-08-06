@@ -1,4 +1,5 @@
 import unittest
+from pydantic import ValidationError
 from openfactory.schemas.devices import Agent
 
 
@@ -40,6 +41,26 @@ class TestAgent(unittest.TestCase):
         self.assertEqual(mod.port, 8080)
         self.assertEqual(mod.device_xml, "xml1")
         self.assertIsNone(mod.deploy)
+
+    def test_extra_fields_forbid_raises_validation_error(self):
+        """ Providing undefined fields for an app should raise ValidationError """
+        invalid_config = {
+            "port": 8080,
+            "device_xml": "xml1",
+            "adapter": {
+                "ip": "1.2.3.4",
+                "port": 7878
+                },
+            "foo": "bar",
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            Agent(**invalid_config)
+
+        # Basic sanity checks: the error mentions the offending field
+        err_str = str(cm.exception)
+        self.assertIn("foo", err_str)
+        self.assertIn("extra", err_str.lower())
 
     def test_missing_device_xml(self):
         """

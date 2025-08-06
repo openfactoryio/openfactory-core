@@ -1,4 +1,5 @@
 import unittest
+from pydantic import ValidationError
 from openfactory.schemas.devices import DevicesConfig
 
 
@@ -14,7 +15,6 @@ class TestDevicesConfig(unittest.TestCase):
         devices_data = {
             "device1": {
                 "uuid": "uuid1",
-                "node": "node1",
                 "agent": {
                     "port": 8080,
                     "device_xml": "xml1",
@@ -23,21 +23,37 @@ class TestDevicesConfig(unittest.TestCase):
             },
             "device2": {
                 "uuid": "uuid2",
-                "node": "node2",
                 "agent": {
                     "port": 8081,
                     "device_xml": "xml2",
                     "adapter": {"ip": "1.2.3.4", "port": 9091}
-                },
-                "runtime": {
-                    "agent": {"cpus": 2.0},
-                    "producer": {"cpus": 1.5},
-                    "adapter": {"cpus": 1.0}
                 }
             }
         }
         devices_config = DevicesConfig(devices=devices_data)
         self.assertIsNone(devices_config.validate_devices())
+
+    def test_extra_fields_forbid_raises_validation_error(self):
+        """ Providing undefined fields for an app should raise ValidationError """
+        invalid_config = {
+            "device1": {
+                "uuid": "uuid1",
+                "agent": {
+                    "port": 8080,
+                    "device_xml": "xml1",
+                    "adapter": {"image": "ofa/adapter", "port": 9090}
+                },
+                "foo": "bar",
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            DevicesConfig(devices=invalid_config)
+
+        # Basic sanity checks: the error mentions the offending field
+        err_str = str(cm.exception)
+        self.assertIn("foo", err_str)
+        self.assertIn("extra", err_str.lower())
 
     def test_validate_devices_invalid_adapter(self):
         """
@@ -117,7 +133,6 @@ class TestDevicesConfig(unittest.TestCase):
         devices_data = {
             "device1": {
                 "uuid": "uuid1",
-                "node": "node1",
                 "agent": {
                     "port": 8081,
                     "device_xml": "xml1",
@@ -130,7 +145,6 @@ class TestDevicesConfig(unittest.TestCase):
             },
             "device2": {
                 "uuid": "uuid1",
-                "node": "node1",
                 "agent": {
                     "port": 8082,
                     "device_xml": "xml2",
@@ -150,7 +164,6 @@ class TestDevicesConfig(unittest.TestCase):
         devices_data = {
             "device1": {
                 "uuid": "uuid1",
-                "node": "node1",
                 "agent": {
                     "port": 8081,
                     "device_xml": "xml1",
@@ -160,7 +173,6 @@ class TestDevicesConfig(unittest.TestCase):
             },
             "device2": {
                 "uuid": "uuid1",
-                "node": "node1",
                 "agent": {
                     "port": 8082,
                     "device_xml": "xml2",

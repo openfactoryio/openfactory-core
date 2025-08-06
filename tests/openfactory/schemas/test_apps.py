@@ -56,6 +56,27 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         self.assertEqual(config.apps["demo1"].image, "demofact/demo1")
         self.assertIn("KAFKA_BROKER=broker:9092", config.apps["demo1"].environment)
 
+    def test_extra_fields_forbid_raises_validation_error(self):
+        """ Providing undefined fields for an app should raise ValidationError """
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    # extra undefined field -> should trigger ValidationError
+                    "foo": "bar",
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        # Basic sanity checks: the error mentions the offending field
+        err_str = str(cm.exception)
+        self.assertIn("foo", err_str)
+        self.assertIn("extra", err_str.lower())
+
     def test_missing_required_fields(self):
         """ Test missing required fields (uuid & image) """
         invalid_config = {

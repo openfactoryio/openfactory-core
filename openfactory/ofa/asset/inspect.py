@@ -13,9 +13,11 @@ from openfactory.ofa.ksqldb import ksql
 def click_inspect(asset_uuid: str) -> None:
     """ List all attributes from an asset. """
 
+    asset = Asset(asset_uuid, ksqlClient=ksql.client)
+
     console = Console()
     table = Table(
-        title=asset_uuid,
+        title=f"{asset_uuid} - {asset.uns_id.value}",
         title_justify="left",
         box=box.HORIZONTALS,
         show_lines=True)
@@ -24,8 +26,6 @@ def click_inspect(asset_uuid: str) -> None:
     table.add_column("Value", justify="left")
     table.add_column("Type", justify="left")
     table.add_column("Tag", justify="left")
-
-    asset = Asset(asset_uuid, ksqlClient=ksql.client)
 
     samples = asset.samples()
     for sample in samples:

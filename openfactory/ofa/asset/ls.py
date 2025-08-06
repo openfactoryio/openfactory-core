@@ -22,6 +22,7 @@ def click_ls() -> None:
         show_lines=True)
 
     table.add_column("Asset UUID", style="cyan", no_wrap=True)
+    table.add_column("Asset UNS ID", style="cyan", no_wrap=True)
     table.add_column("Availability", justify="left")
     table.add_column("Type", justify="left")
     table.add_column("Docker container", justify="left")
@@ -41,6 +42,7 @@ def click_ls() -> None:
             status = Text(availability, style="yellow")
 
         table.add_row(asset.asset_uuid,
+                      asset.uns_id.value,
                       status,
                       asset.type,
                       asset.DockerService.value)

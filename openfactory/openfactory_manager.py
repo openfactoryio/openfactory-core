@@ -50,7 +50,7 @@ class OpenFactoryManager(OpenFactory):
             bootstrap_servers (str): The Kafka bootstrap server address. Defaults to config.KAFKA_BROKER.
 
         Note:
-            The deployment strategy to use (e.g., swarm or docker) is selected based on config.DEPLOYMENT_PLATFORM
+            The deployment strategy to use (e.g., swarm or docker) is selected based on `config.DEPLOYMENT_PLATFORM`
         """
         super().__init__(ksqlClient, bootstrap_servers)
         platform_cls = load_plugin("openfactory.deployment_platforms", config.DEPLOYMENT_PLATFORM)

@@ -1,4 +1,4 @@
-# 🏭 OpenFactory Manifesto
+# OpenFactory Manifesto
 
 > **Making the Physical World Versionable, Testable, Programmable — and Connected at Scale**
 

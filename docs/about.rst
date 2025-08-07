@@ -5,3 +5,4 @@ About
     :maxdepth: 1
 
     MANIFESTO
+    about/ofa_overview

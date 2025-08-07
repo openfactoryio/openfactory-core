@@ -51,6 +51,8 @@ html_static_path = ['_static']
 html_theme_options = {
     "logo": {
         "text": "OpenFactory",
+        "image_light": "ofa_logo.png",
+        "image_dark": "ofa_logo.png",
     },
     "navbar_end": ["theme-switcher", "navbar-icon-links"],  # <-- enable switch button
     "icon_links": [

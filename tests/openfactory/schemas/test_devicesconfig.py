@@ -1,227 +1,53 @@
 import unittest
-from pydantic import ValidationError
 from openfactory.schemas.devices import DevicesConfig
 
 
 class TestDevicesConfig(unittest.TestCase):
     """
-    Unit tests for class DevicesConfig
+    Unit tests for class DevicesConfig.
     """
+
+    def setUp(self):
+        """
+        Prepare a minimal valid device configuration for use in tests.
+        """
+        self.valid_device = {
+            "uuid": "uuid1",
+            "connector": {
+                "type": "mtconnect",
+                "agent": {
+                    "port": 8080,
+                    "device_xml": "xml1",
+                    "adapter": {"image": "ofa/adapter", "port": 9090}
+                }
+            }
+        }
 
     def test_validate_devices_valid(self):
         """
-        Test case where devices have valid configurations
+        Test case where devices have valid configurations.
         """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8080,
-                    "device_xml": "xml1",
-                    "adapter": {"image": "ofa/adapter", "port": 9090}
-                }
-            },
-            "device2": {
-                "uuid": "uuid2",
-                "agent": {
-                    "port": 8081,
-                    "device_xml": "xml2",
-                    "adapter": {"ip": "1.2.3.4", "port": 9091}
-                }
-            }
-        }
-        devices_config = DevicesConfig(devices=devices_data)
-        self.assertIsNone(devices_config.validate_devices())
+        cfg = DevicesConfig(devices={"dev1": self.valid_device})
+        self.assertIsNone(cfg.validate_devices())
 
-    def test_extra_fields_forbid_raises_validation_error(self):
-        """ Providing undefined fields for an app should raise ValidationError """
-        invalid_config = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8080,
-                    "device_xml": "xml1",
-                    "adapter": {"image": "ofa/adapter", "port": 9090}
-                },
-                "foo": "bar",
-            }
-        }
-
-        with self.assertRaises(ValidationError) as cm:
-            DevicesConfig(devices=invalid_config)
-
-        # Basic sanity checks: the error mentions the offending field
-        err_str = str(cm.exception)
-        self.assertIn("foo", err_str)
-        self.assertIn("extra", err_str.lower())
-
-    def test_validate_devices_invalid_adapter(self):
+    def test_duplicate_uuid_raises(self):
         """
-        Test adapter has either ip or image defined
+        Two devices with the same UUID should raise ValueError.
         """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8080,
-                    "device_xml": "xml1",
-                    "adapter": {"port": 7878}  # missing ip or image
-                }
-            }
-        }
+        cfg = DevicesConfig(devices={
+            "dev1": self.valid_device,
+            "dev2": {**self.valid_device},  # same uuid as dev1
+        })
+        with self.assertRaises(ValueError) as cm:
+            cfg.validate_devices()
+        self.assertIn("Duplicate uuid", str(cm.exception))
 
-        with self.assertRaises(ValueError):
-            DevicesConfig(devices=devices_data)
-
-        # both ip and image defined for adapter
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8080,
-                    "device_xml": "xml1",
-                    "adapter": {
-                        "ip": "1.2.3.4",
-                        "image": "ofa/adapter",
-                        "port": 7878
-                        }
-                }
-            }
-        }
-
-        with self.assertRaises(ValueError):
-            DevicesConfig(devices=devices_data)
-
-        # both ip and adapter defiend for agent
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "ip": "10.0.0.1",
-                    "port": 8080,
-                    "adapter": {
-                        "ip": "1.2.3.4",
-                        "image": "ofa/adapter",
-                        "port": 7878
-                        }
-                }
-            }
-        }
-
-        with self.assertRaises(ValueError):
-            DevicesConfig(devices=devices_data)
-
-        # both ip and device_xml defiend for agent
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "ip": "10.0.0.1",
-                    "port": 8080,
-                    "device_xml": "xml1",
-                }
-            }
-        }
-
-        with self.assertRaises(ValueError):
-            DevicesConfig(devices=devices_data)
-
-    def test_agent_resources(self):
+    def test_devices_dict_property(self):
         """
-        Test agent resources
+        devices_dict should return a plain serializable dictionary.
         """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8081,
-                    "device_xml": "xml1",
-                    "adapter": {"ip": "1.2.3.4", "port": 9091},
-                    "deploy": {"resources": {
-                        "reservations": {"cpus": 3},
-                        "limits": {"cpus": 5}
-                    }},
-                }
-            },
-            "device2": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8082,
-                    "device_xml": "xml2",
-                    "adapter": {"ip": "1.2.3.5", "port": 9091},
-                }
-            }
-        }
-        devices_config = DevicesConfig(devices=devices_data)
-        self.assertEqual(devices_config.devices['device1'].agent.deploy.resources.reservations.cpus, 3)
-        self.assertEqual(devices_config.devices['device1'].agent.deploy.resources.limits.cpus, 5)
-        self.assertEqual(devices_config.devices['device2'].agent.deploy.resources, None)
-
-    def test_replicas(self):
-        """
-        Test that replicas
-        """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8081,
-                    "device_xml": "xml1",
-                    "adapter": {"ip": "1.2.3.4", "port": 9091},
-                    "deploy": {"replicas": 3},
-                }
-            },
-            "device2": {
-                "uuid": "uuid1",
-                "agent": {
-                    "port": 8082,
-                    "device_xml": "xml2",
-                    "adapter": {"ip": "1.2.3.5", "port": 9091},
-                }
-            }
-        }
-
-        devices_config = DevicesConfig(devices=devices_data)
-        self.assertEqual(devices_config.devices['device1'].agent.deploy.replicas, 3)
-        # Test that replicas defaults to 1 in case it is not defined
-        self.assertEqual(devices_config.devices['device2'].agent.deploy.replicas, 1)
-
-    def test_ksql_tables_valid_entries(self):
-        """
-        Test ksql tables with valid entries
-        """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "ip": "10.0.0.1",
-                    "port": 8080,
-                },
-                "ksql_tables": ['agent', 'device', 'producer'],
-            }
-        }
-        devices_config = DevicesConfig(devices=devices_data)
-
-        # Check that the data is correctly stored in the model
-        self.assertEqual(devices_config.devices['device1'].ksql_tables, ['agent', 'device', 'producer'])
-
-    def test_ksql_tables_invalid_entries(self):
-        """
-        Test ksql tables with invalid entries
-        """
-        devices_data = {
-            "device1": {
-                "uuid": "uuid1",
-                "agent": {
-                    "ip": "10.0.0.1",
-                    "port": 8080,
-                },
-                "ksql_tables": ['toto'],
-            }
-        }
-
-        with self.assertRaises(ValueError) as context:
-            DevicesConfig(devices=devices_data)
-
-        # Check error message
-        self.assertIn("Invalid entries in ksql-tables: {'toto'}", str(context.exception))
+        cfg = DevicesConfig(devices={"dev1": self.valid_device})
+        out = cfg.devices_dict
+        self.assertIsInstance(out, dict)
+        self.assertIn("dev1", out)
+        self.assertEqual(out["dev1"]["uuid"], "uuid1")

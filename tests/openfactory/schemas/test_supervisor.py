@@ -1,6 +1,7 @@
 import unittest
 from pydantic import ValidationError
-from openfactory.schemas.devices import Supervisor, Adapter, Deploy, Resources, ResourcesDefinition, Placement
+from openfactory.schemas.common import Deploy, Resources, ResourcesDefinition, Placement
+from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 
 
 class TestSupervisor(unittest.TestCase):
@@ -10,7 +11,7 @@ class TestSupervisor(unittest.TestCase):
 
     def setUp(self):
         """ Set up test data """
-        self.valid_adapter = Adapter(
+        self.valid_adapter = SupervisorAdapter(
             ip="192.168.1.1",
             port=8080,
             environment=["ENV_VAR=value"],
@@ -64,6 +65,21 @@ class TestSupervisor(unittest.TestCase):
         )
         self.assertIsNone(supervisor.deploy)
 
+    def test_supervisor_adapter_invalid_type(self):
+        """ Test that invalid adapter type (e.g., str) raises a ValidationError """
+        with self.assertRaises(TypeError) as cm:
+            Supervisor(
+                image="supervisor-image:latest",
+                adapter="this_should_be_a_dict_not_str"
+            )
+        self.assertIn("adapter configuration must be a dictionary", str(cm.exception).lower())
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_supervisor_forbid_extra_fields(self):
+        """ Test that extra fields are forbidden """
+        with self.assertRaises(ValidationError) as cm:
+            Supervisor(
+                image="supervisor-image:latest",
+                adapter=self.valid_adapter,
+                unexpected="not_allowed"
+            )
+        self.assertIn("extra inputs are not permitted", str(cm.exception).lower())

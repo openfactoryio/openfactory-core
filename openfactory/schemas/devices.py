@@ -1,141 +1,31 @@
-""" Pydantic schemas for validating OpenFactory OpenFactory Adapter, Agent, Supervisor and Device definitions. """
+"""
+OpenFactory Device schemas defining the device, supervisor, and device configurations.
 
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator, ConfigDict
-from openfactory.models.user_notifications import user_notify
+This module uses the generic Connector union for device connectors (agents),
+supports UNS enrichment, deployment defaults, and config validation.
+"""
+
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, field_validator, ConfigDict, ValidationError
 from openfactory.config import load_yaml
-from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
-
-
-class ResourcesDefinition(BaseModel):
-    """ Resources Definition Schema. """
-    cpus: float = None
-    memory: str = None
-
-
-class Resources(BaseModel):
-    """ Resources Schema. """
-    reservations: ResourcesDefinition = None
-    limits: ResourcesDefinition = None
-
-
-class Placement(BaseModel):
-    """ Placement Schema. """
-    constraints: List[str] = None
-
-
-class Deploy(BaseModel):
-    """ Deploy Schema. """
-    replicas: Optional[int] = Field(default=1)
-    resources: Resources = None
-    placement: Placement = None
-
-
-class Adapter(BaseModel):
-    """ OpenFactory Adapter Schema. """
-    ip: str = None
-    image: str = None
-    port: int
-    environment: List[str] = None
-    deploy: Optional[Deploy] = None
-
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode='before')
-    def validate_adapter(cls, values: Dict) -> Dict:
-        """
-        Validates the adapter configuration.
-
-        Args:
-            values (Dict): Dictionary of values to validate.
-
-        Returns:
-            Dict: Validated values.
-
-        Raises:
-            ValueError: If 'ip' or 'image' is missing or incorrectly defined.
-        """
-        ip = values.get('ip')
-        image = values.get('image')
-        # Either 'ip' or 'image' must be specified, but not both
-        if (ip is None and image is None) or (ip and image):
-            raise ValueError("Either 'ip' or 'image' must be specified in the adapter.")
-        return values
-
-
-class Agent(BaseModel):
-    """ OpenFactory Agent Schema. """
-    ip: str = None
-    port: int
-    device_xml: str = None
-    adapter: Optional[Adapter] = None
-    deploy: Optional[Deploy] = None
-
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode='before')
-    def validate_agent(cls, values: Dict) -> Dict:
-        """
-        Validates the agent configuration.
-
-        Args:
-            values (Dict): Dictionary of values to validate.
-
-        Returns:
-            Dict: Validated values.
-
-        Raises:
-            ValueError: If 'device_xml' or 'adapter' is missing or incorrectly defined.
-        """
-        ip = values.get('ip')
-        adapter = values.get('adapter')
-        if ip is None:
-            if values.get('device_xml') is None:
-                raise ValueError("'device_xml' is missing")
-            if adapter is None:
-                raise ValueError("'adapter' definition is missing")
-        else:
-            if adapter:
-                raise ValueError("'adapter' can not be defined for an external agent")
-            if values.get('device_xml'):
-                raise ValueError("'device_xml' can not be defined for an external agent")
-        return values
-
-
-class Supervisor(BaseModel):
-    """ OpenFactory Supervisor Schema. """
-    image: str
-    adapter: Adapter
-    deploy: Optional[Deploy] = None
+from openfactory.models.user_notifications import user_notify
+from openfactory.schemas.supervisors import Supervisor
+from openfactory.schemas.connectors.types import Connector
+from openfactory.schemas.uns import AttachUNSMixin, UNSSchema
 
 
 class Device(AttachUNSMixin, BaseModel):
     """ OpenFactory Device Schema. """
-    uuid: str
-    uns: Optional[Dict[str, Any]] = None
-    agent: Agent
-    supervisor: Optional[Supervisor] = None
-    ksql_tables: Optional[List[str]] = None
+    uuid: str = Field(..., description="Unique device identifier.")
+    uns: Optional[Dict[str, Any]] = Field(None, description="Unified Namespace metadata.")
+    connector: Connector = Field(..., description="Connector configuration for the device.")
+    supervisor: Optional[Supervisor] = Field(None, description="Supervisor configuration.")
+    ksql_tables: Optional[List[str]] = Field(None, description="List of Kafka ksqlDB tables.")
 
     model_config = ConfigDict(extra="forbid")
 
-    def __init__(self, **data: Dict):
-        """
-        Initialize the Device model.
-
-        Args:
-            **data (Dict): Keyword arguments to initialize the model.
-        """
-        super().__init__(**data)
-        if self.agent.deploy is None:
-            # If deploy is not provided, create a default Deploy with replicas=1
-            self.agent.deploy = Deploy(replicas=1)
-        elif self.agent.deploy.replicas is None:
-            # If deploy is provided but replicas is missing, set replicas to 1
-            self.agent.deploy.replicas = 1
-
     @field_validator('ksql_tables', mode='before', check_fields=False)
-    def validate_ksql_tables(cls, value: List[str]) -> List[str]:
+    def validate_ksql_tables(cls, value: Optional[List[str]]) -> Optional[List[str]]:
         """
         Validates the ksql_tables field.
 
@@ -150,9 +40,9 @@ class Device(AttachUNSMixin, BaseModel):
         """
         allowed_values = {'device', 'producer', 'agent'}
         if value:
-            invalid_entries = set(value) - allowed_values
-            if invalid_entries:
-                raise ValueError(f"Invalid entries in ksql-tables: {invalid_entries}")
+            invalid = set(value) - allowed_values
+            if invalid:
+                raise ValueError(f"Invalid entries in ksql_tables: {invalid}")
         return value
 
 
@@ -175,29 +65,29 @@ class DevicesConfig(BaseModel):
     Raises:
         pydantic.ValidationError: If the input data does not conform to the expected schema.
     """
-
-    devices: Dict[str, Device]
+    devices: Dict[str, Device] = Field(..., description="Mapping of device names to Device schemas.")
 
     def validate_devices(self) -> None:
         """
-        Validates the devices configuration.
+        Validates the devices configuration at the collection level.
+
+        Checks that all device UUIDs are unique.
 
         Raises:
-            ValueError: If the devices configuration is invalid.
+            ValueError: If the devices configuration is invalid or UUID are not unique.
         """
-        for dev_name, dev in self.devices.items():
-            if dev.agent.ip:
-                if dev.agent.device_xml:
-                    raise ValueError("'device_xml' can not be defined for an external agent")
-                if dev.agent.adapter:
-                    raise ValueError("'adapter' can not be defined for an external agent")
-            else:
-                if not dev.agent.adapter:
-                    raise ValueError(f"Device '{dev_name}': agent requires an 'adapter' block.")
+        seen_uuids = {}
+        for name, device in self.devices.items():
+            uuid = device.uuid  # guaranteed by Device schema
+            if uuid in seen_uuids:
+                raise ValueError(
+                    f"Duplicate uuid '{uuid}' found for devices '{seen_uuids[uuid]}' and '{name}'"
+                )
+            seen_uuids[uuid] = name
 
     @property
-    def devices_dict(self):
-        """ Dictionary with all configured devices. """
+    def devices_dict(self) -> Dict[str, Any]:
+        """ Return plain dict of devices suitable for serialization. """
         return self.model_dump()['devices']
 
 
@@ -228,21 +118,17 @@ def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSS
     try:
         devices_cfg = DevicesConfig(**cfg)
         devices_cfg.validate_devices()
-    except ValidationError as err:
-        user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
-        return None
-    except ValueError as err:
-        user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
+    except (ValidationError, ValueError) as err:
+        user_notify.fail(f"Invalid YAML config: {err}")
         return None
 
     # Attach and enrich UNS for each device
     devices = devices_cfg.devices
-    for dev_name, device in devices.items():
+    for name, device in devices.items():
         try:
             device.attach_uns(uns_schema)
         except Exception as e:
-            user_notify.fail(f"Device '{dev_name}': UNS validation failed: {e}")
+            user_notify.fail(f"Device '{name}': UNS validation failed: {e}")
             return None
 
-    # return plain dict form (with `uns.levels` and `uns.uns_id`)
     return {k: v.model_dump() for k, v in devices.items()}

@@ -71,9 +71,11 @@ class DockerAccesLayer:
 
         self.leader_ip = None
         for node in self.docker_client.nodes.list():
-            if node.attrs['Spec']['Role'] == 'manager' and node.attrs['ManagerStatus']['Leader']:
-                self.leader_ip = node.attrs['Status']['Addr']
-                break
+            if node.attrs['Spec']['Role'] == 'manager':
+                manager_status = node.attrs.get('ManagerStatus', {})
+                if manager_status.get('Leader'):
+                    self.leader_ip = node.attrs['Status']['Addr']
+                    break
 
         if not self.leader_ip:
             user_notify.warning("WARNING: Could not determine the leader manager node IP.")

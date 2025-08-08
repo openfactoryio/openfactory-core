@@ -1,4 +1,18 @@
-""" Pydantic schemas for validating OpenFactory Application definitions. """
+"""
+OpenFactory Application Schemas
+
+This module provides Pydantic models to validate and represent OpenFactory application
+definitions and configurations. It supports loading from YAML configuration files,
+validating the structure and content, and enriching each application with Unified Namespace (UNS)
+metadata for enhanced semantic context.
+
+Validation Features:
+--------------------
+- Strict schema enforcement with `extra="forbid"` to prevent unexpected fields.
+- Support for UNS metadata attachment and validation.
+- Utilities to load and validate application configs from YAML files with user-friendly error handling.
+- Provides a structured way to represent Docker image info, environment variables, and app-specific metadata.
+"""
 
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from typing import List, Dict, Optional, Any

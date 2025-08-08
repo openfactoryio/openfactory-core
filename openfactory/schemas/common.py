@@ -1,8 +1,41 @@
 """
-Shared Pydantic schemas used across device and connector configurations.
+Shared Deployment Configuration Schemas for OpenFactory
 
-This module includes reusable components like resource definitions,
-deployment configuration, and container placement constraints.
+This module defines reusable Pydantic models that represent container
+deployment settings and resource constraints. These models are intended
+to be shared across device and connector configuration schemas.
+
+Components:
+-----------
+- `ResourcesDefinition`: Represents CPU and memory values for a container.
+- `Resources`: Groups `reservations` and `limits` for container resources.
+- `Placement`: Defines constraints for container placement on specific nodes.
+- `Deploy`: Complete deployment configuration including replicas, resource configs, and placement rules.
+
+Key Features:
+-------------
+- Express CPU and memory constraints using common formats (e.g., 0.5 CPUs, "1Gi" memory)
+- Define both resource requests and limits for containers
+- Support placement constraints for scheduling on labeled nodes
+- Modular, reusable across multiple OpenFactory schema modules
+
+Example Usage:
+--------------
+Define a deployment configuration:
+
+    >>> Deploy(
+    ...     replicas=2,
+    ...     resources=Resources(
+    ...         reservations=ResourcesDefinition(cpus=0.5, memory="512Mi"),
+    ...         limits=ResourcesDefinition(cpus=1.0, memory="1Gi")
+    ...     ),
+    ...     placement=Placement(
+    ...         constraints=["node.labels.zone == eu-west"]
+    ...     )
+    ... )
+
+This module is typically used as part of device, connector, or application
+schemas that involve resource scheduling or orchestration.
 """
 
 from pydantic import BaseModel, Field

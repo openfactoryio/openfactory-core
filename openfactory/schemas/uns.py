@@ -1,4 +1,49 @@
-""" OpenFactory Unified Namespace (UNS) Schema. """
+"""
+OpenFactory Unified Namespace (UNS) Schema
+
+This module defines the structure, constraints, validation logic, and helpers
+for managing the Unified Namespace (UNS) within OpenFactory.
+
+The UNS provides a hierarchical naming scheme used to organize assets and
+their attributes across the OpenFactory platform. The structure and rules
+are defined via a YAML schema file that is loaded and validated here.
+
+Components:
+-----------
+- `ConstraintType`: Type alias for field constraints (e.g., "ANY", enum, or literal).
+- `NamespaceItem`: Pydantic model representing one level in the namespace structure.
+- `UNSSchemaModel`: Validates schema structure loaded from YAML.
+- `UNSSchema`: Main interface for schema loading, validation, and UNS path generation.
+- `AttachUNSMixin`: Mixin for enriching objects with validated UNS information.
+
+Key Features:
+-------------
+- Validates schema structure via Pydantic
+- Enforces ordering and constraints of namespace levels
+- Supports constant values, enumerations, and wildcards
+- Automatically generates UNS paths for assets
+- Mix-in support for attaching UNS info to models with `uuid`/`uns`
+
+Typical Usage:
+--------------
+1. Load and validate schema:
+
+    >>> schema = UNSSchema("path/to/uns_schema.yaml")
+
+2. Extract and validate UNS fields for an asset:
+
+    >>> fields = schema.extract_uns_fields("uuid-123", asset_dict)
+
+3. Generate a standardized UNS path:
+
+    >>> path = schema.generate_uns_path(fields)
+
+4. Use `AttachUNSMixin` in your asset model to auto-enrich with UNS:
+
+    >>> class Asset(AttachUNSMixin):
+    >>>     uuid: str
+    >>>     uns: Optional[Dict[str, Any]]
+"""
 
 import yaml
 import re
@@ -326,7 +371,8 @@ class AttachUNSMixin:
         """
         Validate and enrich the object's `uns` block using the provided UNSSchema.
 
-        On success, replaces self.uns with:
+        On success, replaces `self.uns` with::
+
             {
                 "levels": { ... fields as returned by extract_uns_fields ... },
                 "uns_id": "<generated path>"
@@ -336,7 +382,7 @@ class AttachUNSMixin:
             uns_schema (UNSSchema): The UNS schema instance used for validation and path generation.
 
         Raises:
-            ValueError: if validation fails.
+            ValueError: If validation fails.
         """
         uns_data = dict(self.uns) if isinstance(self.uns, dict) else {}
 

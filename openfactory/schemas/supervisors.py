@@ -1,10 +1,15 @@
 """
-OpenFactory Supervisor schemas.
+OpenFactory Supervisor Schemas
 
-This module defines Pydantic models representing the Supervisor and its Adapter
-configurations used within OpenFactory devices. It enforces validation rules,
-such as the mutual exclusivity of 'ip' and 'image' fields in adapters, and
-provides structured deployment configuration options.
+This module defines Pydantic models for configuring OpenFactory supervisors and their
+associated adapters. It provides structured schemas with validation logic to ensure
+correct and consistent configuration of supervisor components within OpenFactory devices.
+
+Validation Features:
+--------------------
+- Strict enforcement of mutually exclusive 'ip' and 'image' fields in adapter configurations.
+- Support for specifying deployment options including resource limits and placement constraints.
+- Clear separation of supervisor container settings and adapter-specific parameters.
 """
 
 from typing import Dict, List, Optional

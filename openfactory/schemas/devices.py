@@ -1,8 +1,52 @@
 """
-OpenFactory Device schemas defining the device, supervisor, and device configurations.
+OpenFactory Device Schemas
 
-This module uses the generic Connector union for device connectors (agents),
-supports UNS enrichment, deployment defaults, and config validation.
+This module defines Pydantic models and utility functions to parse and validate
+device configuration files in OpenFactory. Device definitions include connection
+details, UNS metadata, ksql table mappings, and supervisor configurations.
+
+Key Components:
+---------------
+- **Device**: Defines a single device including its UUID, connector, optional supervisor,
+  UNS metadata, and supported Kafka ksqlDB tables.
+- **DevicesConfig**: Validates a dictionary of device entries and ensures UUID uniqueness.
+- **get_devices_from_config_file**: Loads, validates, and enriches devices from a YAML file.
+
+Features:
+---------
+- Supports UNS (Unified Namespace) enrichment through the `AttachUNSMixin`.
+- Restricts configuration fields with `extra="forbid"` to ensure strict schema conformance.
+- Includes validation logic to ensure all device UUIDs are unique.
+- Enforces allowed values for `ksql_tables`.
+
+YAML Example:
+-------------
+.. code-block:: yaml
+
+    devices:
+      press-1:
+        uuid: "press-001"
+        uns:
+          location: building-a
+          workcenter: press
+        connector:
+          type: mtconnect
+          ip: 192.168.1.100
+        supervisor:
+          image: ghcr.io/openfactoryio/opcua-supervisor:v4.0.1
+          adapter:
+            ip: 192.168.0.201
+            port: 4840
+            environment:
+            - NAMESPACE_URI=openfactory
+            - BROWSE_NAME=PRESS
+
+Usage:
+------
+Use `get_devices_from_config_file(path, uns_schema)` to load and validate a
+device configuration YAML file, with automatic UNS enrichment.
+
+This module is used by OpenFactory agents and deployment tools for runtime configuration.
 """
 
 from typing import Any, Dict, List, Optional

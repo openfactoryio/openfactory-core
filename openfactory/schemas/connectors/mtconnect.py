@@ -1,10 +1,46 @@
 """
-MTConnect-specific Pydantic schemas used to configure adapters and agents.
+MTConnect Connector Schemas
 
-This module defines validation logic for MTConnect data source connectors in OpenFactory,
-supporting both embedded and external agents/adapters. It ensures that configurations
-follow the expected rules, such as mutual exclusivity of `ip` and `image` in adapters,
-and valid combinations of `device_xml`, `adapter`, and `ip` in agents.
+This module provides Pydantic models to define and validate configuration
+schemas for MTConnect adapters and agents within OpenFactory.
+
+Key Models:
+-----------
+- Adapter:
+  Configuration for MTConnect adapters, supporting either direct IP-based
+  connection or container image deployment. Validates that exactly one of
+  `ip` or `image` is specified and applies deployment defaults.
+
+- Agent:
+  Configuration for MTConnect agents, which may be external (specified by `ip`)
+  or embedded with an Adapter and device XML file. Validates the correct
+  mutual exclusivity and presence of `ip`, `device_xml`, and `adapter` fields.
+
+- MTConnectConnector:
+  Wrapper schema with a discriminator `type='mtconnect'` that encapsulates the
+  Agent configuration.
+
+Validation Features:
+--------------------
+- Ensures mutual exclusivity of critical fields (`ip` vs. `image` for adapters;
+  `ip` vs. `adapter` and `device_xml` for agents).
+- Provides default deployment settings (`deploy.replicas = 1`) if unspecified.
+- Forbids unknown fields to ensure strict schema conformance.
+
+YAML Example:
+-------------
+.. code-block:: yaml
+
+    type: mtconnect
+    agent:
+      port: 7878
+      device_xml: /path/to/device.xml
+      adapter:
+        ip: 192.168.0.201
+        port: 7879
+
+This module is essential for configuring MTConnect data sources in OpenFactory agents and adapters,
+ensuring valid and consistent runtime setup.
 """
 
 from typing import Dict, List, Optional, Literal

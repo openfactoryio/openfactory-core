@@ -111,11 +111,16 @@ class DevicesConfig(BaseModel):
     """
     devices: Dict[str, Device] = Field(..., description="Mapping of device names to Device schemas.")
 
-    def validate_devices(self) -> None:
+    def validate_devices(self, uns_schema: UNSSchema) -> None:
         """
         Validates the devices configuration at the collection level.
 
-        Checks that all device UUIDs are unique.
+        Checks that all device UUIDs are unique and attaches UNS metadata
+        using the provided UNS schema.
+
+        Args:
+            uns_schema (UNSSchema): Schema instance used to extract and validate
+                                    UNS metadata for each device.
 
         Raises:
             ValueError: If the devices configuration is invalid or UUID are not unique.
@@ -129,6 +134,11 @@ class DevicesConfig(BaseModel):
                 )
             seen_uuids[uuid] = name
 
+            try:
+                device.attach_uns(uns_schema)
+            except Exception as e:
+                raise ValueError(f"Device '{name}': UNS validation failed: {e}")
+
     @property
     def devices_dict(self) -> Dict[str, Any]:
         """ Return plain dict of devices suitable for serialization. """
@@ -138,10 +148,6 @@ class DevicesConfig(BaseModel):
 def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSSchema) -> Optional[Dict[str, Device]]:
     """
     Load, validate, and enrich device configurations from a YAML file using UNS metadata.
-
-    This function reads a YAML file containing device definitions, validates its content
-    using the :class:`DevicesConfig` Pydantic model, and augments each validated device entry
-    with Unified Namespace (UNS) metadata derived from the provided schema.
 
     Args:
         devices_yaml_config_file (str): Path to the YAML file defining device configurations.
@@ -161,18 +167,10 @@ def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSS
     # validate and create devices configuration
     try:
         devices_cfg = DevicesConfig(**cfg)
-        devices_cfg.validate_devices()
+        devices_cfg.validate_devices(uns_schema)
     except (ValidationError, ValueError) as err:
         user_notify.fail(f"Invalid YAML config: {err}")
         return None
 
     # Attach and enrich UNS for each device
-    devices = devices_cfg.devices
-    for name, device in devices.items():
-        try:
-            device.attach_uns(uns_schema)
-        except Exception as e:
-            user_notify.fail(f"Device '{name}': UNS validation failed: {e}")
-            return None
-
-    return {k: v.model_dump() for k, v in devices.items()}
+    return devices_cfg.devices

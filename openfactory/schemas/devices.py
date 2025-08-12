@@ -1,8 +1,52 @@
 """
-OpenFactory Device schemas defining the device, supervisor, and device configurations.
+OpenFactory Device Schemas
 
-This module uses the generic Connector union for device connectors (agents),
-supports UNS enrichment, deployment defaults, and config validation.
+This module defines Pydantic models and utility functions to parse and validate
+device configuration files in OpenFactory. Device definitions include connection
+details, UNS metadata, ksql table mappings, and supervisor configurations.
+
+Key Components:
+---------------
+- **Device**: Defines a single device including its UUID, connector, optional supervisor,
+  UNS metadata, and supported Kafka ksqlDB tables.
+- **DevicesConfig**: Validates a dictionary of device entries and ensures UUID uniqueness.
+- **get_devices_from_config_file**: Loads, validates, and enriches devices from a YAML file.
+
+Features:
+---------
+- Supports UNS (Unified Namespace) enrichment through the `AttachUNSMixin`.
+- Restricts configuration fields with `extra="forbid"` to ensure strict schema conformance.
+- Includes validation logic to ensure all device UUIDs are unique.
+- Enforces allowed values for `ksql_tables`.
+
+YAML Example:
+-------------
+.. code-block:: yaml
+
+    devices:
+      press-1:
+        uuid: "press-001"
+        uns:
+          location: building-a
+          workcenter: press
+        connector:
+          type: mtconnect
+          ip: 192.168.1.100
+        supervisor:
+          image: ghcr.io/openfactoryio/opcua-supervisor:v4.0.1
+          adapter:
+            ip: 192.168.0.201
+            port: 4840
+            environment:
+            - NAMESPACE_URI=openfactory
+            - BROWSE_NAME=PRESS
+
+Usage:
+------
+Use `get_devices_from_config_file(path, uns_schema)` to load and validate a
+device configuration YAML file, with automatic UNS enrichment.
+
+This module is used by OpenFactory agents and deployment tools for runtime configuration.
 """
 
 from typing import Any, Dict, List, Optional
@@ -67,11 +111,16 @@ class DevicesConfig(BaseModel):
     """
     devices: Dict[str, Device] = Field(..., description="Mapping of device names to Device schemas.")
 
-    def validate_devices(self) -> None:
+    def validate_devices(self, uns_schema: UNSSchema) -> None:
         """
         Validates the devices configuration at the collection level.
 
-        Checks that all device UUIDs are unique.
+        Checks that all device UUIDs are unique and attaches UNS metadata
+        using the provided UNS schema.
+
+        Args:
+            uns_schema (UNSSchema): Schema instance used to extract and validate
+                                    UNS metadata for each device.
 
         Raises:
             ValueError: If the devices configuration is invalid or UUID are not unique.
@@ -85,6 +134,11 @@ class DevicesConfig(BaseModel):
                 )
             seen_uuids[uuid] = name
 
+            try:
+                device.attach_uns(uns_schema)
+            except Exception as e:
+                raise ValueError(f"Device '{name}': UNS validation failed: {e}")
+
     @property
     def devices_dict(self) -> Dict[str, Any]:
         """ Return plain dict of devices suitable for serialization. """
@@ -94,10 +148,6 @@ class DevicesConfig(BaseModel):
 def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSSchema) -> Optional[Dict[str, Device]]:
     """
     Load, validate, and enrich device configurations from a YAML file using UNS metadata.
-
-    This function reads a YAML file containing device definitions, validates its content
-    using the :class:`DevicesConfig` Pydantic model, and augments each validated device entry
-    with Unified Namespace (UNS) metadata derived from the provided schema.
 
     Args:
         devices_yaml_config_file (str): Path to the YAML file defining device configurations.
@@ -117,18 +167,10 @@ def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSS
     # validate and create devices configuration
     try:
         devices_cfg = DevicesConfig(**cfg)
-        devices_cfg.validate_devices()
+        devices_cfg.validate_devices(uns_schema)
     except (ValidationError, ValueError) as err:
         user_notify.fail(f"Invalid YAML config: {err}")
         return None
 
     # Attach and enrich UNS for each device
-    devices = devices_cfg.devices
-    for name, device in devices.items():
-        try:
-            device.attach_uns(uns_schema)
-        except Exception as e:
-            user_notify.fail(f"Device '{name}': UNS validation failed: {e}")
-            return None
-
-    return {k: v.model_dump() for k, v in devices.items()}
+    return devices_cfg.devices

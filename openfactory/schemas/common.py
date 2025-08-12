@@ -1,8 +1,41 @@
 """
-Shared Pydantic schemas used across device and connector configurations.
+Shared Deployment Configuration Schemas for OpenFactory
 
-This module includes reusable components like resource definitions,
-deployment configuration, and container placement constraints.
+This module defines reusable Pydantic models that represent container
+deployment settings and resource constraints. These models are intended
+to be shared across device and connector configuration schemas.
+
+Components:
+-----------
+- `ResourcesDefinition`: Represents CPU and memory values for a container.
+- `Resources`: Groups `reservations` and `limits` for container resources.
+- `Placement`: Defines constraints for container placement on specific nodes.
+- `Deploy`: Complete deployment configuration including replicas, resource configs, and placement rules.
+
+Key Features:
+-------------
+- Express CPU and memory constraints using common formats (e.g., 0.5 CPUs, "1Gi" memory)
+- Define both resource requests and limits for containers
+- Support placement constraints for scheduling on labeled nodes
+- Modular, reusable across multiple OpenFactory schema modules
+
+Example Usage:
+--------------
+Define a deployment configuration:
+
+    >>> Deploy(
+    ...     replicas=2,
+    ...     resources=Resources(
+    ...         reservations=ResourcesDefinition(cpus=0.5, memory="512Mi"),
+    ...         limits=ResourcesDefinition(cpus=1.0, memory="1Gi")
+    ...     ),
+    ...     placement=Placement(
+    ...         constraints=["node.labels.zone == eu-west"]
+    ...     )
+    ... )
+
+This module is typically used as part of device, connector, or application
+schemas that involve resource scheduling or orchestration.
 """
 
 from pydantic import BaseModel, Field
@@ -55,3 +88,64 @@ class Deploy(BaseModel):
         default=None,
         description="Constraints for container placement on specific nodes."
     )
+
+
+def cpus_reservation(deploy: Optional[Deploy], default: float = 0.5) -> float:
+    """
+    Retrieve the CPU reservation value from a Deploy object, returning a default if unavailable.
+
+    Args:
+        deploy (Optional[Deploy]): The deployment configuration object.
+        default (float): The default CPU reservation value to return if not set. Defaults to 0.5.
+
+    Returns:
+        float: The CPU reservation value from the deployment or the default if not specified.
+    """
+    if deploy is None:
+        return default
+    resources = getattr(deploy, 'resources', None)
+    reservations = resources.reservations if resources else None
+    return reservations.cpus if reservations and reservations.cpus is not None else default
+
+
+def cpus_limit(deploy: Optional[Deploy], default: float = 1.0) -> float:
+    """
+    Retrieve the CPU limit value from a Deploy object, returning a default if unavailable.
+
+    Args:
+        deploy (Optional[Deploy]): The deployment configuration object.
+        default (float): The default CPU limit value to return if not set. Defaults to 1.0.
+
+    Returns:
+        float: The CPU limit value from the deployment or the default if not specified.
+    """
+    if deploy is None:
+        return default
+    resources = getattr(deploy, 'resources', None)
+    limits = resources.limits if resources else None
+    return limits.cpus if limits and limits.cpus is not None else default
+
+
+def constraints(deploy: Optional[Deploy]) -> Optional[List[str]]:
+    """
+    Extract placement constraints from a Deploy object and format them for use in Python Docker deployments.
+
+    Docker Engine and Docker Swarm APIs expect placement constraints to use `==` for equality checks
+    (e.g., node labels). This function transforms any single `=` signs in constraint expressions into
+    the required `==` syntax, ensuring the constraints are correctly interpreted when creating containers
+    or services programmatically using Python Docker clients.
+
+    Args:
+        deploy (Optional[Deploy]): The deployment configuration object.
+
+    Returns:
+        Optional[List[str]]: A list of constraints formatted for Docker/Docker Swarm API usage,
+        or None if no constraints are provided.
+    """
+    if deploy is None:
+        return None
+    placement = getattr(deploy, 'placement', None)
+    placement_constraints = placement.constraints if placement else None
+    if placement_constraints:
+        return [c.replace('=', ' == ') for c in placement_constraints]
+    return None

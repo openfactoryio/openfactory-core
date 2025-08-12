@@ -1,4 +1,60 @@
-""" Pydantic schemas for validating OpenFactory infrastructure configuration files. """
+"""
+Infrastructure Configuration Schemas for OpenFactory
+
+This module defines Pydantic models used to validate and process infrastructure
+configuration files in OpenFactory. These configurations typically describe
+networking, nodes, volumes, and IP address management (IPAM) settings for
+Docker Swarm-based deployments.
+
+Key Components:
+---------------
+- **Volumes**: Defines named Docker volumes and associated driver options.
+- **Nodes**: Represents Docker Swarm managers and workers with IP and labels.
+- **Networks**: Includes support for IPAM configuration and multiple network definitions.
+- **InfrastructureSchema**: Top-level model combining nodes, volumes, and networks.
+- **get_infrastructure_from_config_file**: Utility function to load and validate YAML-based infrastructure config.
+
+Validation Features:
+--------------------
+- Ensures that manager and worker node IP addresses are unique across the cluster.
+- Uses Pydantic aliases for compatibility with external config file formats.
+- Provides rich error messages via user notification hooks.
+
+Example YAML Structure:
+-----------------------
+
+.. code-block:: yaml
+
+    nodes:
+      managers:
+        manager-1:
+          ip: 192.168.1.10
+      workers:
+        worker-1:
+          ip: 192.168.1.11
+
+    volumes:
+      my-volume:
+        driver_opts:
+          type: nfs
+          o: addr=192.168.1.20,nolock,soft,rw
+          device: ":/data"
+
+    networks:
+      openfactory-network:
+        name: ofa-net
+        ipam:
+          config:
+            - subnet: 192.168.0.0/16
+              gateway: 192.168.0.1
+
+Usage:
+------
+
+Call `get_infrastructure_from_config_file(path)` to load and validate the infrastructure config.
+
+This module is typically used by OpenFactory's bootstrap and deployment tooling.
+"""
 
 from typing import Dict, Optional
 from pydantic import BaseModel, Field, RootModel, model_validator, ValidationError

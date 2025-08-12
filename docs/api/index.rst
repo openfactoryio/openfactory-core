@@ -6,6 +6,7 @@ API Reference
 
    openfactory/index
    assets/index
+   connectors/index
    apps/index
    kafka/index
    schemas/index

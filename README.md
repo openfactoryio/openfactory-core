@@ -33,7 +33,7 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 
 1. **Perception Layer**: This foundational layer consists of devices such as sensors and manufacturing equipment that collect data from and send commands to the physical environment.
 
-2. **Connection Layer**: This layer comprises data connectors that facilitate communication between devices and the system, ensuring seamless data transfer.
+2. **Connection Layer**: This layer comprises data connectors that facilitate communication between devices and the system and supervisors sending back commands to devices willing to respond to them.
 
 3. **Aggregation Layer**: Here, Kafka acts as a storage layer, while ksqlDB serves as a compute layer, enabling the processing and organization of incoming data streams.
 
@@ -47,38 +47,70 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 ## Architecture
 
 ![Data Flow OpenFactory](docs/_static/images/OFAArchitecture.png)
+
 *OpenFactory* employs a microservices architecture orchestrated by Docker Swarm, where various microservices required for device integration are automatically created and deployed based on YAML configurations. Key components include:
 
-- **Adapters**: Facilitate data and commands compatibility between devices.
-- **Agents**: Collect and transmit data from devices to Kafka, ensuring smooth integration and real-time data flow.
-- **Supervisors**: Send commands from Kafka to devices.
-- **Kafka**: While not part of *OpenFactory*, it serves as the data stream platform where processed data is sent.
-- **ksqlDB**: Provides real-time stream processing, enabling users to query and manipulate data dynamically for actionable insights.
-- **Docker Swarm**: Coordinates and manages microservices across the cluster for optimal performance.
+* **Adapters**: Ensure data and command compatibility between devices and the platform.
+* **Connectors**: Collect and transmit data from devices to **Kafka**, using Adapters if required.
+* **Supervisors**: Send commands from **Kafka** to devices.
+* **Applications**: Process data in real time, make decisions, and emit commands.
+* **Kafka**: Serves as the data streaming platform where processed data is sent.
+* **ksqlDB**: Provides real-time stream processing, enabling dynamic querying and transformation of data streams.
+* **Docker Swarm**: Coordinates and manages microservices across the cluster for optimal performance.
+* **Registry**: Serves as the central source of truth for device and application configurations, device models, application code, and Docker images, ensuring consistent deployments and operations.
 
-## Scalability
 
-*OpenFactory* is built for scalability, enabling the addition of resources as demand grows. Its microservices architecture, managed by Docker Swarm, allows individual services to be scaled independently based on operational needs. This modularity ensures that as more devices are integrated or data processing requirements increase, *OpenFactory* can adapt efficiently, supporting both horizontal and vertical scaling.
+## **How It Works**
 
-## Elasticity
+1. **Device / Application Onboarding**
 
-*OpenFactory* exhibits strong elasticity, allowing it to adapt quickly to changing workloads and operational demands. This capability enables the system to allocate resources dynamically, ensuring that microservices can scale up or down based on real-time usage. As the volume of data from devices fluctuates or as processing needs change, *OpenFactory* can efficiently adjust resource allocation, optimizing performance without manual intervention.
+   * The device or application is described in a YAML configuration and stored in the **Registry**.
+   * The Registry holds the configurations, device models, application code, and Docker images needed for deployment.
+   * *OpenFactory* automatically deploys the necessary **Adapters**, **Connectors**, and **Supervisors** as Docker Swarm services on the OpenFactory cluster, pulling the required images from the Registry as needed.
 
-## Fault Tolerance
+2. **Data Ingestion**
 
-*OpenFactory* is designed with fault tolerance in mind, leveraging Docker Swarm's orchestration capabilities to ensure high availability and resilience. The replication of microservices across multiple nodes allows the system to continue functioning smoothly even if some components fail. This redundancy minimizes downtime and guarantees that data streams remain operational, providing continuous service for device integration and data processing.
+   * **Connectors** collect device data.
+   * If needed, an **Adapter** converts the data into a standard format.
+   * Data is published to **Kafka**.
 
-## Hybrid Deployment
+3. **Real-Time Processing**
 
-*OpenFactory* supports hybrid deployment strategies, allowing organizations to combine on-premises resources with cloud-based infrastructure. This flexibility enables businesses to optimize their operations by leveraging the benefits of both environments, such as improved resource utilization and reduced latency for local operations.
+   * **Applications** subscribe to Kafka topics and process data for analytics, decision-making, or triggers.
+   * **ksqlDB** allows dynamic filtering, aggregation, and transformation without writing custom code.
 
-## Distributed Architecture
+4. **Command Execution**
 
-*OpenFactory* operates on a distributed architecture, ensuring that components can be spread across multiple nodes in a network. This distribution enhances performance by allowing parallel processing of data streams and improves reliability through redundancy. By decentralizing resource management and processing, *OpenFactory* can efficiently handle large volumes of data from multiple devices.
+   * **Applications** (or ksqlDB queries) produce command messages.
+   * **Supervisors** receive these commands from Kafka and send them to devices via the proper Connector/Adapter path.
 
-## Alignment with RAMI 4.0
 
-OpenFactory follows the principles of the [RAMI 4.0 framework](https://www.sci40.com/english/thematic-fields/rami4-0/) through its structured architecture, integrating devices within a digital manufacturing environment.
+## **Platform Capabilities**
+
+### **Scalability**
+
+*OpenFactory* is built to grow with demand. Its microservices architecture, managed by Docker Swarm, allows each service to be scaled independently. As more devices are connected or data volumes increase, resources can be added seamlessly to support both horizontal and vertical scaling without disrupting operations.
+
+### **Elasticity**
+
+The platform automatically adapts to changing workloads. Services can scale up or down in real time based on data flow and processing needs, ensuring efficient resource usage and optimal performance without manual intervention.
+
+### **Fault Tolerance**
+
+High availability is built in. Docker Swarm replicates microservices across nodes so that even if some components fail, the system remains operational. This redundancy minimizes downtime and ensures continuous data collection, processing, and control.
+
+### **Hybrid Deployment**
+
+*OpenFactory* can run across both on-premises and cloud infrastructure, giving organizations the flexibility to balance performance, latency, and cost. Critical operations can be kept local while leveraging cloud resources for scalability and advanced analytics.
+
+### **Distributed Architecture**
+
+The platform’s services can be deployed across multiple nodes, enabling parallel data processing and improved reliability through redundancy. This distribution ensures that large volumes of device data are handled efficiently and without bottlenecks.
+
+### **Alignment with RAMI 4.0**
+
+*OpenFactory* aligns with the principles of the [RAMI 4.0 framework](https://www.sci40.com/english/thematic-fields/rami4-0/), providing a structured, standards-based approach to integrating devices within a digital manufacturing environment.
+
 
 ## License
 ![License: Polyform Noncommercial](https://img.shields.io/badge/license-Polyform--NC-blue)

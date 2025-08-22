@@ -5,6 +5,7 @@ import os
 import re
 from dotenv import load_dotenv
 from pathlib import Path
+from importlib import resources
 from importlib.metadata import version
 from typing import Any
 
@@ -66,4 +67,5 @@ def load_yaml(yaml_file: str) -> Any:
 config_file = Path.joinpath(Path(__file__).resolve().parent, 'openfactory.yml')
 globals().update(load_yaml(config_file))
 
-MTCONNECT_AGENT_CFG_FILE = os.path.join(Path(__file__).resolve().parent, 'agent.cfg')
+with resources.as_file(resources.files("openfactory.resources.mtcagent").joinpath("agent.cfg")) as cfg_path:
+    MTCONNECT_AGENT_CFG_FILE = str(cfg_path)

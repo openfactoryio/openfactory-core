@@ -39,7 +39,7 @@ def setup_kafka(ksqldb_server: str) -> None:
                 f"{ksqldb_server}/ksql",
                 headers={"Content-Type": "application/vnd.ksql.v1+json"},
                 json={"ksql": statements, "streamsProperties": {}},
-                timeout=10,
+                timeout=20,
             )
             response.raise_for_status()
             time.sleep(5)

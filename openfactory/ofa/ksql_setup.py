@@ -19,8 +19,8 @@ def setup_kafka(ksqldb_server: str) -> None:
     Apply all SQL scripts in `openfactory.resources.ksql` to a ksqlDB server.
 
     The SQL scripts are applied in alphabetical order, which allows
-    numeric prefixes in filenames to control execution order (e.g., 
-    `001-assets.sql`, `002-ofacmds.sql`).
+    numeric prefixes in filenames to control execution order
+    (e.g., `001-assets.sql`, `002-ofacmds.sql`).
 
     Args:
         ksqldb_server (str): The URL of the ksqlDB server, e.g., "http://localhost:8088".

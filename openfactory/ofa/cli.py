@@ -77,6 +77,7 @@ def version() -> None:
     """ Returns OpenFactory version. """
     print(__version__)
 
+
 @cli.command(name="setup-kafka")
 @click.option(
     "--ksqldb-server", required=True,

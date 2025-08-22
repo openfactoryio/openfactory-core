@@ -1,2 +1,3 @@
 include openfactory/config/openfactory.yml
 include openfactory/config/agent.cfg
+recursive-include openfactory/resources/ksql *.sql

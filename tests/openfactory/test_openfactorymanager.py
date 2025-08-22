@@ -3,8 +3,12 @@ import docker
 from unittest.mock import patch, MagicMock
 from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 from openfactory.schemas.common import Deploy, Resources, ResourcesDefinition, Placement
+from openfactory.schemas.apps import OpenFactoryAppSchema
+from openfactory.schemas.filelayer.nfs_backend import NFSBackendConfig
+from openfactory.schemas.filelayer.local_backend import LocalBackendConfig
+from openfactory.filelayer.local_backend import LocalBackend
 from openfactory.openfactory_manager import OpenFactoryManager
-from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy
+from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 from openfactory.exceptions import OFAException
 
 
@@ -207,12 +211,12 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_config.OPENFACTORY_NETWORK = "openfactory_net"
 
         # Application dict without explicit KSQLDB_LOG_LEVEL in environment
-        app = {
-            "uuid": "APP123",
-            "image": "app_image",
-            "environment": ["FOO=bar", "BAZ=qux"],
-            "uns": {"some": "metadata"}
-        }
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            environment=["FOO=bar", "BAZ=qux"],
+            uns={"some": "metadata"},
+        )
 
         self.manager.deploy_openfactory_application(app)
 
@@ -232,7 +236,8 @@ class TestOpenFactoryManager(unittest.TestCase):
             name="app123",
             mode={"Replicated": {"Replicas": 1}},
             env=expected_env,
-            networks=["openfactory_net"]
+            networks=["openfactory_net"],
+            mounts=[]
         )
 
         # register_asset call check
@@ -250,6 +255,48 @@ class TestOpenFactoryManager(unittest.TestCase):
 
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.register_asset")
+    def test_deploy_with_nfs_storage_calls_backend(self, mock_register_asset, mock_user_notify, mock_config):
+        """ Test that deploying an app with NFS storage calls the backend's get_mount_spec """
+
+        mock_config.KSQLDB_LOG_LEVEL = "INFO"
+        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
+
+        nfs_config = NFSBackendConfig(
+            type="nfs",
+            server="nfs.example.com",
+            remote_path="/data/share",
+            mount_point="/mnt/data",
+            mount_options=["rw"]
+        )
+
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            environment=None,
+            uns=None,
+            storage=nfs_config
+        )
+
+        with patch("openfactory.filelayer.nfs_backend.NFSBackend") as MockBackend:
+            backend_instance = MockBackend.return_value
+            mount_spec = {"source": "nfs.example.com:/data/share", "target": "/mnt/data", "type": "volume"}
+            backend_instance.get_mount_spec.return_value = mount_spec
+
+            self.manager.deploy_openfactory_application(app)
+
+            # Backend instantiation and get_mount_spec called
+            MockBackend.assert_called_once_with(nfs_config)
+            backend_instance.get_mount_spec.assert_called_once()
+
+            # Deployment strategy received the mount spec
+            self.manager.deployment_strategy.deploy.assert_called_once()
+            deploy_kwargs = self.manager.deployment_strategy.deploy.call_args.kwargs
+            self.assertIn("mounts", deploy_kwargs)
+            self.assertIn(mount_spec, deploy_kwargs["mounts"])
+
+    @patch("openfactory.openfactory_manager.config")
+    @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_deploy_fails(self, mock_user_notify, mock_config):
         """ Test deploy_openfactory_application raises on Docker APIError """
         mock_config.KSQLDB_LOG_LEVEL = "INFO"
@@ -261,12 +308,13 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.manager.deployment_strategy.deploy.side_effect = DummyAPIError("deployment failed")
 
-        app = {
-            "uuid": "APP123",
-            "image": "app_image",
-            "environment": None,
-            "uns": None
-        }
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            environment=None,
+            uns=None,
+            storage=None
+        )
 
         self.manager.deploy_openfactory_application(app)
 
@@ -274,6 +322,35 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_user_notify.fail.assert_called_once()
         args, _ = mock_user_notify.fail.call_args
         self.assertIn("Application APP123 could not be deployed", args[0])
+
+    @patch("os.path.exists", return_value=True)
+    @patch("os.path.isdir", return_value=True)
+    def test_local_backend_cannot_be_used_with_swarm(self, mock_isdir, mock_exists):
+        """ LocalBackend should raise an error when deployed with SwarmDeploymentStrategy """
+
+        # Use a real LocalBackendConfig and LocalBackend
+        config = LocalBackendConfig(type="local",
+                                    local_path="/tmp/host",
+                                    mount_point="/mnt/data")
+        local_backend = LocalBackend(config)
+
+        # Create a mock OpenFactoryApp
+        app = MagicMock()
+        app.uuid = "APP1"
+        app.image = "myimage:latest"
+        app.environment = []
+        app.storage = MagicMock()
+        app.storage.create_backend_instance.return_value = local_backend
+        app.uns = None
+
+        # Assign a SwarmDeploymentStrategy instance
+        self.manager.deployment_strategy = SwarmDeploymentStrategy()
+
+        # Expect ValueError because LocalBackend is incompatible with Swarm
+        with self.assertRaises(ValueError) as cm:
+            self.manager.deploy_openfactory_application(app)
+
+        self.assertIn("LocalBackend cannot be used with SwarmDeploymentStrategy", str(cm.exception))
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
@@ -285,14 +362,13 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_uns_schema_class.return_value = mock_uns_instance
 
         # Mock the OpenFactoryManager instance
-        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers='mokded_bootstrap_servers')
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers='mocked_bootstrap_servers')
         manager.applications_uuid = MagicMock(return_value=['existing-app-uuid'])
         manager.deploy_openfactory_application = MagicMock()
 
-        # Mock the YAML configuration file loading
         mock_get_apps_from_config_file.return_value = {
-            'App1': {'uuid': 'new-app-uuid', 'image': 'app1-image', 'environment': None},
-            'App2': {'uuid': 'existing-app-uuid', 'image': 'app2-image', 'environment': None}
+            'App1': OpenFactoryAppSchema(uuid='new-app-uuid', image='app1-image', environment=None, uns=None),
+            'App2': OpenFactoryAppSchema(uuid='existing-app-uuid', image='app2-image', environment=None, uns=None)
         }
 
         # Call the method to test
@@ -303,11 +379,9 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_user_notify.info.assert_any_call('App1:')
         mock_user_notify.info.assert_any_call('App2:')
         mock_user_notify.info.assert_any_call('Application existing-app-uuid exists already and was not deployed')
-        manager.deploy_openfactory_application.assert_called_once_with({
-            'uuid': 'new-app-uuid',
-            'image': 'app1-image',
-            'environment': None
-        })
+        manager.deploy_openfactory_application.assert_called_once_with(
+            mock_get_apps_from_config_file.return_value['App1']
+        )
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
@@ -745,8 +819,8 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # Mock the YAML config file content
         mock_get_apps_from_config_file.return_value = {
-            'App1': {'uuid': 'app-uuid-1'},
-            'App2': {'uuid': 'app-uuid-3'}
+            'App1': OpenFactoryAppSchema(uuid='app-uuid-1', image='app1-image', environment=None, uns=None),
+            'App2': OpenFactoryAppSchema(uuid='app-uuid-3', image='app2-image', environment=None, uns=None)
         }
 
         # Call the method

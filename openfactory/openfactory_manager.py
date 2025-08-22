@@ -26,11 +26,10 @@ Error handling:
 """
 
 import docker
-from typing import Dict
 import openfactory.config as config
 from openfactory import OpenFactory
 from openfactory.schemas.devices import Device, get_devices_from_config_file
-from openfactory.schemas.apps import get_apps_from_config_file
+from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file
 from openfactory.schemas.uns import UNSSchema
 from openfactory.schemas.common import constraints, cpus_limit, cpus_reservation
 from openfactory.assets import Asset
@@ -39,7 +38,7 @@ from openfactory.models.user_notifications import user_notify
 from openfactory.utils import register_asset, deregister_asset, load_plugin
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.connectors.mtconnect.mtc_connector import MTConnectConnector
-from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy
+from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 
 
 class OpenFactoryManager(OpenFactory):
@@ -136,23 +135,23 @@ class OpenFactoryManager(OpenFactory):
 
         user_notify.success(f"Supervisor {supervisor_uuid} deployed successfully")
 
-    def deploy_openfactory_application(self, application: Dict) -> None:
+    def deploy_openfactory_application(self, application: OpenFactoryAppSchema) -> None:
         """
         Deploy an OpenFactory application.
 
         Args:
-            application (dict): The application configuration as a dictionary.
+            application (OpenFactoryAppSchema): The application configuration.
 
         Raises:
             OFAException: If the application cannot be deployed.
         """
         # build environment variables
-        env = [f"APP_UUID={application['uuid']}",
+        env = [f"APP_UUID={application.uuid}",
                f"KAFKA_BROKER={self.bootstrap_servers}",
                f"KSQLDB_URL={self.ksql.ksqldb_url}",
-               f"DOCKER_SERVICE={application['uuid'].lower()}"]
-        if application['environment'] is not None:
-            for item in application['environment']:
+               f"DOCKER_SERVICE={application.uuid.lower()}"]
+        if application.environment is not None:
+            for item in application.environment:
                 var, val = item.split('=')
                 env.append(f"{var.strip()}={val.strip()}")
 
@@ -160,21 +159,33 @@ class OpenFactoryManager(OpenFactory):
         if not any(var.startswith("KSQLDB_LOG_LEVEL=") for var in env):
             env.append(f"KSQLDB_LOG_LEVEL={config.KSQLDB_LOG_LEVEL}")
 
+        # add storage
+        mounts = []
+        if application.storage:
+            backend_instance = application.storage.create_backend_instance()
+            if isinstance(self.deployment_strategy, SwarmDeploymentStrategy):
+                if not backend_instance.compatible_with_swarm():
+                    raise ValueError(f"{type(backend_instance).__name__} cannot be used with SwarmDeploymentStrategy")
+            mount_spec = backend_instance.get_mount_spec()
+            if mount_spec:
+                mounts.append(mount_spec)
+
         try:
             self.deployment_strategy.deploy(
-                image=application['image'],
-                name=application['uuid'].lower(),
+                image=application.image,
+                name=application.uuid.lower(),
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,
-                networks=[config.OPENFACTORY_NETWORK]
+                networks=[config.OPENFACTORY_NETWORK],
+                mounts=mounts
             )
         except docker.errors.APIError as err:
-            user_notify.fail(f"Application {application['uuid']} could not be deployed\n{err}")
+            user_notify.fail(f"Application {application.uuid} could not be deployed\n{err}")
             return
 
-        register_asset(application['uuid'], uns=application['uns'], asset_type='OpenFactoryApp',
-                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=application['uuid'].lower())
-        user_notify.success(f"Application {application['uuid']} deployed successfully")
+        register_asset(application.uuid, uns=application.uns, asset_type='OpenFactoryApp',
+                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=application.uuid.lower())
+        user_notify.success(f"Application {application.uuid} deployed successfully")
 
     def deploy_devices_from_config_file(self, yaml_config_file: str) -> None:
         """
@@ -252,8 +263,8 @@ class OpenFactoryManager(OpenFactory):
 
         for app_name, app in apps.items():
             user_notify.info(f"{app_name}:")
-            if app['uuid'] in self.applications_uuid():
-                user_notify.info(f"Application {app['uuid']} exists already and was not deployed")
+            if app.uuid in self.applications_uuid():
+                user_notify.info(f"Application {app.uuid} exists already and was not deployed")
                 continue
 
             self.deploy_openfactory_application(app)
@@ -395,11 +406,11 @@ class OpenFactoryManager(OpenFactory):
 
         for app_name, app in apps.items():
             user_notify.info(f"{app_name}:")
-            if not app['uuid'] in self.applications_uuid():
-                user_notify.info(f"No application {app['uuid']} deployed in OpenFactory")
+            if app.uuid not in self.applications_uuid():
+                user_notify.info(f"No application {app.uuid} deployed in OpenFactory")
                 continue
 
-            self.tear_down_application(app['uuid'])
+            self.tear_down_application(app.uuid)
 
     def get_asset_uuid_from_docker_service(self, docker_service_name: str) -> str:
         """

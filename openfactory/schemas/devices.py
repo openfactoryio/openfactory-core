@@ -119,8 +119,7 @@ class DevicesConfig(BaseModel):
         using the provided UNS schema.
 
         Args:
-            uns_schema (UNSSchema): Schema instance used to extract and validate
-                                    UNS metadata for each device.
+            uns_schema (UNSSchema): Schema instance used to extract and validate UNS metadata for each device.
 
         Raises:
             ValueError: If the devices configuration is invalid or UUID are not unique.
@@ -151,12 +150,10 @@ def get_devices_from_config_file(devices_yaml_config_file: str, uns_schema: UNSS
 
     Args:
         devices_yaml_config_file (str): Path to the YAML file defining device configurations.
-        uns_schema (UNSSchema): Schema instance used to extract and validate UNS metadata
-                                for each device.
+        uns_schema (UNSSchema): Schema instance used to extract and validate UNS metadata for each device.
 
     Returns:
-        Optional[Dict[str, Device]]: A dictionary of validated and enriched device configurations,
-                                     or `None` if validation fails.
+        Optional[Dict[str, Device]]: A dictionary of validated and enriched device configurations, or `None` if validation fails.
 
     Note:
         In case of validation errors, user notifications will be triggered and `None` will be returned.

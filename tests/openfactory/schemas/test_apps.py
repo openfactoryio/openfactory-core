@@ -169,13 +169,68 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         result = get_apps_from_config_file("valid_config.yaml", self.uns_schema)
         self.assertIsNotNone(result)
-        self.assertIn("demo1", result)
-        self.assertEqual(result["demo1"]["uuid"], "DEMO-APP")
-        self.assertEqual(result["demo1"]["image"], "demofact/demo1")
-        self.assertEqual(result["demo1"]["uns"]["uns_id"], "OpenFactory/WC2/DEMO-APP")
-        self.assertEqual(result["demo1"]["uns"]["levels"], {
+        app = result["demo1"]
+        self.assertEqual(app.uuid, "DEMO-APP")
+        self.assertEqual(app.image, "demofact/demo1")
+
+        self.assertIsNotNone(app.uns)
+        self.assertEqual(app.uns["uns_id"], "OpenFactory/WC2/DEMO-APP")
+        self.assertEqual(app.uns["levels"], {
             "inc": "OpenFactory",
             "workcenter": "WC2",
             "asset": "DEMO-APP"
         })
-        self.assertIn("KAFKA_BROKER=broker:9092", result["demo1"]["environment"])
+
+        self.assertIn("KAFKA_BROKER=broker:9092", app.environment)
+
+    def test_valid_nfs_storage_backend(self):
+        """ Test OpenFactoryApp with a valid NFSBackendConfig """
+        app_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "storage": {
+                        "type": "nfs",
+                        "server": "192.168.1.10",
+                        "remote_path": "/exports/data",
+                        "mount_point": "/mnt/data",
+                        "mount_options": ["rw", "vers=4.1", "noatime"]
+                    }
+                }
+            }
+        }
+        config = OpenFactoryAppsConfig(**app_config)
+        storage = config.apps["demo1"].storage
+        self.assertEqual(storage.type, "nfs")
+        self.assertEqual(storage.server, "192.168.1.10")
+        self.assertEqual(storage.mount_point, "/mnt/data")
+
+    def test_invalid_storage_type(self):
+        """ Test that unknown storage backend type triggers ValidationError with correct message """
+
+        app_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "storage": {
+                        "type": "unknown",
+                        "foo": "bar"
+                    }
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**app_config)
+
+        errors = cm.exception.errors()
+
+        # There should be a union_tag_invalid error for 'storage'
+        storage_error = [
+            e for e in errors
+            if e['loc'][-1] == 'storage' and e['type'] == 'union_tag_invalid'
+        ]
+
+        self.assertTrue(storage_error, "ValidationError should include 'union_tag_invalid' for 'storage' field")

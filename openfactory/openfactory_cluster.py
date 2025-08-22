@@ -1,4 +1,42 @@
-""" OpenFactory Cluster Manager. """
+"""
+OpenFactory Cluster Manager.
+
+This module provides the `OpenFactoryCluster` class, which manages the lifecycle
+of an OpenFactory Docker Swarm cluster, including manager and worker nodes.
+
+Core responsibilities:
+    - Validate the current host as a Swarm manager and part of a Docker Swarm cluster
+    - Provision manager and worker nodes from YAML configuration files
+    - Add labels to nodes for identification and role assignment
+    - Remove worker nodes from the cluster safely
+    - Map node IPs to Docker Swarm node IDs for orchestration
+    - Notify users of operational outcomes, warnings, and failures
+
+Key integrations:
+    - Docker API for managing Swarm nodes and containers
+    - SSH access to remote nodes for initial provisioning
+    - OpenFactory YAML infrastructure schemas for configuration
+    - User notifications to report success, warnings, and errors
+
+Usage Example:
+---------------
+.. code-block:: python
+
+    cluster = OpenFactoryCluster()
+
+    # Provision managers and workers from config file
+    cluster.create_infrastack_from_config_file("infra.yaml")
+
+    # Remove workers safely
+    cluster.remove_infrastack_from_config_file("infra.yaml")
+
+Error handling:
+---------------
+    - Raises `OFAException` if the local host is not part of a Swarm or is not a manager
+    - Catches Docker API errors and SSH connection issues during node creation
+    - Skips already provisioned nodes without interrupting the orchestration
+"""
+
 
 import docker
 import paramiko.ssh_exception

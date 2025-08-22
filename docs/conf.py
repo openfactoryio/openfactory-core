@@ -82,3 +82,8 @@ autodoc_default_options = {
     'special-members': '__init__',  # Include __init__ method in class docs
     'show-inheritance': True,       # Show base classes in class documentation
 }
+
+autodoc_type_aliases = {
+    "LocalBackend": "openfactory.filelayer.local_backend.LocalBackend",
+    "NFSBackend": "openfactory.filelayer.nfs_backend.NFSBackend",
+}

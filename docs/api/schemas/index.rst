@@ -35,3 +35,11 @@ Applications
    :maxdepth: 1
 
    apps
+
+Storage
+-------
+
+.. toctree::
+   :maxdepth: 1
+
+   storage

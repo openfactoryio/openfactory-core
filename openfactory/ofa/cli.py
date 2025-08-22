@@ -2,6 +2,7 @@
 
 import click
 import openfactory.ofa as ofa
+from openfactory.ofa.ksql_setup import setup_kafka
 from openfactory import __version__
 
 
@@ -75,3 +76,13 @@ asset.add_command(ofa.asset.click_inspect)
 def version() -> None:
     """ Returns OpenFactory version. """
     print(__version__)
+
+
+@cli.command(name="setup-kafka")
+@click.option(
+    "--ksqldb-server", required=True,
+    help="ksqlDB server endpoint, e.g., http://localhost:8088"
+)
+def init_kafka_cmd(ksqldb_server):
+    """ Initialize Kafka stream topology in ksqlDB. """
+    setup_kafka(ksqldb_server)

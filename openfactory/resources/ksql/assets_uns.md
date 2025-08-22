@@ -1,6 +1,6 @@
 # Topology for OpenFactory Assets by Unified Namespace
 
-The topology for OpenFactory assets classified by Unified Namespace is defined in the script [assets\_uns.sql](assets_uns.sql).
+The topology for OpenFactory assets classified by Unified Namespace is defined in the script [002-assets-uns.sql](002-assets-uns.sql).
 
 ## Mapping
 

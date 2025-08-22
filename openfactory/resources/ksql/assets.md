@@ -1,6 +1,6 @@
 # Main Topology for OpenFactory Assets
 
-The main toppolgy for OpenFactory Assets is defined in the script [mtcdevices.sql](mtcdevices.sql).
+The main toppolgy for OpenFactory Assets is defined in the script [001-assets.sql](001-assets.sql).
 
 ## Topology for OpenFactory Assets
 ![Main stream processing topology for deployed assets](main_topology.png)

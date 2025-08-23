@@ -43,6 +43,8 @@ YAML Example:
           server: deskfab.openfactory.com
           remote_path: /nfs/deskfab
           mount_point: /mnt
+          mount_options:
+            - ro
 
 Usage:
 ------

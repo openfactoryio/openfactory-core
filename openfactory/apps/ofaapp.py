@@ -28,6 +28,7 @@ class OpenFactoryApp(Asset):
         .. code-block:: python
 
             import time
+            import os
             from openfactory.apps import OpenFactoryApp
             from openfactory.kafka import KSQLDBClient
 
@@ -46,10 +47,13 @@ class OpenFactoryApp(Asset):
                     # Not absolutely required as it is already done by the `KSQLDBClient` class
                     self.ksql.close()
 
+            # When the Application is deployed on the OpenFactory Cluster, the
+            # environment variables KSQLDB_URL and KAFKA_BROKER will be set.
+            # The default values can be used for local development.
             app = DemoApp(
                 app_uuid='DEMO-APP',
-                ksqlClient=KSQLDBClient("http://localhost:8088"),
-                bootstrap_servers="localhost:9092"
+                ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL", "http://localhost:8088")),
+                bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092")
             )
             app.run()
     """

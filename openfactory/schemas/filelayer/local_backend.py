@@ -1,7 +1,7 @@
 """
 LocalBackend configuration schema for OpenFactory applications.
 
-This module defines the :class:`.LocalBackendConfig`, which extends
+This module defines the :class:`.LocalBackendConfig` class, which extends
 :class:`.BaseBackendConfig` to configure local host directory backends.
 
 Warning:
@@ -11,12 +11,25 @@ Warning:
     backends (e.g., NFS or S3).
 
 Note:
-    - Subclasses must implement :meth:`.LocalBackendConfig.create_backend_instance`
-      to return the runtime backend.
     - All paths are validated to be absolute and to exist on the host.
     - Mount points inside containers are normalized and restricted to safe characters.
     - This module only provides configuration and validation; it does not perform
       actual file operations.
+
+.. admonition:: Usage Example
+
+  To use the Local Storage Backend, add a `storage` entry to your OpenFactory YAML configuration file:
+
+  .. code-block:: yaml
+
+     storage:
+       type: local
+       local_path: /nfs/data
+       mount_point: /mnt
+
+.. seealso::
+
+   The runtime class of the Local Backend is :class:`openfactory.filelayer.local_backend.LocalBackend`.
 """
 
 import os

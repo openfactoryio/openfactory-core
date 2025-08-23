@@ -1,7 +1,7 @@
 """
 NFSBackend configuration schema for OpenFactory applications.
 
-This module defines the :class:`.NFSBackendConfig`, which extends
+This module defines the :class:`.NFSBackendConfig` class, which extends
 :class:`.BaseBackendConfig` to configure NFS (POSIX filesystem) backends.
 
 The NFSBackend allows OpenFactory services to mount a network-shared
@@ -16,6 +16,25 @@ Note:
     - Optional mount options can be specified for fine-tuning NFS mounts.
     - This module only provides configuration and validation; it does not perform
       actual file operations.
+
+.. admonition:: Usage Example
+
+  To use the NFS Storage Backend, add a `storage` entry to your OpenFactory YAML configuration file:
+
+  .. code-block:: yaml
+
+     storage:
+       type: nfs
+       server: nfs.server.openfactory.org
+       remote_path: /nfs/data
+       mount_point: /mnt
+       mount_options:
+         - rw
+         - noatime
+
+.. seealso::
+
+   The runtime class of the NFS Backend is :class:`openfactory.filelayer.nfs_backend.NFSBackend`.
 """
 
 import re

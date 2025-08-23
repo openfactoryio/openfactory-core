@@ -1,5 +1,5 @@
-LocalBackendConfig Module
-=========================
+Local Backend
+=============
 
 .. automodule:: openfactory.schemas.filelayer.local_backend
     :members:

@@ -1,13 +1,18 @@
+.. _storage-schemas-index:
+
 OpenFactory Storage Schemas
 ===========================
 
-.. automodule:: openfactory.schemas.filelayer
-    :members:
-    :undoc-members:
-    :show-inheritance:
+OpenFactory defines various Storage Backends which allows to add storage to deployed OpenFactory Apps.
 
-Submodules
-----------
+.. seealso::
+
+   :ref:`filelayer-index`.
+
+Each Storage Backend is described by a schema.
+All Storage Backends schemas derive from the :class:`openfactory.schemas.filelayer.base_backend.BaseBackendConfig` class.
+
+The following schemas are defined so far to describe them:
 
 .. toctree::
    :maxdepth: 1

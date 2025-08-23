@@ -64,7 +64,7 @@ html_theme_options = {
         },
     ],
     "show_prev_next": False,
-    "navigation_depth": 2,
+    "navigation_depth": 3,
     "use_edit_page_button": True,
 }
 

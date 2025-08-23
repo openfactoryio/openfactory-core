@@ -9,6 +9,10 @@ Note:
     - This backend is **not compatible** with Docker Swarm.
     - Mount specifications can be generated via :meth:`.LocalBackend.get_mount_spec`.
     - Ensure the local path exists and has the proper permissions for the container.
+
+.. seealso::
+
+   The schema of the Local Backend is :class:`openfactory.schemas.filelayer.local_backend.LocalBackendConfig`.
 """
 
 from pathlib import Path

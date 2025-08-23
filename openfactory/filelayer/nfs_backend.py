@@ -9,6 +9,10 @@ Note:
       mount specifications via :meth:`.NFSBackend.get_mount_spec`.
     - Ensure the NFS server is reachable and that mount options are valid
       for your environment.
+
+.. seealso::
+
+   The schema of the NFS Backend is :class:`openfactory.schemas.filelayer.nfs_backend.NFSBackendConfig`.
 """
 
 from pathlib import Path

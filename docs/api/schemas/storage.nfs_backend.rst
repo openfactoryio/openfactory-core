@@ -1,5 +1,5 @@
-NFSBackendConfig Module
-=======================
+NFS Backend
+===========
 
 .. automodule:: openfactory.schemas.filelayer.nfs_backend
     :members:

@@ -15,6 +15,7 @@ Note:
    The schema of the NFS Backend is :class:`openfactory.schemas.filelayer.nfs_backend.NFSBackendConfig`.
 """
 
+import hashlib
 from pathlib import Path
 from typing import IO, List, Dict, Any
 from openfactory.filelayer.backend import FileBackend
@@ -142,6 +143,34 @@ class NFSBackend(FileBackend):
         validated_config = NFSBackendConfig(**config)
         return NFSBackend(validated_config)
 
+    def make_volume_name(self) -> str:
+        """
+        Generate a deterministic NFS volume name for Docker.
+
+        The volume name is constructed from the NFS server address and the
+        remote path. If mount options are provided, a short SHA1 hash of the
+        normalized (sorted) options is appended to ensure uniqueness between
+        different configurations (e.g., `ro` vs `rw`).
+
+        Format:
+            ``nfs_<server>_<remote_path>[_<hash>]``
+
+        Returns:
+            str: A deterministic volume name safe to use in Docker Swarm.
+        """
+        base_name = (
+            f"nfs_{self.config.server.replace('.', '_')}_"
+            f"{self.config.remote_path.strip('/').replace('/', '_')}"
+        )
+
+        if self.config.mount_options:
+            # Normalize + sort options so order does not matter
+            opts_str = ",".join(sorted(self.config.mount_options))
+            digest = hashlib.sha1(opts_str.encode()).hexdigest()[:8]
+            return f"{base_name}_{digest}"
+
+        return base_name
+
     def get_mount_spec(self) -> Dict[str, Any]:
         """
         Build a Docker-compatible mount specification for NFS.
@@ -152,20 +181,25 @@ class NFSBackend(FileBackend):
         Returns:
             Dict[str, Any]: A dictionary containing the mount configuration in Docker's expected format.
         """
+        # Build NFS mount options
+        mount_opts = [f"addr={self.config.server}"]
+        if self.config.mount_options:
+            mount_opts.extend(self.config.mount_options)
+
         opts = {
             "type": "nfs",
-            "o": f"addr={self.config.server}," + ",".join(self.config.mount_options or []),
-            "device": f":{self.config.remote_path}"
+            "o": ",".join(mount_opts),
+            "device": f":{self.config.remote_path}",
         }
 
         return {
             "Type": "volume",
-            "Source": f"nfs_{self.config.server.replace('.', '_')}_{self.config.remote_path.strip('/').replace('/', '_')}",
+            "Source": self.make_volume_name(),
             "Target": self.config.mount_point,
             "VolumeOptions": {
                 "DriverConfig": {
                     "Name": "local",
-                    "Options": opts
+                    "Options": opts,
                 }
-            }
+            },
         }

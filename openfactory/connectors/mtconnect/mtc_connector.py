@@ -1,6 +1,5 @@
 """
-MTConnectConnector
-------------------
+**MTConnectConnector Class**
 
 Provides orchestration for deploying MTConnect-based devices into the OpenFactory
 environment. This includes:

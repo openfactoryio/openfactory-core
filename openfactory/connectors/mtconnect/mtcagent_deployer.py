@@ -1,7 +1,9 @@
 """
-Module to deploy MTConnect agents and their adapters for OpenFactory devices.
+**MTConnectAgentDeployer Class**
 
-This module provides the MTConnectAgentDeployer class, which handles loading
+Class to deploy MTConnect agents and their adapters for OpenFactory devices.
+
+The :class:`MTConnectAgentDeployer` class, handles loading
 device configurations, preparing environment variables, deploying adapter
 services if needed, deploying the MTConnect agent service itself, and
 registering the assets in the system.

@@ -5,4 +5,4 @@ Connector
 
    The `Connector` class is an abstract class not intented to be used.
 
-.. autoclass:: openfactory.connectors.base_connector.Connector
+.. automodule:: openfactory.connectors.base_connector

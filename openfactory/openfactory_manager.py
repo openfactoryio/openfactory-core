@@ -38,8 +38,8 @@ from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
 from openfactory.utils import register_asset, deregister_asset, load_plugin
 from openfactory.kafka.ksql import KSQLDBClient
-from openfactory.connectors.mtconnect.mtc_connector import MTConnectConnector
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
+from openfactory.connectors.registry import build_connector
 
 
 class OpenFactoryManager(OpenFactory):
@@ -77,11 +77,6 @@ class OpenFactoryManager(OpenFactory):
 
         self.deployment_strategy: OpenFactoryServiceDeploymentStrategy = platform_cls()
         self.deployment_strategy = platform_cls()
-
-        self.connectors = {
-            "mtconnect": MTConnectConnector(self.deployment_strategy, self.ksql, self.bootstrap_servers),
-            # Add other connectors here
-        }
 
     def deploy_device_supervisor(self, device: Device) -> None:
         """
@@ -232,11 +227,14 @@ class OpenFactoryManager(OpenFactory):
                 user_notify.info(f"Device {device.uuid} exists already and was not deployed")
                 continue
 
-            if device.connector.type not in self.connectors:
-                user_notify.warning(f"Device {device.uuid} has an unknown connector {device.connector.type}")
+            schema = device.connector
+            try:
+                connector = build_connector(schema, self.deployment_strategy, self.ksql, self.bootstrap_servers)
+            except ValueError:
+                user_notify.warning(f"Device {device.uuid} has an unknown connector {schema.type}")
                 continue
 
-            self.connectors[device.connector.type].deploy(device, yaml_config_file)
+            connector.deploy(device, yaml_config_file)
             self.deploy_device_supervisor(device)
 
             user_notify.success(f"Device {device.uuid} deployed successfully")
@@ -357,7 +355,13 @@ class OpenFactoryManager(OpenFactory):
                 continue
 
             # Tear down Connector
-            self.connectors[device.connector.type].tear_down(device.uuid)
+            schema = device.connector
+            try:
+                connector = build_connector(schema, self.deployment_strategy, self.ksql, self.bootstrap_servers)
+            except ValueError:
+                user_notify.warning(f"Device {device.uuid} has an unknown connector {schema.type}")
+                continue
+            connector.tear_down(device.uuid)
             self.tear_down_device(device.uuid)
 
             # Tear down Supervisor

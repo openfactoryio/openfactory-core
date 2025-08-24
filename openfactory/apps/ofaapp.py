@@ -84,7 +84,6 @@ class OpenFactoryApp(Asset):
             bootstrap_servers (str): Kafka bootstrap server URL, default value is read from `config.KAFKA_BROKER`.
             loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
 
-        
         Side effects:
             - Configures logging with the application UUID as prefix.
             - Mounts a storage backend if the `STORAGE` environment variable is set.

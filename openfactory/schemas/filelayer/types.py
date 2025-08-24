@@ -23,7 +23,11 @@ from openfactory.schemas.filelayer.local_backend import LocalBackendConfig
 
 
 StorageBackend = Annotated[
-    Union[NFSBackendConfig, LocalBackendConfig],
+    Union[
+        NFSBackendConfig,
+        LocalBackendConfig,
+        # Add other Storage Backend models here as needed
+    ],
     Field(
         discriminator="type",
         description="Discriminator field to select the correct storage backend schema"

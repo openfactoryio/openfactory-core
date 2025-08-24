@@ -68,7 +68,6 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # Assertions
         self.assertIsInstance(manager.deployment_strategy, DummyDeploymentStrategy)
-        self.assertIn("mtconnect", manager.connectors)
         self.assertIsNotNone(manager.bootstrap_servers)
         self.assertEqual(manager.bootstrap_servers, "mocked_broker")
         self.assertIs(manager.ksql, mock_ksql)
@@ -465,54 +464,51 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.manager.deploy_device_supervisor.assert_not_called()
         mock_user_notify.success.assert_not_called()
 
+    @patch('openfactory.openfactory_manager.build_connector')
     @patch('openfactory.openfactory_manager.config')
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
-    @patch('openfactory.openfactory_manager.register_asset')
-    def test_deploy_devices_from_config_file_success(self, mock_register_asset, mock_uns_schema_class, mock_user_notify, mock_get_devices, mock_config):
+    def test_deploy_devices_from_config_file_success(self, mock_uns_schema_class, mock_user_notify, mock_get_devices, mock_config, mock_build_connector):
         """ Test deploy_devices_from_config_file """
 
         mock_config.OPENFACTORY_UNS_SCHEMA = "mocked_schema"
         mock_uns_instance = MagicMock()
         mock_uns_schema_class.return_value = mock_uns_instance
 
-        # Prepare mocked devices
+        # Mock devices
         devices_dict = {
             "Device1": create_mock_device(
                 uuid="device-uuid-1",
                 connector_type="mocked_connector",
                 supervisor=MagicMock(),
-                uns={"uns_id": "some/mocked/path"}
-            ),
+                uns={"uns_id": "some/mocked/path"}),
             "Device2": create_mock_device(
                 uuid="device-uuid-2",
                 connector_type="mocked_connector",
                 supervisor=None,
-                uns={"uns_id": "some/other/path"}
-            )
+                uns={"uns_id": "some/other/path"})
         }
         mock_get_devices.return_value = devices_dict
 
-        # Configure OpenFactoryMAnager instance
-        mock_connector = MagicMock()
-        self.manager.connectors = {"mocked_connector": mock_connector}
-        self.manager.devices_uuid = MagicMock(return_value=[])  # no device is deployed yet
+        # Mock build_connector to return a connector with a deploy method
+        mock_connector_instance = MagicMock()
+        mock_build_connector.return_value = mock_connector_instance
+
+        self.manager.devices_uuid = MagicMock(return_value=[])
         self.manager.deploy_device_supervisor = MagicMock()
 
         # Call method under test
         self.manager.deploy_devices_from_config_file("mock_devices.yaml")
 
-        # UNS schema class instantiated once with correct param
+        # Check UNS schema created correctly
         mock_uns_schema_class.assert_called_once_with(schema_yaml_file="mocked_schema")
-
-        # Devices loaded from config file with uns schema instance
         mock_get_devices.assert_called_once_with("mock_devices.yaml", mock_uns_instance)
 
-        # Each device has to be deployed, its supervior deployed and success message
+        # Check each device deployment
         for device_key, device_obj in devices_dict.items():
             mock_user_notify.info.assert_any_call(f"{device_key} - {device_obj.uuid}:")
-            mock_connector.deploy.assert_any_call(device_obj, "mock_devices.yaml")
+            mock_connector_instance.deploy.assert_any_call(device_obj, "mock_devices.yaml")
             self.manager.deploy_device_supervisor.assert_any_call(device_obj)
             mock_user_notify.success.assert_any_call(f"Device {device_obj.uuid} deployed successfully")
 
@@ -711,40 +707,49 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.assertIn("Mock API error", str(context.exception))
 
+    @patch('openfactory.openfactory_manager.build_connector')
     @patch('openfactory.openfactory_manager.deregister_asset')
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
-    def test_shut_down_devices_from_config_file(self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file, mock_deregister_asset):
+    def test_shut_down_devices_from_config_file(self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file, mock_deregister_asset, mock_build_connector):
         """ Test shut_down_devices_from_config_file """
+
         # Mock UNSSchema
         mock_uns_instance = MagicMock()
         mock_uns_schema_class.return_value = mock_uns_instance
 
-        # Configure the OpenFactoryManager instance
-        mock_connector = MagicMock()
-        self.manager.connectors = {"mocked_connector": mock_connector}
-        self.manager.devices = MagicMock(return_value=[
-            MagicMock(asset_uuid="device-uuid-1"),
-            MagicMock(asset_uuid="device-uuid-2")
-        ])
-        self.manager.tear_down_device = MagicMock()
-
-        # Mock the devices returned by the config file (only device-uuid-1 is deployed, device-uuid-3 is not)
-        mock_get_devices_from_config_file.return_value = {
+        # Mock devices returned by config file
+        devices_dict = {
             "Device1": create_mock_device(uuid="device-uuid-1", connector_type="mocked_connector"),
             "Device2": create_mock_device(uuid="device-uuid-3", connector_type="mocked_connector")
         }
+        mock_get_devices_from_config_file.return_value = devices_dict
 
-        # Call the method
+        # Mock build_connector to return a connector with a tear_down method
+        mock_connector_instance = MagicMock()
+        mock_build_connector.return_value = mock_connector_instance
+
+        # Mock devices already deployed in manager
+        deployed_devices = [
+            MagicMock(asset_uuid="device-uuid-1"),
+            MagicMock(asset_uuid="device-uuid-2")
+        ]
+        self.manager.devices = MagicMock(return_value=deployed_devices)
+        self.manager.tear_down_device = MagicMock()
+
+        # Call method under test
         self.manager.shut_down_devices_from_config_file("dummy_config.yaml")
 
         # Assertions
         mock_get_devices_from_config_file.assert_called_once_with("dummy_config.yaml", uns_schema=mock_uns_instance)
+
         mock_user_notify.info.assert_any_call("Device1:")
         mock_user_notify.info.assert_any_call("Device2:")
         mock_user_notify.info.assert_any_call("No device device-uuid-3 deployed in OpenFactory")
-        mock_connector.tear_down.assert_called_once_with("device-uuid-1")
+
+        # Connector tear_down should be called for deployed device
+        mock_connector_instance.tear_down.assert_called_once_with("device-uuid-1")
         self.manager.tear_down_device.assert_called_once_with("device-uuid-1")
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')

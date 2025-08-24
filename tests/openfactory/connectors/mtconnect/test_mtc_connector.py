@@ -2,8 +2,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 from docker.errors import APIError
 from openfactory.schemas.devices import Device
-from openfactory.connectors.mtconnect.mtc_connector import MTConnectConnector
 from openfactory.exceptions import OFAException
+from openfactory.connectors.registry import CONNECTOR_REGISTRY
+from openfactory.connectors.mtconnect.mtc_connector import MTConnectConnector
+from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 
 
 class TestMTConnectConnector(unittest.TestCase):
@@ -38,6 +40,11 @@ class TestMTConnectConnector(unittest.TestCase):
             ksqlClient=MagicMock(),
             bootstrap_servers="kafka:9092"
         )
+
+    def test_connector_is_registered(self):
+        """ MTConnectConnectorSchema should map to MTConnectConnector in CONNECTOR_REGISTRY. """
+        self.assertIn(MTConnectConnectorSchema, CONNECTOR_REGISTRY)
+        self.assertIs(CONNECTOR_REGISTRY[MTConnectConnectorSchema], MTConnectConnector)
 
     @patch("openfactory.connectors.mtconnect.mtc_connector.register_asset")
     @patch("openfactory.connectors.mtconnect.mtc_connector.MTConnectAgentDeployer")

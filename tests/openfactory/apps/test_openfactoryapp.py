@@ -2,7 +2,9 @@ import unittest
 from unittest.mock import patch, MagicMock
 import signal
 import os
+import json
 from openfactory.apps import OpenFactoryApp
+from openfactory.filelayer.backend import FileBackend
 
 
 class TestOpenFactoryApp(unittest.TestCase):
@@ -63,6 +65,34 @@ class TestOpenFactoryApp(unittest.TestCase):
         self.assertEqual(app.APPLICATION_MANUFACTURER, 'OpenFactory')
         self.assertEqual(app.APPLICATION_LICENSE, 'BSD-3-Clause license')
         self.assertEqual(app.asset_uuid, 'init-uuid')
+
+    @patch("openfactory.apps.ofaapp.StorageBackendSchema")
+    def test_storage_initialization(self, MockStorageSchema):
+        """ Test that storage JSON is parsed and runtime backend instance is created """
+
+        # Mock the StorageBackendSchema instance
+        mock_schema_instance = MockStorageSchema.return_value
+        mock_backend_instance = MagicMock(spec=FileBackend)
+        mock_schema_instance.storage.create_backend_instance.return_value = mock_backend_instance
+
+        # Example storage JSON
+        storage_json = json.dumps({
+            "type": "nfs",
+            "server": "10.0.5.2",
+            "remote_path": "/nfs/data",
+            "mount_point": "/mnt",
+            "mount_options": ["rw", "noatime"]
+        })
+
+        with patch.dict("os.environ", {"STORAGE": storage_json}):
+            app = OpenFactoryApp(app_uuid="test-app", ksqlClient=self.ksql_mock)
+
+        # Assert StorageBackendSchema was called with parsed JSON
+        MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json))
+        # Assert create_backend_instance() was called
+        mock_schema_instance.storage.create_backend_instance.assert_called_once()
+        # Assert self.storage is set to the backend instance
+        self.assertIs(app.storage, mock_backend_instance)
 
     def test_attributes_added(self):
         """ Test if attributes are added correctly to the app """

@@ -16,7 +16,7 @@ Key Models:
   or embedded with an Adapter and device XML file. Validates the correct
   mutual exclusivity and presence of `ip`, `device_xml`, and `adapter` fields.
 
-- MTConnectConnector:
+- MTConnectConnectorSchema:
   Wrapper schema with a discriminator `type='mtconnect'` that encapsulates the
   Agent configuration.
 
@@ -194,7 +194,7 @@ class Agent(BaseModel):
         return values
 
 
-class MTConnectConnector(BaseModel):
+class MTConnectConnectorSchema(BaseModel):
     """
     MTConnect Connector schema that wraps the Agent configuration.
 

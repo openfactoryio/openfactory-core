@@ -1,6 +1,6 @@
 import unittest
 from pydantic import ValidationError
-from openfactory.schemas.connectors.mtconnect import MTConnectConnector
+from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 
 
 class TestMTConnectConnector(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestMTConnectConnector(unittest.TestCase):
                 "port": 5000,
             }
         }
-        connector = MTConnectConnector(**data)
+        connector = MTConnectConnectorSchema(**data)
         self.assertEqual(connector.type, "mtconnect")
         self.assertEqual(connector.agent.ip, "10.0.0.1")
         self.assertEqual(connector.agent.port, 5000)
@@ -31,7 +31,7 @@ class TestMTConnectConnector(unittest.TestCase):
             }
         }
         with self.assertRaises(ValidationError) as cm:
-            MTConnectConnector(**data)
+            MTConnectConnectorSchema(**data)
         err_str = str(cm.exception)
         self.assertIn("Field required", err_str)
         self.assertIn("type", err_str)
@@ -46,7 +46,7 @@ class TestMTConnectConnector(unittest.TestCase):
             }
         }
         with self.assertRaises(ValidationError) as cm:
-            MTConnectConnector(**data)
+            MTConnectConnectorSchema(**data)
         err_str = str(cm.exception)
         self.assertIn("mtconnect", err_str)
         self.assertIn("invalid_type", err_str)
@@ -57,7 +57,7 @@ class TestMTConnectConnector(unittest.TestCase):
             "type": "mtconnect",
         }
         with self.assertRaises(ValidationError) as cm:
-            MTConnectConnector(**data)
+            MTConnectConnectorSchema(**data)
         err_str = str(cm.exception)
         self.assertIn("Field required", err_str)
         self.assertIn("agent", err_str)

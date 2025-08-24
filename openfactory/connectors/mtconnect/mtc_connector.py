@@ -25,10 +25,13 @@ from openfactory.utils import register_asset, deregister_asset
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.schemas.devices import Device
 from openfactory.schemas.common import constraints, cpus_limit, cpus_reservation
+from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy
+from openfactory.connectors.registry import register_connector
 from openfactory.connectors.mtconnect.mtcagent_deployer import MTConnectAgentDeployer
 
 
+@register_connector(MTConnectConnectorSchema)
 class MTConnectConnector(Connector):
     """
     Connector for MTConnect devices that manages deployment of MTConnect agents,

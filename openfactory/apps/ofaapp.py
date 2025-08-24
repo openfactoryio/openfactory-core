@@ -3,11 +3,14 @@
 import os
 import signal
 import time
+import json
 from types import FrameType
 from typing import Optional
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
 from openfactory.setup_logging import configure_prefixed_logger
+from openfactory.schemas.filelayer.storage import StorageBackendSchema
+from openfactory.filelayer.backend import FileBackend
 import openfactory.config as config
 
 
@@ -19,10 +22,11 @@ class OpenFactoryApp(Asset):
     logging, and lifecycle management.
 
     Attributes:
-        APPLICATION_VERSION (str): Class attribute. Version string from `APPLICATION_VERSION` env var or 'latest'.
-        APPLICATION_MANUFACTURER (str): Class attribute. Manufacturer from `APPLICATION_MANUFACTURER` or 'OpenFactory'.
-        APPLICATION_LICENSE (str): Class attribute. License string from `APPLICATION_LICENSE` or 'BSD-3-Clause license'.
+        APPLICATION_VERSION (str): Class attribute. Version string from `APPLICATION_VERSION` environment variable or 'latest'.
+        APPLICATION_MANUFACTURER (str): Class attribute. Manufacturer from `APPLICATION_MANUFACTURER` environment variable or 'OpenFactory'.
+        APPLICATION_LICENSE (str): Class attribute. License string from `APPLICATION_LICENSE` environment variable or 'BSD-3-Clause license'.
         logger (logging.Logger): Instance attribute. Prefixed logger instance configured with the app UUID.
+        storage (Optional[FileBackend]): Storage backend instance created from the `STORAGE` environment variable, or `None` if not configured.
 
     Example usage:
         .. code-block:: python
@@ -70,18 +74,31 @@ class OpenFactoryApp(Asset):
         """
         Initializes the OpenFactory application.
 
-        Fetches the application's UUID from either the argument or the environment variable `APP_UUID`. It also sets up
-        attributes for version, manufacturer, and license, and registers signal handlers for termination signals.
+        Sets up the application UUID, storage backend (if configured), standard
+        attributes (version, manufacturer, license), a prefixed logger, and
+        termination signal handlers.
 
         Args:
             app_uuid (str): The UUID of the application (overrides the environment variable `APP_UUID` if provided).
             ksqlClient (KSQLDBClient): The KSQL client instance.
             bootstrap_servers (str): Kafka bootstrap server URL, default value is read from `config.KAFKA_BROKER`.
             loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
+
+        Side effects:
+            - Configures logging with the application UUID as prefix.
+            - Mounts a storage backend if the `STORAGE` environment variable is set.
+            - Registers signal handlers for `SIGINT` and `SIGTERM`.
         """
         # get paramters from environment (set if deployed by ofa deployment tool)
         app_uuid = os.getenv('APP_UUID', app_uuid)
         super().__init__(app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
+
+        # attach storage
+        storage_env = os.environ.get("STORAGE")
+        self.storage: FileBackend | None = None
+        if storage_env:
+            schema = StorageBackendSchema(storage=json.loads(storage_env))
+            self.storage = schema.storage.create_backend_instance()
 
         # attributes of the application
         self.add_attribute(

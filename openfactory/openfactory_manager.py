@@ -26,6 +26,7 @@ Error handling:
 """
 
 import docker
+import json
 import openfactory.config as config
 from openfactory import OpenFactory
 from openfactory.schemas.devices import Device, get_devices_from_config_file
@@ -150,6 +151,13 @@ class OpenFactoryManager(OpenFactory):
                f"KAFKA_BROKER={self.bootstrap_servers}",
                f"KSQLDB_URL={self.ksql.ksqldb_url}",
                f"DOCKER_SERVICE={application.uuid.lower()}"]
+
+        # Add STORAGE only if not None
+        if application.storage is not None:
+            # Serialize storage config as JSON
+            storage_dict = application.storage.model_dump(exclude_none=True)
+            env.append(f"STORAGE={json.dumps(storage_dict)}")
+
         if application.environment is not None:
             for item in application.environment:
                 var, val = item.split('=')

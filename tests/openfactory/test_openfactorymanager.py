@@ -6,7 +6,6 @@ from openfactory.schemas.common import Deploy, Resources, ResourcesDefinition, P
 from openfactory.schemas.apps import OpenFactoryAppSchema
 from openfactory.schemas.filelayer.nfs_backend import NFSBackendConfig
 from openfactory.schemas.filelayer.local_backend import LocalBackendConfig
-from openfactory.filelayer.local_backend import LocalBackend
 from openfactory.openfactory_manager import OpenFactoryManager
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 from openfactory.exceptions import OFAException
@@ -256,6 +255,57 @@ class TestOpenFactoryManager(unittest.TestCase):
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")
+    def test_deploy_openfactory_application_includes_storage_env(self, mock_register_asset, mock_user_notify, mock_config):
+        """ Test that deploy_openfactory_application includes STORAGE in env when storage is provided """
+
+        mock_config.KSQLDB_LOG_LEVEL = "INFO"
+        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
+
+        nfs_config = NFSBackendConfig(
+            type="nfs",
+            server="nfs.example.com",
+            remote_path="/data/share",
+            mount_point="/mnt/data",
+            mount_options=["rw"]
+        )
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_WITH_STORAGE",
+            image="app_image",
+            environment=["FOO=bar"],
+            uns=None,
+            storage=nfs_config,
+        )
+
+        # Patch backend class so we don't try to mount anything
+        with patch("openfactory.filelayer.nfs_backend.NFSBackend") as MockBackend:
+            backend_instance = MockBackend.return_value
+            backend_instance.get_mount_spec.return_value = None
+
+            self.manager.deploy_openfactory_application(app)
+
+        # Extract env from the call to deploy
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env_list = deploy_call.kwargs["env"]
+
+        # STORAGE env var should be present and contain serialized config
+        storage_env = next((e for e in env_list if e.startswith("STORAGE=")), None)
+        self.assertIsNotNone(storage_env, "Expected STORAGE env var to be included")
+        self.assertIn('"type": "nfs"', storage_env)
+        self.assertIn('"server": "nfs.example.com"', storage_env)
+        self.assertIn('"/mnt/data"', storage_env)
+
+        # Other env vars should still be present
+        self.assertIn("APP_UUID=APP_WITH_STORAGE", env_list)
+        self.assertIn("FOO=bar", env_list)
+
+        mock_user_notify.success.assert_called_once_with(
+            "Application APP_WITH_STORAGE deployed successfully"
+        )
+
+    @patch("openfactory.openfactory_manager.config")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.register_asset")
     def test_deploy_with_nfs_storage_calls_backend(self, mock_register_asset, mock_user_notify, mock_config):
         """ Test that deploying an app with NFS storage calls the backend's get_mount_spec """
 
@@ -328,22 +378,15 @@ class TestOpenFactoryManager(unittest.TestCase):
     def test_local_backend_cannot_be_used_with_swarm(self, mock_isdir, mock_exists):
         """ LocalBackend should raise an error when deployed with SwarmDeploymentStrategy """
 
-        # Use a real LocalBackendConfig and LocalBackend
-        config = LocalBackendConfig(type="local",
-                                    local_path="/tmp/host",
-                                    mount_point="/mnt/data")
-        local_backend = LocalBackend(config)
-
-        # Create a mock OpenFactoryApp
+        # Create a mocked OpenFactoryApp with aLocalBackendConfig
         app = MagicMock()
         app.uuid = "APP1"
-        app.image = "myimage:latest"
         app.environment = []
-        app.storage = MagicMock()
-        app.storage.create_backend_instance.return_value = local_backend
-        app.uns = None
+        app.storage = LocalBackendConfig(type="local",
+                                         local_path="/tmp/host",
+                                         mount_point="/mnt/data")
 
-        # Assign a SwarmDeploymentStrategy instance
+        # Assign a SwarmDeploymentStrategy instance to the manager
         self.manager.deployment_strategy = SwarmDeploymentStrategy()
 
         # Expect ValueError because LocalBackend is incompatible with Swarm

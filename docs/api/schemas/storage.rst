@@ -18,6 +18,7 @@ The following schemas are defined so far to describe them:
    :maxdepth: 1
 
    storage.types
+   storage.storage
    storage.base
    storage.local_backend
    storage.nfs_backend

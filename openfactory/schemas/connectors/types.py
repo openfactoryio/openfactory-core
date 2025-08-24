@@ -2,7 +2,7 @@
 Connector Type Union
 
 This module defines the `Connector` type as a discriminated union of all supported
-connector-specific Pydantic schemas (e.g., MTConnectConnector).
+connector-specific Pydantic schemas (e.g., MTConnectConnectorSchema).
 
 The union enables automatic parsing and validation of connector configurations
 based on the `type` discriminator field present in the input data.
@@ -15,12 +15,12 @@ Attributes:
 
 from typing import Annotated, Union
 from pydantic import Field
-from openfactory.schemas.connectors.mtconnect import MTConnectConnector
+from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 
 
 Connector = Annotated[
     Union[
-        MTConnectConnector,
+        MTConnectConnectorSchema,
         # Add other connector models here as needed
     ],
     Field(

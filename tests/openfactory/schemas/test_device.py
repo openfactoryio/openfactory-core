@@ -1,7 +1,7 @@
 import unittest
 from pydantic import ValidationError
 from openfactory.schemas.devices import Device
-from openfactory.schemas.connectors.types import MTConnectConnector
+from openfactory.schemas.connectors.types import MTConnectConnectorSchema
 from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 
 
@@ -19,7 +19,7 @@ class TestDevice(unittest.TestCase):
                 "port": 5000
             }
         }
-        self.valid_connector = MTConnectConnector(**self.valid_connector_data)
+        self.valid_connector = MTConnectConnectorSchema(**self.valid_connector_data)
 
         # Optional supervisor config
         self.valid_supervisor = Supervisor(

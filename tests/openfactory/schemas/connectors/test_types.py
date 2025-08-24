@@ -1,7 +1,7 @@
 import unittest
 from pydantic import ValidationError, BaseModel
 from openfactory.schemas.connectors.types import Connector
-from openfactory.schemas.connectors.mtconnect import MTConnectConnector
+from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 
 
 class TestConnectorUnion(unittest.TestCase):
@@ -23,7 +23,7 @@ class TestConnectorUnion(unittest.TestCase):
             }
         }
         connector = Connector.model_validate(data)
-        self.assertIsInstance(connector, MTConnectConnector)
+        self.assertIsInstance(connector, MTConnectConnectorSchema)
         self.assertEqual(connector.type, "mtconnect")
         self.assertEqual(connector.agent.port, 5000)
 

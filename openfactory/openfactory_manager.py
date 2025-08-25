@@ -275,61 +275,6 @@ class OpenFactoryManager(OpenFactory):
 
             self.deploy_openfactory_application(app)
 
-    def tear_down_device(self, device_uuid: str) -> None:
-        """
-        Tear down a device deployed on OpenFactory.
-
-        Args:
-            device_uuid (str): The UUID of the device to be torn down.
-
-        Raises:
-            OFAException: If the device cannot be torn down.
-        """
-        # tear down Adapter
-        try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-adapter')
-            user_notify.success(f"Adapter for device {device_uuid} shut down successfully")
-        except docker.errors.NotFound:
-            # no adapter running as a Docker swarm service
-            pass
-        except docker.errors.APIError as err:
-            raise OFAException(err)
-
-        # tear down Producer
-        try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-producer')
-            deregister_asset(device_uuid + '-PRODUCER', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-            user_notify.success(f"Kafka producer for device {device_uuid} shut down successfully")
-        except docker.errors.NotFound:
-            user_notify.info(f"Kafka producer for device {device_uuid} was not running")
-        except docker.errors.APIError as err:
-            raise OFAException(err)
-
-        # tear down Agent
-        try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-agent')
-            deregister_asset(device_uuid + '-AGENT', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-            user_notify.success(f"MTConnect Agent for device {device_uuid} shut down successfully")
-        except docker.errors.NotFound:
-            # no agent running as a Docker swarm service
-            pass
-        except docker.errors.APIError as err:
-            raise OFAException(err)
-
-        # tear down Supervisor
-        try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-supervisor')
-            deregister_asset(f"{device_uuid.upper()}-SUPERVISOR", ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-            user_notify.success(f"Supervisor for device {device_uuid} shut down successfully")
-        except docker.errors.NotFound:
-            # no supervisor
-            pass
-        except docker.errors.APIError as err:
-            raise OFAException(err)
-
-        deregister_asset(device_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        user_notify.success(f"Device {device_uuid} shut down successfully")
-
     def shut_down_devices_from_config_file(self, yaml_config_file: str) -> None:
         """
         Shut down devices based on a config file.
@@ -362,7 +307,6 @@ class OpenFactoryManager(OpenFactory):
                 user_notify.warning(f"Device {device.uuid} has an unknown connector {schema.type}")
                 continue
             connector.tear_down(device.uuid)
-            self.tear_down_device(device.uuid)
 
             # Tear down Supervisor
             try:

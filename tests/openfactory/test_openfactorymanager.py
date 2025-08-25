@@ -1,6 +1,6 @@
 import unittest
 import docker
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 from openfactory.schemas.common import Deploy, Resources, ResourcesDefinition, Placement
 from openfactory.schemas.apps import OpenFactoryAppSchema
@@ -605,108 +605,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         assert "Mocked error" in fail_msg
         mock_get_apps.assert_not_called()
 
-    @patch('openfactory.openfactory_manager.user_notify')
-    @patch('openfactory.openfactory_manager.deregister_asset')
-    def test_tear_down_device_happy_path(self, mock_deregister_asset, mock_user_notify):
-        """ Test tear_down_device """
-
-        # Assume all removals succeed without exception
-        self.manager.deployment_strategy.remove = MagicMock()
-
-        # Call the method
-        device_uuid = "TestDevice123"
-        self.manager.tear_down_device(device_uuid)
-
-        # Verify deployment_strategy.remove called with all expected service names
-        expected_service_names = [
-            device_uuid.lower() + '-adapter',
-            device_uuid.lower() + '-producer',
-            device_uuid.lower() + '-agent',
-            device_uuid.lower() + '-supervisor',
-        ]
-        actual_calls = [call[0][0] for call in self.manager.deployment_strategy.remove.call_args_list]
-        for service_name in expected_service_names:
-            assert service_name in actual_calls
-
-        # Verify deregister_asset called for producer, agent, supervisor, and device itself
-        expected_deregister_calls = [
-            (device_uuid + '-PRODUCER',),
-            (device_uuid + '-AGENT',),
-            (device_uuid.upper() + '-SUPERVISOR',),
-            (device_uuid,),
-        ]
-        actual_deregister_calls = [call[0] for call in mock_deregister_asset.call_args_list]
-        for dereg_call in expected_deregister_calls:
-            assert dereg_call in actual_deregister_calls
-
-        # Verify success notifications for each service shutdown plus device shutdown
-        mock_user_notify.success.assert_any_call(f"Adapter for device {device_uuid} shut down successfully")
-        mock_user_notify.success.assert_any_call(f"Kafka producer for device {device_uuid} shut down successfully")
-        mock_user_notify.success.assert_any_call(f"MTConnect Agent for device {device_uuid} shut down successfully")
-        mock_user_notify.success.assert_any_call(f"Supervisor for device {device_uuid} shut down successfully")
-        mock_user_notify.success.assert_any_call(f"Device {device_uuid} shut down successfully")
-
-    @patch('openfactory.openfactory_manager.deregister_asset')
-    def test_tear_down_device_adapter_api_error_raises_ofaexception(self, mock_deregister_asset):
-        """ Test tear_down_device raises OFAException when docker APIError in  adapter removal """
-        # Setup remove to raise APIError on adapter removal
-        device_uuid = "TestDevice123"
-
-        def remove_side_effect(service_name):
-            if service_name == device_uuid.lower() + "-adapter":
-                raise docker.errors.APIError("Mock API error")
-        self.manager.deployment_strategy.remove.side_effect = remove_side_effect
-
-        with self.assertRaises(OFAException) as context:
-            self.manager.tear_down_device(device_uuid)
-
-        self.assertIn("Mock API error", str(context.exception))
-
-    @patch('openfactory.openfactory_manager.deregister_asset')
-    def test_tear_down_device_producer_api_error_raises_ofaexception(self, mock_deregister_asset):
-        """ Test tear_down_device raises OFAException when docker APIError in producer removal """
-        device_uuid = "TestDevice123"
-
-        def remove_side_effect(service_name):
-            if service_name == device_uuid.lower() + "-producer":
-                raise docker.errors.APIError("Mock API error")
-        self.manager.deployment_strategy.remove.side_effect = remove_side_effect
-
-        with self.assertRaises(OFAException) as context:
-            self.manager.tear_down_device(device_uuid)
-
-        self.assertIn("Mock API error", str(context.exception))
-
-    @patch('openfactory.openfactory_manager.deregister_asset')
-    def test_tear_down_device_agent_api_error_raises_ofaexception(self, mock_deregister_asset):
-        """ Test tear_down_device raises OFAException when docker APIError in agent removal """
-        device_uuid = "TestDevice123"
-
-        def remove_side_effect(service_name):
-            if service_name == device_uuid.lower() + "-agent":
-                raise docker.errors.APIError("Mock API error")
-        self.manager.deployment_strategy.remove.side_effect = remove_side_effect
-
-        with self.assertRaises(OFAException) as context:
-            self.manager.tear_down_device(device_uuid)
-
-        self.assertIn("Mock API error", str(context.exception))
-
-    @patch('openfactory.openfactory_manager.deregister_asset')
-    def test_tear_down_device_supervisor_api_error_raises_ofaexception(self, mock_deregister_asset):
-        """ Test tear_down_device raises OFAException when docker APIError in supervisor removal """
-        device_uuid = "TestDevice123"
-
-        def remove_side_effect(service_name):
-            if service_name == device_uuid.lower() + "-supervisor":
-                raise docker.errors.APIError("Mock API error")
-        self.manager.deployment_strategy.remove.side_effect = remove_side_effect
-
-        with self.assertRaises(OFAException) as context:
-            self.manager.tear_down_device(device_uuid)
-
-        self.assertIn("Mock API error", str(context.exception))
-
     @patch('openfactory.openfactory_manager.build_connector')
     @patch('openfactory.openfactory_manager.deregister_asset')
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
@@ -736,21 +634,44 @@ class TestOpenFactoryManager(unittest.TestCase):
             MagicMock(asset_uuid="device-uuid-2")
         ]
         self.manager.devices = MagicMock(return_value=deployed_devices)
-        self.manager.tear_down_device = MagicMock()
+
+        # Mock deployment_strategy
+        self.manager.deployment_strategy = MagicMock()
+        self.manager.ksql = MagicMock()
+        self.manager.bootstrap_servers = "dummy-bootstrap"
 
         # Call method under test
         self.manager.shut_down_devices_from_config_file("dummy_config.yaml")
 
-        # Assertions
+        # Config was loaded
         mock_get_devices_from_config_file.assert_called_once_with("dummy_config.yaml", uns_schema=mock_uns_instance)
 
+        # Info messages
         mock_user_notify.info.assert_any_call("Device1:")
         mock_user_notify.info.assert_any_call("Device2:")
         mock_user_notify.info.assert_any_call("No device device-uuid-3 deployed in OpenFactory")
 
-        # Connector tear_down should be called for deployed device
+        # Connector teardown called for deployed device only
         mock_connector_instance.tear_down.assert_called_once_with("device-uuid-1")
-        self.manager.tear_down_device.assert_called_once_with("device-uuid-1")
+
+        # Deployment strategy remove should be called for the supervisor of device-uuid-1
+        self.manager.deployment_strategy.remove.assert_called_once_with("device-uuid-1-supervisor")
+
+        # Assets should be deregistered exactly twice (supervisor + device itself)
+        expected_calls = [
+            call("DEVICE-UUID-1-SUPERVISOR",
+                 ksqlClient=self.manager.ksql,
+                 bootstrap_servers=self.manager.bootstrap_servers),
+            call("device-uuid-1",
+                 ksqlClient=self.manager.ksql,
+                 bootstrap_servers=self.manager.bootstrap_servers),
+        ]
+        mock_deregister_asset.assert_has_calls(expected_calls, any_order=False)
+        assert mock_deregister_asset.call_count == 2  # strict check
+
+        # Success messages
+        mock_user_notify.success.assert_any_call("Supervisor for device device-uuid-1 shut down successfully")
+        mock_user_notify.success.assert_any_call("Device device-uuid-1 shut down successfully")
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.UNSSchema')

@@ -16,11 +16,13 @@ Attributes:
 from typing import Annotated, Union
 from pydantic import Field
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
+from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema
 
 
 Connector = Annotated[
     Union[
         MTConnectConnectorSchema,
+        OPCUAConnectorSchema,
         # Add other connector models here as needed
     ],
     Field(

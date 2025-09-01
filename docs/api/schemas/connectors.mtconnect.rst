@@ -1,5 +1,5 @@
-Mtconnect Module
-================
+Mtconnect Connector Schemas
+===========================
 
 .. automodule:: openfactory.schemas.connectors.mtconnect
     :members:

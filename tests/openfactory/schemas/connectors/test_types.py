@@ -1,7 +1,8 @@
 import unittest
-from pydantic import ValidationError, BaseModel
+from pydantic import ValidationError, BaseModel, TypeAdapter
 from openfactory.schemas.connectors.types import Connector
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
+from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema
 
 
 class TestConnectorUnion(unittest.TestCase):
@@ -22,10 +23,32 @@ class TestConnectorUnion(unittest.TestCase):
                 }
             }
         }
-        connector = Connector.model_validate(data)
+        connector = TypeAdapter(Connector).validate_python(data)
         self.assertIsInstance(connector, MTConnectConnectorSchema)
         self.assertEqual(connector.type, "mtconnect")
         self.assertEqual(connector.agent.port, 5000)
+
+    def test_valid_opcua_connector(self):
+        """ Test valid OPC UA connector configuration is parsed correctly. """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+                "namespace_uri": "http://examples.openfactory.local/opcua"
+            },
+            "device": {
+                "path": "Sensors/TemperatureSensor",
+                "variables": {"temp": "Temperature", "hum": "Humidity"},
+                "methods": {"calibrate": "Calibrate"}
+            }
+        }
+        connector = TypeAdapter(Connector).validate_python(data)
+        self.assertIsInstance(connector, OPCUAConnectorSchema)
+        self.assertEqual(connector.type, "opcua")
+        self.assertEqual(connector.server.uri, "opc.tcp://127.0.0.1:4840/freeopcua/server/")
+        self.assertEqual(connector.device.path, "Sensors/TemperatureSensor")
+        self.assertEqual(connector.device.variables, {"temp": "Temperature", "hum": "Humidity"})
+        self.assertEqual(connector.device.methods, {"calibrate": "Calibrate"})
 
     def test_unknown_type_discriminator(self):
         """ Test validation error when unknown connector type is used. """
@@ -36,7 +59,7 @@ class TestConnectorUnion(unittest.TestCase):
             }
         }
         with self.assertRaises(ValidationError):
-            Connector.model_validate(data)
+            TypeAdapter(Connector).validate_python(data)
 
     def test_missing_type_field(self):
         """ Test validation error when 'type' field is missing. """

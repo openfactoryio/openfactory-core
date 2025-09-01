@@ -14,3 +14,4 @@ Submodules
 
    connectors.types
    connectors.mtconnect
+   connectors.opcua

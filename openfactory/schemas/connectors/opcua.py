@@ -26,6 +26,8 @@ YAML Example:
 -------------
 .. code-block:: yaml
 
+    type: opcua
+
     server:
       uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
       namespace_uri: http://examples.openfactory.local/opcua

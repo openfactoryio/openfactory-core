@@ -13,3 +13,4 @@ So far the following Connectors are implemented:
 
    connector_base
    mtc_connector
+   opcua_connector

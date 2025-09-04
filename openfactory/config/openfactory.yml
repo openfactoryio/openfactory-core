@@ -55,7 +55,7 @@ KSQLDB_URL: ${KSQLDB_URL}
 
 MTCONNECT_AGENT_IMAGE: ghcr.io/openfactoryio/mtcagent:v2.5.0.11
 MTCONNECT_PRODUCER_IMAGE: ghcr.io/openfactoryio/kafka-mtc-producer:${OPENFACTORY_VERSION}
-OPCUA_PRODUCER_IMAGE: opcua-producer
+OPCUA_PRODUCER_IMAGE: ghcr.io/openfactoryio/opcua-producer:${OPENFACTORY_VERSION}
 
 # Colors for ofa cli
 OFA_SUCCSESS: "\e[0;32m"   # Green for success

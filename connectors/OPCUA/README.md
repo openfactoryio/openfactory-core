@@ -8,7 +8,7 @@ The image runs a Kafka producer that ingests data from an OPC UA servr and pushe
 
 ## Docker Image
 
-The GitHub workflow [`opcua-producer.yml`](../../.github/workflows/opcua-producer.yml) builds this image and publishes it to [GitHub Container Registry (GHCR)](https://github.com/openfactoryio).
+The GitHub workflow [`opcua-producer.yml`](../../.github/workflows/opcua_producer.yml) builds this image and publishes it to [GitHub Container Registry (GHCR)](https://github.com/openfactoryio).
 
 The image is used by OpenFactory to deploy OPC UA producers for specific devices.
 

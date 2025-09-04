@@ -40,8 +40,9 @@ YAML Example:
       methods:
         calibrate: Calibrate
 
-This module is essential for configuring OPC UA connectors in OpenFactory,
-ensuring consistent and valid device subscriptions.
+.. seealso::
+
+   The runtime class of the class OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
 """
 
 import re
@@ -122,6 +123,10 @@ class OPCUAConnectorSchema(BaseModel):
     OPC UA Connector schema wrapping the server and device configuration.
 
     The `type` field is a discriminator for Pydantic to select this schema.
+
+    .. seealso::
+
+       The runtime class of the class OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
     """
     type: Literal['opcua'] = Field(
         ...,  # no default, means required

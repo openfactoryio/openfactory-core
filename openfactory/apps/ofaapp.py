@@ -220,7 +220,7 @@ class OpenFactoryApp(Asset):
             self.app_event_loop_stopped()
             deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
 
-    def async_main_loop(self) -> None:
+    async def async_main_loop(self) -> None:
         """
         Async main loop of the OpenFactory App.
 

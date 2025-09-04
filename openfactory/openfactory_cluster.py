@@ -19,24 +19,27 @@ Key integrations:
     - User notifications to report success, warnings, and errors
 
 Usage Example:
----------------
-.. code-block:: python
+    .. code-block:: python
 
-    cluster = OpenFactoryCluster()
+        from openfactory import OpenFactoryCluster
 
-    # Provision managers and workers from config file
-    cluster.create_infrastack_from_config_file("infra.yaml")
+        cluster = OpenFactoryCluster()
 
-    # Remove workers safely
-    cluster.remove_infrastack_from_config_file("infra.yaml")
+        # Provision managers and workers from config file
+        cluster.create_infrastack_from_config_file("infra.yaml")
+
+        # Remove workers safely
+        cluster.remove_infrastack_from_config_file("infra.yaml")
 
 Error handling:
----------------
     - Raises `OFAException` if the local host is not part of a Swarm or is not a manager
     - Catches Docker API errors and SSH connection issues during node creation
     - Skips already provisioned nodes without interrupting the orchestration
-"""
 
+Important:
+    User requires Docker access on all nodes of the OpenFactory cluster
+    and ssh access to all nodes using the config.OPENFACTORY_USER.
+"""
 
 import docker
 import paramiko.ssh_exception

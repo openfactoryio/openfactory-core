@@ -19,10 +19,25 @@ Key integrations:
     - User notifications for communicating operational outcomes
     - Plugin system for selecting deployment strategies
 
+Usage Example:
+    .. code-block:: python
+
+        from openfactory import OpenFactoryManager
+        from openfactory.kafka.ksql import KSQLDBClient
+        import openfactory.config as config
+
+        ofa_manager = OpenFactoryManager(ksqlClient=KSQLDBClient(config.KSQLDB_URL))
+
+        # deploy some devices
+        ofa_manager.deploy_devices_from_config_file('/path/to/device_config.yml')
+
 Error handling:
     - Raises `OFAException` for critical operational failures
     - Catches and logs Docker API errors
     - Skips existing or invalid deployments without stopping other deployments
+
+Important:
+    User requires Docker access on the OpenFactory cluster.
 """
 
 import docker

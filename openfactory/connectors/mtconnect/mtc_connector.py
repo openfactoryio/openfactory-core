@@ -5,7 +5,7 @@ Provides orchestration for deploying MTConnect-based devices into the OpenFactor
 environment. This includes:
 
 - Registering the device with OpenFactory.
-- Deploying the MTConnect agent and its adapters via `MTConnectAgentDeployer`.
+- Deploying the MTConnect agent and its adapter (if required) via `MTConnectAgentDeployer`.
 - Deploying a Kafka producer to publish MTConnect data into the Kafka cluster.
 - Tearing down all associated components when the device is removed.
 
@@ -13,6 +13,10 @@ Note:
     This connector delegates agent and adapter deployment to
     `MTConnectAgentDeployer`, ensuring separation between orchestration logic
     and MTConnect-specific deployment details.
+
+.. seealso::
+
+   The schema of the MTConnectConnector is :class:`openfactory.schemas.connectors.mtconnect.MTConnectConnectorSchema`.
 """
 
 import docker
@@ -36,6 +40,10 @@ class MTConnectConnector(Connector):
     """
     Connector for MTConnect devices that manages deployment of MTConnect agents,
     adapters, and Kafka producers, leveraging a pluggable deployment strategy.
+
+    .. seealso::
+
+       The schema of the MTConnectConnector is :class:`openfactory.schemas.connectors.mtconnect.MTConnectConnectorSchema`.
     """
 
     def __init__(self,

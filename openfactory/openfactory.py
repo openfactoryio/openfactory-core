@@ -1,8 +1,37 @@
 """
-Interface to the OpenFactory API.
+OpenFactory API.
 
-Defines the `OpenFactory` class, which provides methods to interact
-with deployed assets, devices, and services via KSQL queries to OpenFactory.
+This module provides the `OpenFactory` class, which serves as the main interface
+to deployed assets, devices, and services in an OpenFactory environment through
+ksqlDB queries.
+
+Core responsibilities:
+    - Retrieve deployed assets and their UUIDs
+    - Access availability information for assets
+    - Query Docker services associated with assets
+    - Classify assets by type (devices, MTConnect agents, Kafka producers, supervisors, applications)
+    - Provide high-level `Asset` objects for interacting with deployed components
+
+Key integrations:
+    - ksqlDB for querying asset metadata and status
+    - Kafka for underlying streaming infrastructure
+    - Asset abstraction for modeling and interacting with deployed entities
+
+Usage Example:
+    .. code-block:: python
+
+        from openfactory import OpenFactory
+        from openfactory.kafka.ksql import KSQLDBClient
+        import openfactory.config as config
+
+        ofa = OpenFactory(ksqlClient=KSQLDBClient(config.KSQLDB_URL))
+
+        # List all UUID of deployed assets
+        print(ofa.assets_uuid())
+
+Error handling:
+    - Returns empty lists or DataFrames when no results are available
+    - Relies on the KSQLDBClient to report query execution errors
 """
 
 from pandas import DataFrame

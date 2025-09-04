@@ -3,7 +3,7 @@
 OpenFactory Storage Schemas
 ===========================
 
-OpenFactory defines various Storage Backends which allows to add storage to deployed OpenFactory Apps.
+OpenFactory defines various Storage Backends which allows to add storage to deployed OpenFactory Applications.
 
 .. seealso::
 

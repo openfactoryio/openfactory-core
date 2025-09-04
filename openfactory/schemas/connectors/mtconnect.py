@@ -39,8 +39,9 @@ YAML Example:
         ip: 192.168.0.201
         port: 7879
 
-This module is essential for configuring MTConnect data sources in OpenFactory agents and adapters,
-ensuring valid and consistent runtime setup.
+.. seealso::
+
+   The runtime class of the MTConnect schema is :class:`openfactory.connectors.mtconnect.mtc_connector.MTConnectConnector`.
 """
 
 from typing import Dict, List, Optional, Literal
@@ -199,6 +200,10 @@ class MTConnectConnectorSchema(BaseModel):
     MTConnect Connector schema that wraps the Agent configuration.
 
     The `type` field is a discriminator for Pydantic to select this schema.
+
+    .. seealso::
+
+       The runtime class of the MTConnect schema is :class:`openfactory.connectors.mtconnect.mtc_connector.MTConnectConnector`.
     """
 
     type: Literal['mtconnect'] = Field(

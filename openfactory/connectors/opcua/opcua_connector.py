@@ -7,6 +7,10 @@ environment. This includes:
 - Registering the device with OpenFactory.
 - Deploying an OPC UA producer to publish device data into the Kafka cluster.
 - Tearing down all associated components when the device is removed.
+
+.. seealso::
+
+   The schema of the OPCUAConnector is :class:`openfactory.schemas.connectors.opcua.OPCUAConnectorSchema`.
 """
 
 import docker
@@ -35,6 +39,10 @@ class OPCUAConnector(Connector):
     - Deploying an OPC UA producer to stream device data to Kafka.
     - Managing references between the device and its producer in OpenFactory.
     - Tearing down the producer when the device is removed.
+
+    .. seealso::
+
+       The schema of the OPCUAConnector is :class:`openfactory.schemas.connectors.opcua.OPCUAConnectorSchema`.
     """
 
     def __init__(self,

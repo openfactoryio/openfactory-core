@@ -1,4 +1,4 @@
-Mtconnect Connector
+MTConnect Connector
 ===================
 
 .. automodule:: openfactory.connectors.mtconnect.mtc_connector

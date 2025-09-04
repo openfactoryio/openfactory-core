@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import signal
 import os
 import json
@@ -213,3 +213,85 @@ class TestOpenFactoryApp(unittest.TestCase):
             args, kwargs = mock_logger_exception.call_args
             assert "An error occurred in the main_loop of the app." in args[0]
             self.mock_deregister.assert_called_once()
+
+
+class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
+    """
+    Test async methods of OpenFactoryApp
+    """
+
+    def setUp(self):
+        self.ksql_mock = MagicMock()
+
+        # Patch AssetProducer
+        self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
+        self.MockAssetProducer = self.asset_producer_patcher.start()
+        self.addCleanup(self.asset_producer_patcher.stop)
+
+        # Patch add_attribute
+        self.add_attribute_patcher = patch.object(OpenFactoryApp, 'add_attribute')
+        self.mock_add_attribute = self.add_attribute_patcher.start()
+        self.addCleanup(self.add_attribute_patcher.stop)
+
+        # Patch deregister_asset
+        self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
+        self.mock_deregister = self.deregister_patcher.start()
+        self.addCleanup(self.deregister_patcher.stop)
+
+    async def test_async_main_loop_not_implemented(self):
+        """ Verify async_main_loop raises NotImplementedError by default. """
+        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+        with self.assertRaises(NotImplementedError):
+            await app.async_main_loop()
+
+    async def test_async_run_calls_welcome_and_adds_avail(self):
+        """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
+        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+
+        # Patch async_main_loop to avoid NotImplementedError
+        app.async_main_loop = AsyncMock()
+
+        # Patch welcome_banner to track calls
+        patch.object(app, "welcome_banner")
+
+        # Patch welcome_banner to track calls
+        with patch.object(app, "welcome_banner", return_value=None) as mock_banner:
+            await app.async_run()
+
+        mock_banner.assert_called_once()
+        app.add_attribute.assert_any_call('avail', unittest.mock.ANY)
+        app.async_main_loop.assert_called_once()
+
+    async def test_async_run_handles_exception(self):
+        """ Verify async_run handles exceptions from async_main_loop. """
+        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+
+        # Patch async_main_loop to raise an exception
+        app.async_main_loop = AsyncMock(side_effect=Exception("Boom!"))
+
+        # Patch welcome_banner to avoid side effects
+        app.welcome_banner = lambda: None
+
+        # Patch add_attribute
+        app.add_attribute = lambda *a, **k: None
+
+        # Patch logger to avoid actual logging
+        app.logger = unittest.mock.Mock()
+
+        # Patch deregister_asset and app_event_loop_stopped
+        app.app_event_loop_stopped = unittest.mock.Mock()
+
+        await app.async_run()
+
+        # Check app_event_loop_stopped called
+        app.app_event_loop_stopped.assert_called_once()
+
+        # Check deregister_asset called with asset_uuid
+        self.mock_deregister.assert_called_once_with(
+            app.asset_uuid,
+            ksqlClient=app.ksql,
+            bootstrap_servers=app.bootstrap_servers
+        )
+
+        # Check logger.exception called
+        app.logger.exception.assert_called()

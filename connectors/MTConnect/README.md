@@ -1,4 +1,4 @@
-# OpenFactory MTConnect Connector
+# OpenFactory MTConnect Producer
 
 This folder contains the files needed to build the Docker image `kafka-mtc-producer`.
 

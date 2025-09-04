@@ -181,7 +181,7 @@ class OpenFactoryApp(Asset):
         Raises:
             NotImplementedError: If this method is not implemented by a subclass.
         """
-        raise NotImplementedError("Method 'event_loop' must be implemented")
+        raise NotImplementedError("Method 'main_loop' must be implemented")
 
     def run(self) -> None:
         """
@@ -217,6 +217,41 @@ class OpenFactoryApp(Asset):
 
         except Exception:
             self.logger.exception("An error occurred in the main_loop of the app.")
+            self.app_event_loop_stopped()
+            deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+
+    def async_main_loop(self) -> None:
+        """
+        Async main loop of the OpenFactory App.
+
+        This method must be implemented by child classes to define the main
+        application loop behavior. It will be responsible for managing the
+        application's lifecycle, handling events, and maintaining any necessary
+        state while the application is running.
+
+        Raises:
+            NotImplementedError: If this method is not implemented by a subclass.
+        """
+        raise NotImplementedError("Method 'async_main_loop' must be implemented")
+
+    async def async_run(self) -> None:
+        """
+        Run the OpenFactory app asynchronously.
+
+        Args:
+            async_main_loop: Async function to use as the main loop
+        """
+        self.welcome_banner()
+        self.add_attribute('avail', AssetAttribute(
+            value='AVAILABLE',
+            tag='Availability',
+            type='Events'
+        ))
+        self.logger.info("Starting async main loop")
+        try:
+            await self.async_main_loop()
+        except Exception:
+            self.logger.exception("An error occurred in the async main loop")
             self.app_event_loop_stopped()
             deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
 

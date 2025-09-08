@@ -29,6 +29,7 @@ import os
 import asyncio
 import json
 import logging
+import traceback
 from numbers import Number
 from datetime import datetime
 from asyncua import Client, ua
@@ -239,6 +240,24 @@ class OPCUAProducer(OpenFactoryApp):
     `OPCUAConnectorSchema`.
     """
 
+    def welcome_banner(self) -> None:
+        """
+        Welcome banner printed to stdout.
+        """
+        connector_env = os.environ.get("OPCUA_CONNECTOR")
+        connector_dict = json.loads(connector_env)
+        schema = OPCUAConnectorSchema(**connector_dict)
+        url = schema.server.uri
+        ns = schema.server.namespace_uri
+
+        print("--------------------------------------------------------------")
+        print(f"Starting Kafka Producer {self.asset_uuid}")
+        print("--------------------------------------------------------------")
+        print("OPC UA connection configuration")
+        print("URL:", url)
+        print("URI:", ns)
+        print("--------------------------------------------------------------")
+
     async def async_main_loop(self) -> None:
         """
         Main asynchronous loop for the OPC UA producer.
@@ -257,8 +276,6 @@ class OPCUAProducer(OpenFactoryApp):
         connector_env = os.environ.get("OPCUA_CONNECTOR")
         connector_dict = json.loads(connector_env)
         schema = OPCUAConnectorSchema(**connector_dict)
-        url = schema.server.uri
-        ns = schema.server.namespace_uri
 
         self.opcua_device = Asset(
             asset_uuid=os.environ.get("DEVICE_UUID"),
@@ -268,10 +285,10 @@ class OPCUAProducer(OpenFactoryApp):
         while True:
             sub: Optional[Subscription] = None
             try:
-                async with Client(url) as client:
+                async with Client(schema.server.uri) as client:
 
                     # Resolve namespace index
-                    idx = await client.get_namespace_index(ns)
+                    idx = await client.get_namespace_index(schema.server.namespace_uri)
 
                     # Resolve device node
                     if schema.device.path:
@@ -304,7 +321,7 @@ class OPCUAProducer(OpenFactoryApp):
                     self.logger.info("Subscribed to events on device node")
 
                     # Tag OPC UA device as available
-                    self.logger.info(f"Connected to OPC UA server at {url}")
+                    self.logger.info(f"Connected to OPC UA server at {schema.server.uri}")
                     self.opcua_device.add_attribute('avail', AssetAttribute(
                         value='AVAILABLE',
                         tag='Availability',
@@ -318,7 +335,9 @@ class OPCUAProducer(OpenFactoryApp):
                         await device_node.read_display_name()
 
             except Exception as e:
-                self.logger.error(f"OPC UA client error: {e}")
+                self.logger.error(f"OPC UA client error: {type(e).__name__}: {e}")
+                tb = traceback.format_exc()
+                self.logger.debug(f"Traceback:\n{tb}")
                 self.opcua_device.add_attribute('avail', AssetAttribute(
                         value='UNAVAILABLE',
                         tag='Availability',
@@ -331,6 +350,7 @@ if __name__ == "__main__":
     producer = OPCUAProducer(
         app_uuid=os.getenv("OPCUA_PRODUCER_UUID"),
         ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL")),
-        bootstrap_servers=os.getenv("KAFKA_BROKER")
+        bootstrap_servers=os.getenv("KAFKA_BROKER"),
+        loglevel=os.getenv("OPCUA_PRODUCER_LOG_LEVEL", "INFO")
     )
     asyncio.run(producer.async_run())

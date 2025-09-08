@@ -101,6 +101,7 @@ class OPCUAConnector(Connector):
                      f"KSQLDB_URL={self.ksql.ksqldb_url}",
                      f'OPCUA_CONNECTOR={json.dumps(connector_dict)}',
                      f'OPCUA_PRODUCER_UUID={producer_uuid}',
+                     f"OPCUA_PRODUCER_LOG_LEVEL={config.OPCUA_PRODUCER_LOG_LEVEL}",
                      f"DOCKER_SERVICE={service_name}",
                      f"DEVICE_UUID={device.uuid}",
                      "APPLICATION_MANUFACTURER=OpenFactory",

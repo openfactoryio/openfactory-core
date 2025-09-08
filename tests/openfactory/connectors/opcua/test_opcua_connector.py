@@ -1,4 +1,5 @@
 import unittest
+import json
 from unittest.mock import MagicMock, patch
 from openfactory.connectors.opcua.opcua_connector import OPCUAConnector
 from openfactory.schemas.devices import Device
@@ -81,6 +82,32 @@ class TestOPCUAConnector(unittest.TestCase):
         # Add reference calls should happen on mocked Asset
         self.assertTrue(mock_asset_instance.add_reference_below.called)
         self.assertTrue(mock_asset_instance.add_reference_above.called)
+
+    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
+    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
+    @patch("openfactory.connectors.opcua.opcua_connector.config.OPCUA_PRODUCER_LOG_LEVEL", "mocked_level")
+    @patch("openfactory.connectors.opcua.opcua_connector.config.KAFKA_BROKER", "mocked_kafka:9092")
+    def test_deploy_opcua_producer_sets_correct_env(self, mock_register_asset, mock_asset_cls):
+        """ deploy_opcua_producer should set correct environment variables. """
+
+        mock_asset_cls.return_value = MagicMock()
+
+        self.connector.deploy_opcua_producer(self.device)
+
+        # Capture arguments passed to deployment_strategy.deploy
+        _, kwargs = self.deploy_strategy_mock.deploy.call_args
+        env_vars = kwargs["env"]
+
+        # Assertions for key env variables
+        self.assertIn("KAFKA_BROKER=mocked_kafka:9092", env_vars)
+        self.assertIn(f"KSQLDB_URL={self.ksql_mock.ksqldb_url}", env_vars)
+        self.assertIn(f"OPCUA_CONNECTOR={json.dumps(self.device.connector.model_dump())}", env_vars)
+        self.assertIn("OPCUA_PRODUCER_UUID=DEVICE-123-PRODUCER", env_vars)
+        self.assertIn("OPCUA_PRODUCER_LOG_LEVEL=mocked_level", env_vars)
+        self.assertIn("DOCKER_SERVICE=device-123-producer", env_vars)
+        self.assertIn("DEVICE_UUID=DEVICE-123", env_vars)
+        self.assertIn("APPLICATION_MANUFACTURER=OpenFactory", env_vars)
+        self.assertIn("APPLICATION_LICENSE=Polyform Noncommercial License 1.0.0", env_vars)
 
     @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
     def test_deploy_opcua_producer_docker_api_error_raises(self, mock_register_asset):

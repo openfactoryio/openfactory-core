@@ -288,15 +288,28 @@ class OPCUAProducer(OpenFactoryApp):
                 async with Client(schema.server.uri) as client:
 
                     # Resolve namespace index
-                    idx = await client.get_namespace_index(schema.server.namespace_uri)
+                    try:
+                        idx = await client.get_namespace_index(schema.server.namespace_uri)
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to resolve namespace URI {schema.server.namespace_uri}: {e}"
+                        )
+                        raise
 
                     # Resolve device node
-                    if schema.device.path:
-                        path_parts = [f"{idx}:{p}" for p in schema.device.path.split("/")]
-                        device_node = await client.nodes.objects.get_child(path_parts)
-                    else:
-                        # Using NodeId directly
-                        device_node = client.get_node(schema.device.node_id)
+                    try:
+                        if schema.device.path:
+                            path_parts = [f"{idx}:{p}" for p in schema.device.path.split("/")]
+                            device_node = await client.nodes.objects.get_child(path_parts)
+                        else:
+                            # Using NodeId directly
+                            device_node = client.get_node(schema.device.node_id)
+
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to resolve device node (path={schema.device.path} | node_id={schema.device.node_id}): {e}"
+                        )
+                        raise
 
                     # Prepare subscription
                     handler = SubscriptionHandler(self.opcua_device, self.logger)
@@ -305,16 +318,24 @@ class OPCUAProducer(OpenFactoryApp):
                     # Subscribe to OPC UA variables
                     if schema.device.variables:
                         for local_name, browse_name in schema.device.variables.items():
-                            var_node = await device_node.get_child([f"{idx}:{browse_name}"])
-                            await sub.subscribe_data_change(var_node)
+                            try:
+                                var_node = await device_node.get_child([f"{idx}:{browse_name}"])
+                                await sub.subscribe_data_change(var_node)
 
-                            qname = await var_node.read_browse_name()
-                            handler.node_map[var_node] = {
-                                "local_name": local_name,
-                                "browse_name": qname.Name,
-                            }
+                                qname = await var_node.read_browse_name()
+                                handler.node_map[var_node] = {
+                                    "local_name": local_name,
+                                    "browse_name": qname.Name,
+                                }
 
-                            self.logger.info(f"Subscribed to variable {local_name} ({browse_name})")
+                                self.logger.info(f"Subscribed to variable {local_name} ({browse_name})")
+
+                            except Exception as e:
+                                self.logger.error(
+                                    f"Failed to subscribe variable {local_name} (browse_name={browse_name}): {e}"
+                                )
+                                # keep going with other variables
+                                continue
 
                     # Subscribe to OPC UA events
                     await sub.subscribe_events(device_node)

@@ -2,7 +2,7 @@ import unittest
 from pydantic import ValidationError, BaseModel, TypeAdapter
 from openfactory.schemas.connectors.types import Connector
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
-from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema
+from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema, OPCUAVariableConfig
 
 
 class TestConnectorUnion(unittest.TestCase):
@@ -43,11 +43,23 @@ class TestConnectorUnion(unittest.TestCase):
             }
         }
         connector = TypeAdapter(Connector).validate_python(data)
+
+        # Type checks
         self.assertIsInstance(connector, OPCUAConnectorSchema)
         self.assertEqual(connector.type, "opcua")
         self.assertEqual(connector.server.uri, "opc.tcp://127.0.0.1:4840/freeopcua/server/")
         self.assertEqual(connector.device.path, "Sensors/TemperatureSensor")
-        self.assertEqual(connector.device.variables, {"temp": "Temperature", "hum": "Humidity"})
+
+        # Variables should be normalized into OPCUAVariableConfig
+        self.assertIn("temp", connector.device.variables)
+        self.assertIsInstance(connector.device.variables["temp"], OPCUAVariableConfig)
+        self.assertEqual(connector.device.variables["temp"].browse_name, "Temperature")
+
+        self.assertIn("hum", connector.device.variables)
+        self.assertIsInstance(connector.device.variables["hum"], OPCUAVariableConfig)
+        self.assertEqual(connector.device.variables["hum"].browse_name, "Humidity")
+
+        # Methods should remain untouched
         self.assertEqual(connector.device.methods, {"calibrate": "Calibrate"})
 
     def test_unknown_type_discriminator(self):

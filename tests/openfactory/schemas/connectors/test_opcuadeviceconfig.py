@@ -1,6 +1,6 @@
 import unittest
 from pydantic import ValidationError
-from openfactory.schemas.connectors.opcua import OPCUADeviceConfig
+from openfactory.schemas.connectors.opcua import OPCUADeviceConfig, OPCUAConnectorSchema, OPCUAVariableConfig
 
 
 class TestOPCUADeviceConfig(unittest.TestCase):
@@ -166,3 +166,82 @@ class TestOPCUADeviceConfig(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             OPCUADeviceConfig(**data)
         self.assertIn("Invalid node_id format", str(cm.exception))
+
+    def test_variable_normalization_from_string(self):
+        """ Simple string variable should be normalized to OPCUAVariableConfig """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840", "namespace_uri": "http://example.com"},
+            "device": {"path": "Sensors/TempSensor", "variables": {"temp": "Temperature"}}
+        }
+        schema = OPCUAConnectorSchema(**data)
+        self.assertIsInstance(schema.device.variables["temp"], OPCUAVariableConfig)
+        self.assertEqual(schema.device.variables["temp"].browse_name, "Temperature")
+
+    def test_variable_inherits_server_defaults(self):
+        """ Variables inherit queue_size and sampling_interval from server subscription """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840",
+                "namespace_uri": "http://example.com",
+                "subscription": {"queue_size": 10, "sampling_interval": 50}
+            },
+            "device": {
+                "path": "Sensors/TempSensor",
+                "variables": {"temp": "Temperature"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        var = schema.device.variables["temp"]
+        self.assertEqual(var.queue_size, 10)
+        self.assertEqual(var.sampling_interval, 50)
+
+    def test_variable_explicit_override_preserved(self):
+        """ Explicit variable overrides should take precedence over server defaults """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840",
+                "namespace_uri": "http://example.com",
+                "subscription": {"queue_size": 10, "sampling_interval": 50}
+            },
+            "device": {
+                "path": "Sensors/TempSensor",
+                "variables": {
+                    "temp": {"browse_name": "Temperature", "queue_size": 5, "sampling_interval": 20}
+                }
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        var = schema.device.variables["temp"]
+        self.assertEqual(var.queue_size, 5)
+        self.assertEqual(var.sampling_interval, 20)
+
+    def test_mixed_variable_types(self):
+        """ Mixed string and explicit variable configs should normalize correctly """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840", "namespace_uri": "http://example.com"},
+            "device": {
+                "path": "Sensors/TempSensor",
+                "variables": {
+                    "temp": "Temperature",
+                    "hum": {"browse_name": "Humidity", "queue_size": 5}
+                }
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        self.assertIsInstance(schema.device.variables["temp"], OPCUAVariableConfig)
+        self.assertIsInstance(schema.device.variables["hum"], OPCUAVariableConfig)
+        self.assertEqual(schema.device.variables["hum"].queue_size, 5)
+
+    def test_methods_optional_and_empty_dict_allowed(self):
+        """ Device methods can be omitted or be an empty dict """
+        data1 = {"type": "opcua", "server": {"uri": "opc.tcp://127.0.0.1:4840", "namespace_uri": "http://example.com"}, "device": {"path": "Sensors/TempSensor"}}
+        schema1 = OPCUAConnectorSchema(**data1)
+        self.assertIsNone(schema1.device.methods)
+
+        data2 = {"type": "opcua", "server": {"uri": "opc.tcp://127.0.0.1:4840", "namespace_uri": "http://example.com"}, "device": {"path": "Sensors/TempSensor", "methods": {}}}
+        schema2 = OPCUAConnectorSchema(**data2)
+        self.assertEqual(schema2.device.methods, {})

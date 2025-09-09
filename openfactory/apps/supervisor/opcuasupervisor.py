@@ -54,6 +54,8 @@ class OPCUASupervisor(BaseSupervisor):
 
     RECONNECT_INTERVAL = 10  # Time in seconds to wait before trying to reconnect
 
+    APPLICATION_LICENSE = 'Polyform Noncommercial License 1.0.0'
+
     def __init__(self, supervisor_uuid: str, device_uuid: str, adapter_ip: str, adapter_port: int,
                  ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER,
                  loglevel: str = 'INFO'):

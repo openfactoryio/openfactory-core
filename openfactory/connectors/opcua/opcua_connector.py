@@ -105,8 +105,7 @@ class OPCUAConnector(Connector):
                      f"DOCKER_SERVICE={service_name}",
                      f"DEVICE_UUID={device.uuid}",
                      "APPLICATION_MANUFACTURER=OpenFactory",
-                     "APPLICATION_LICENSE=Polyform Noncommercial License 1.0.0"],
-                networks=[config.OPENFACTORY_NETWORK]
+                     "APPLICATION_LICENSE=Polyform Noncommercial License 1.0.0"]
             )
         except docker.errors.APIError as err:
             raise OFAException(f"Connector {service_name} could not be created\n{err}")

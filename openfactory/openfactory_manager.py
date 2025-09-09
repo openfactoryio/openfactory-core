@@ -127,7 +127,6 @@ class OpenFactoryManager(OpenFactory):
                 name=device.uuid.lower() + '-supervisor',
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,
-                networks=[config.OPENFACTORY_NETWORK],
                 resources={
                     "Limits": {"NanoCPUs": int(1000000000*cpus_limit(device.supervisor.deploy, 1.0))},
                     "Reservations": {"NanoCPUs": int(1000000000*cpus_reservation(device.supervisor.deploy, 0.5))}
@@ -194,7 +193,6 @@ class OpenFactoryManager(OpenFactory):
                 name=application.uuid.lower(),
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,
-                networks=[config.OPENFACTORY_NETWORK],
                 mounts=mounts
             )
         except docker.errors.APIError as err:

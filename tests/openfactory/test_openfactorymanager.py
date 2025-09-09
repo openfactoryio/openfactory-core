@@ -174,7 +174,6 @@ class TestOpenFactoryManager(unittest.TestCase):
             name="dev123-supervisor",
             mode={"Replicated": {"Replicas": 1}},
             env=expected_env,
-            networks=["openfactory_net"],
             resources={
                 "Limits": {"NanoCPUs": 2000000000},       # 2.0 * 1_000_000_000
                 "Reservations": {"NanoCPUs": 1500000000}  # 1.5 * 1_000_000_000
@@ -234,7 +233,6 @@ class TestOpenFactoryManager(unittest.TestCase):
             name="app123",
             mode={"Replicated": {"Replicas": 1}},
             env=expected_env,
-            networks=["openfactory_net"],
             mounts=[]
         )
 

@@ -313,14 +313,19 @@ class OPCUAProducer(OpenFactoryApp):
 
                     # Prepare subscription
                     handler = SubscriptionHandler(self.opcua_device, self.logger)
-                    sub = await client.create_subscription(500, handler)
+                    sub = await client.create_subscription(
+                        period=float(schema.server.subscription.publishing_interval),
+                        handler=handler)
 
                     # Subscribe to OPC UA variables
                     if schema.device.variables:
-                        for local_name, browse_name in schema.device.variables.items():
+                        for local_name, var_cfg in schema.device.variables.items():
                             try:
-                                var_node = await device_node.get_child([f"{idx}:{browse_name}"])
-                                await sub.subscribe_data_change(var_node)
+                                var_node = await device_node.get_child([f"{idx}:{var_cfg.browse_name}"])
+                                await sub.subscribe_data_change(
+                                    var_node,
+                                    queuesize=var_cfg.queue_size,
+                                    sampling_interval=var_cfg.sampling_interval)
 
                                 qname = await var_node.read_browse_name()
                                 handler.node_map[var_node] = {
@@ -328,11 +333,11 @@ class OPCUAProducer(OpenFactoryApp):
                                     "browse_name": qname.Name,
                                 }
 
-                                self.logger.info(f"Subscribed to variable {local_name} ({browse_name})")
+                                self.logger.info(f"Subscribed to variable {local_name} ({var_cfg.browse_name})")
 
                             except Exception as e:
                                 self.logger.error(
-                                    f"Failed to subscribe variable {local_name} (browse_name={browse_name}): {e}"
+                                    f"Failed to subscribe variable {local_name} (browse_name={var_cfg.browse_name}): {e}"
                                 )
                                 # keep going with other variables
                                 continue

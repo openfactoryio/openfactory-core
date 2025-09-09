@@ -41,7 +41,7 @@ class CaseInsensitiveDict(UserDict):
 
         Args:
             key (str): The key to look up.
-            default (Any, optional): Value to return if key is not found.
+            default (Any, Optional): Value to return if key is not found.
 
         Returns:
             Any: The value for the key, or default if not found.

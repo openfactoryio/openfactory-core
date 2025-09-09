@@ -1,6 +1,6 @@
 import unittest
 from pydantic import ValidationError
-from openfactory.schemas.connectors.opcua import OPCUAServerConfig
+from openfactory.schemas.connectors.opcua import OPCUAServerConfig, OPCUASubscriptionConfig
 
 
 class TestOPCUAServerConfig(unittest.TestCase):
@@ -50,3 +50,41 @@ class TestOPCUAServerConfig(unittest.TestCase):
         err_str = str(cm.exception)
         self.assertIn("foo", err_str)
         self.assertIn("extra", err_str.lower())
+
+    def test_server_with_subscription(self):
+        """ Server with subscription object should be valid """
+        data = {
+            "uri": "opc.tcp://127.0.0.1:4840",
+            "namespace_uri": "http://example.com",
+            "subscription": {
+                "publishing_interval": 100,
+                "queue_size": 10,
+                "sampling_interval": 50
+            }
+        }
+        server = OPCUAServerConfig(**data)
+        self.assertIsInstance(server.subscription, OPCUASubscriptionConfig)
+        self.assertEqual(server.subscription.publishing_interval, 100)
+        self.assertEqual(server.subscription.queue_size, 10)
+        self.assertEqual(server.subscription.sampling_interval, 50)
+
+    def test_server_subscription_optional(self):
+        """ Server without subscription is valid and defaults to None """
+        data = {
+            "uri": "opc.tcp://127.0.0.1:4840",
+            "namespace_uri": "http://example.com"
+        }
+        server = OPCUAServerConfig(**data)
+        self.assertIsNone(server.subscription)
+
+    def test_subscription_extra_fields_forbid(self):
+        """ Extra fields in subscription should raise ValidationError """
+        data = {
+            "uri": "opc.tcp://127.0.0.1:4840",
+            "namespace_uri": "http://example.com",
+            "subscription": {"publishing_interval": 100, "foo": "bar"}
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAServerConfig(**data)
+        self.assertIn("foo", str(cm.exception))
+        self.assertIn("extra", str(cm.exception).lower())

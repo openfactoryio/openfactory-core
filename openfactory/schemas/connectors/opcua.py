@@ -56,9 +56,9 @@ YAML Example:
 
     type: opcua
 
-    # -------------------------------
+    # --------------------------------------------------------
     # Example: Server subscription omitted → defaults applied
-    # -------------------------------
+    # --------------------------------------------------------
     server:
       uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
       namespace_uri: http://examples.openfactory.local/opcua
@@ -73,6 +73,28 @@ YAML Example:
         temp: Temperature         # simple string → inherits server defaults
         hum:                      # explicit variable config → overrides defaults
           browse_name: Humidity
+          queue_size: 5
+          sampling_interval: 50
+      methods:
+        calibrate: Calibrate
+
+    # --------------------------------------------------------
+    # Example 2: Server subscription explicitly provided
+    # --------------------------------------------------------
+    server:
+      uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
+      namespace_uri: http://examples.openfactory.local/opcua
+      subscription:
+        publishing_interval: 200
+        queue_size: 10
+        sampling_interval: 25
+
+    device:
+      path: Sensors/TemperatureSensor_2
+      variables:
+        temp: Temperature          # inherits server subscription values
+        hum:
+          browse_name: Humidity    # overrides server subscription values
           queue_size: 5
           sampling_interval: 50
       methods:

@@ -9,7 +9,6 @@ dependencies = [
     # Core utilities
     "click",
     "rich",
-    "pandas",
     "pydantic",
     "pyyaml",
     "python-dotenv",

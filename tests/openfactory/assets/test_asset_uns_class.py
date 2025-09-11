@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import MagicMock, patch, call
-import pandas as pd
 from openfactory.assets import AssetUNS
 from openfactory.assets.asset_base import BaseAsset
 from openfactory.kafka import KafkaAssetUNSConsumer
@@ -26,10 +25,9 @@ class TestAssetUNS(unittest.TestCase):
 
     def test_asset_uuid_returns_value(self, MockAssetProducer):
         """ Test asset_uuid returns correct value """
-        # Setup mock DataFrame with expected data
-        mock_df = pd.DataFrame({'ASSET_UUID': ['uuid-123']})
+        mock_result = [{'ASSET_UUID': 'uuid-123'}]
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.return_value = mock_df
+        mock_ksqlClient.query.return_value = mock_result
 
         asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset.asset_uuid
@@ -43,7 +41,7 @@ class TestAssetUNS(unittest.TestCase):
     def test_asset_uuid_returns_none_on_empty_df(self, MockAssetProducer):
         """ Test asset_uuid is None when no mapping """
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.return_value = pd.DataFrame()
+        mock_ksqlClient.query.return_value = []
         asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
 
         result = asset.asset_uuid
@@ -51,10 +49,11 @@ class TestAssetUNS(unittest.TestCase):
 
     def test_get_reference_list_returns_uuids(self, MockAssetProducer):
         """ Test _get_reference_list returns list of UUIDs """
-        mock_map = pd.DataFrame({'ASSET_UUID': ['uuid-123']})
-        mock_df = pd.DataFrame({'VALUE': ['ref_001, ref_002']})
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_map, mock_df]
+        mock_ksqlClient.query.side_effect = [
+            [{'ASSET_UUID': 'uuid-123'}],  # asset_uuid lookup
+            [{'VALUE': 'ref_001, ref_002'}]  # references query
+        ]
 
         asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('above')
@@ -65,9 +64,9 @@ class TestAssetUNS(unittest.TestCase):
 
     def test_get_reference_list_returns_empty_on_empty_df(self, MockAssetProducer):
         """ Test _get_reference_list returns empty list on empty query """
-        mock_map = pd.DataFrame({'ASSET_UUID': ['uuid-123']})
+        mock_map = [{'ASSET_UUID': 'uuid-123'}]
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_map, pd.DataFrame()]
+        mock_ksqlClient.query.side_effect = [mock_map, []]
 
         asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('below')
@@ -75,10 +74,9 @@ class TestAssetUNS(unittest.TestCase):
 
     def test_get_reference_list_returns_empty_on_blank_value(self, MockAssetProducer):
         """ Test _get_reference_list returns empty list on blank VALUE """
-        mock_map = pd.DataFrame({'ASSET_UUID': ['uuid-123']})
-        mock_df = pd.DataFrame({'VALUE': ['   ']})
+        mock_map = [{'ASSET_UUID': 'uuid-123'}]
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_map, mock_df]
+        mock_ksqlClient.query.side_effect = [mock_map, [{'VALUE': '   '}]]
 
         asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('above')
@@ -87,8 +85,8 @@ class TestAssetUNS(unittest.TestCase):
     @patch('openfactory.assets.asset_uns_class.AssetUNS')
     def test_get_reference_list_returns_assets(self, MockAssetUNS, MockAssetProducer):
         """ Test _get_reference_list returns AssetUNS instances when as_assets=True """
-        mock_map = pd.DataFrame({'ASSET_UUID': ['uuid-123']})
-        mock_df = pd.DataFrame({'VALUE': ['uns_010, uns_020']})
+        mock_map = [{'ASSET_UUID': 'uuid-123'}]
+        mock_df = [{'VALUE': 'uns_010, uns_020'}]
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.side_effect = [mock_map, mock_df]
 

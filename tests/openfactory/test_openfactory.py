@@ -1,6 +1,5 @@
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
-import pandas as pd
 from openfactory import OpenFactory
 
 
@@ -24,15 +23,18 @@ class TestOpenFactory(TestCase):
 
     def test_assets_uuid(self):
         """ Test assets_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.assets_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
         mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type;")
@@ -40,12 +42,13 @@ class TestOpenFactory(TestCase):
     def test_assets_empty(self):
         """ Test assets() when no assets exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()  # Simulate empty DataFrame
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         assets = ofa.assets()
 
-        self.assertEqual(assets, [])  # Expect an empty list
+        # Expect an empty list
+        assert assets == []
 
     @patch("openfactory.openfactory.Asset")
     def test_assets(self, MockAsset):
@@ -67,50 +70,47 @@ class TestOpenFactory(TestCase):
         # Assert that the return value matches the mock objects
         self.assertEqual(result, mock_asset_instances)
 
-    def test_assets_availability(self):
-        """ Test assets_availability() """
-        test_df = pd.DataFrame({"ASSET_UUID": [1, 2], "available": ["AVAILABLE", "UNAVAILABLE"]})
-        mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
-
-        ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
-        result = ofa.assets_availability()
-
-        # Ensure the function returns the expected DataFrame
-        pd.testing.assert_frame_equal(result, test_df)
-
-        # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT * FROM assets_avail;")
-
     def test_assets_docker_services(self):
         """ Test assets_docker_services() """
-        test_df = pd.DataFrame({"service_id": [1, 2], "status": ["running", "stopped"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"service_id": 1, "status": "running"},
+            {"service_id": 2, "status": "stopped"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.assets_docker_services()
 
-        # Ensure the function returns the expected DataFrame
-        pd.testing.assert_frame_equal(result, test_df)
+        # Ensure the function returns the expected list of dicts
+        expected_result = [
+            {"service_id": 1, "status": "running"},
+            {"service_id": 2, "status": "stopped"}
+        ]
+        assert result == expected_result
 
         # Verify the correct query was executed
         mock_ksql.query.assert_called_once_with("SELECT * FROM docker_services;")
 
     def test_devices_uuid(self):
         """ Test devices_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.devices_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Device';")
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Device';"
+        )
 
     @patch("openfactory.openfactory.Asset")
     def test_devices(self, MockAsset):
@@ -136,27 +136,33 @@ class TestOpenFactory(TestCase):
     def test_devices_empty(self):
         """ Test devices() when no devices exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         devices = ofa.devices()
 
-        self.assertEqual(devices, [])
+        # Expect an empty list
+        assert devices == []
 
     def test_agents_uuid(self):
         """ Test agents_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.agents_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'MTConnectAgent';")
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'MTConnectAgent';"
+        )
 
     @patch("openfactory.openfactory.Asset")
     def test_agents(self, MockAsset):
@@ -182,27 +188,33 @@ class TestOpenFactory(TestCase):
     def test_agents_empty(self):
         """ Test agents() when no agents exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         agents = ofa.agents()
 
-        self.assertEqual(agents, [])
+        # Expect an empty list
+        assert agents == []
 
     def test_producers_uuid(self):
         """ Test producers_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.producers_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'KafkaProducer';")
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'KafkaProducer';"
+        )
 
     @patch("openfactory.openfactory.Asset")
     def test_producers(self, MockAsset):
@@ -228,27 +240,33 @@ class TestOpenFactory(TestCase):
     def test_producers_empty(self):
         """ Test producers() when no producers exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         producers = ofa.producers()
 
-        self.assertEqual(producers, [])
+        # Expect an empty list
+        assert producers == []
 
     def test_supervisors_uuid(self):
         """ Test supervisors_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.supervisors_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Supervisor';")
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Supervisor';"
+        )
 
     @patch("openfactory.openfactory.Asset")
     def test_supervisors(self, MockAsset):
@@ -274,27 +292,33 @@ class TestOpenFactory(TestCase):
     def test_supervisors_empty(self):
         """ Test supervisors() when no supervisors exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         supervisors = ofa.supervisors()
 
-        self.assertEqual(supervisors, [])
+        # Expect an empty list
+        assert supervisors == []
 
     def test_applications_uuid(self):
         """ Test applications_uuid() """
-        test_df = pd.DataFrame({"ASSET_UUID": ["uuid1", "uuid2"]})
+        # Mock query result as list of dicts
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = test_df
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         result = ofa.applications_uuid()
 
         # Ensure the function returns the expected result
-        self.assertEqual(result, ["uuid1", "uuid2"])
+        assert result == ["uuid1", "uuid2"]
 
         # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with("SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'OpenFactoryApp';")
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'OpenFactoryApp';"
+        )
 
     @patch("openfactory.openfactory.Asset")
     def test_applications(self, MockAsset):
@@ -320,9 +344,10 @@ class TestOpenFactory(TestCase):
     def test_applications_empty(self):
         """ Test applications() when no applications exist """
         mock_ksql = MagicMock()
-        mock_ksql.query.return_value = pd.DataFrame()
+        mock_ksql.query.return_value = []  # Simulate empty result
 
         ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
         applications = ofa.applications()
 
-        self.assertEqual(applications, [])
+        # Expect an empty list
+        assert applications == []

@@ -30,11 +30,10 @@ Usage Example:
         print(ofa.assets_uuid())
 
 Error handling:
-    - Returns empty lists or DataFrames when no results are available
+    - Returns empty lists when no results are available
     - Relies on the KSQLDBClient to report query execution errors
 """
 
-from pandas import DataFrame
 from typing import List
 import openfactory.config as config
 from openfactory.assets import Asset
@@ -68,8 +67,8 @@ class OpenFactory:
             List[str]: UUIDs of all deployed assets.
         """
         query = "SELECT ASSET_UUID FROM assets_type;"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def assets(self) -> List[Asset]:
         """
@@ -80,22 +79,22 @@ class OpenFactory:
         """
         return [Asset(uuid, self.ksql, self.bootstrap_servers) for uuid in self.assets_uuid()]
 
-    def assets_availability(self) -> DataFrame:
+    def assets_availability(self) -> list[dict]:
         """
         Get availability data for all deployed assets.
 
         Returns:
-            DataFrame: Availability data of deployed assets.
+            list[dict]: Availability data of deployed assets.
         """
         query = "SELECT * FROM assets_avail;"
         return self.ksql.query(query)
 
-    def assets_docker_services(self) -> DataFrame:
+    def assets_docker_services(self) -> list[dict]:
         """
         Get Docker services associated with all deployed assets.
 
         Returns:
-            DataFrame: Docker services data of deployed assets.
+            list[dict]: Docker services data of deployed assets.
         """
         query = "SELECT * FROM docker_services;"
         return self.ksql.query(query)
@@ -108,8 +107,8 @@ class OpenFactory:
             List[str]: UUIDs of deployed device-type assets.
         """
         query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Device';"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def devices(self) -> List[Asset]:
         """
@@ -128,8 +127,8 @@ class OpenFactory:
             List[str]: UUIDs of deployed MTConnect agents.
         """
         query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'MTConnectAgent';"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def agents(self) -> List[Asset]:
         """
@@ -148,8 +147,8 @@ class OpenFactory:
             List[str]: UUIDs of deployed Kafka producer assets.
         """
         query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'KafkaProducer';"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def producers(self) -> List[Asset]:
         """
@@ -168,8 +167,8 @@ class OpenFactory:
             List[str]: UUIDs of deployed supervisor-type assets.
         """
         query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Supervisor';"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def supervisors(self) -> List[Asset]:
         """
@@ -188,8 +187,8 @@ class OpenFactory:
             List[str]: UUIDs of deployed OpenFactory application-type assets.
         """
         query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'OpenFactoryApp';"
-        df = self.ksql.query(query)
-        return df['ASSET_UUID'].to_list() if not df.empty else []
+        results = self.ksql.query(query)
+        return [row['ASSET_UUID'] for row in results] if results else []
 
     def applications(self) -> List[Asset]:
         """

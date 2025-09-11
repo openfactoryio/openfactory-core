@@ -104,10 +104,10 @@ class AssetUNS(BaseAsset):
             str: The asset's UUID.
         """
         query = f"SELECT asset_uuid FROM asset_to_uns_map WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}';"
-        df = self.ksql.query(query)
-        if df.empty:
+        result = self.ksql.query(query)
+        if not result:
             return None
-        return df['ASSET_UUID'][0]
+        return result[0]['ASSET_UUID']
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[Union[str, 'AssetUNS']]:
         """
@@ -122,12 +122,12 @@ class AssetUNS(BaseAsset):
         """
         key = f"{self.ASSET_ID}|references_{direction}"
         query = f"SELECT VALUE FROM {self.KSQL_ASSET_TABLE} WHERE key='{key}';"
-        df = self.ksql.query(query)
+        results = self.ksql.query(query)
 
-        if df.empty or not df['VALUE'][0].strip():
+        if not results or not results[0].get('VALUE', '').strip():
             return []
 
-        uns_ids = [uns_id.strip() for uns_id in df['VALUE'][0].split(",")]
+        uns_ids = [uns_id.strip() for uns_id in results[0]['VALUE'].split(",")]
         if as_assets:
             return [AssetUNS(uns_id, ksqlClient=self.ksql) for uns_id in uns_ids]
         return uns_ids

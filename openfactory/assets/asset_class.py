@@ -113,14 +113,16 @@ class Asset(BaseAsset):
         """
         key = f"{self.asset_uuid}|references_{direction}"
         query = f"SELECT VALUE FROM assets WHERE key='{key}';"
-        df = self.ksql.query(query)
+        result = self.ksql.query(query)
 
-        if df.empty or not df['VALUE'][0].strip():
+        # Handle empty query result or empty VALUE
+        if not result or not result[0].get("VALUE", "").strip():
             return []
 
-        uuids = [uuid.strip() for uuid in df['VALUE'][0].split(",")]
+        uuids = [uuid.strip() for uuid in result[0]["VALUE"].split(",")]
         if as_assets:
             return [Asset(asset_uuid=uuid, ksqlClient=self.ksql) for uuid in uuids]
+
         return uuids
 
 

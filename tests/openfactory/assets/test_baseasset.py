@@ -1,4 +1,3 @@
-import pandas as pd
 import json
 from itertools import chain, repeat
 from unittest import TestCase
@@ -110,7 +109,7 @@ class TestBaseAsset(TestCase):
         """ Test if asset.type returns 'UNAVAILABLE' when the ksql query yields no results """
 
         # Simulate an empty result from ksqlDB
-        self.ksql_mock.query.return_value = pd.DataFrame()
+        self.ksql_mock.query.return_value = []
 
         asset = ValidAsset('some_id', self.ksql_mock)
 
@@ -126,7 +125,7 @@ class TestBaseAsset(TestCase):
 
         # Simulate a valid result from ksqlDB with type 'Condition'
         ksql_mock = Mock(spec=KSQLDBClient)
-        ksql_mock.query.return_value = pd.DataFrame({'TYPE': ['Condition']})
+        ksql_mock.query.return_value = [{'TYPE': 'Condition'}]
 
         asset = ValidAsset('some_id', ksql_mock)
 
@@ -140,9 +139,11 @@ class TestBaseAsset(TestCase):
     def test_attributes_success(self, MockAssetProducer):
         """ Test attributes() returns correct attribute IDs """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        attributes_df = pd.DataFrame({"ID": [101, 102, 103]})
-        ksqlMock.query.side_effect = [attributes_df]
+        ksqlMock.query.return_value = [
+            {"ID": 101},
+            {"ID": 102},
+            {"ID": 103}
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attributes = asset.attributes()
@@ -152,9 +153,7 @@ class TestBaseAsset(TestCase):
     def test_attributes_empty(self, MockAssetProducer):
         """ Test attributes() returns an empty list when no attributes exist """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        empty_attributes_df = pd.DataFrame(columns=["ID"])
-        ksqlMock.query.side_effect = [empty_attributes_df]
+        ksqlMock.query.return_value = []
 
         asset = ValidAsset("uuid-456", ksqlClient=ksqlMock)
         attributes = asset.attributes()
@@ -164,13 +163,13 @@ class TestBaseAsset(TestCase):
     def test_get_attributes_by_type(self, MockAssetProducer):
         """ Test _get_attributes_by_type() """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        samples_df = pd.DataFrame({
-            "ID": ["id1"],
-            "VALUE": ["val1"],
-            "TAG": ["{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"]
-        })
-        ksqlMock.query.side_effect = [samples_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id1",
+                "VALUE": "val1",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         samples = asset._get_attributes_by_type('Samples')
@@ -184,13 +183,13 @@ class TestBaseAsset(TestCase):
     def test_samples(self, MockAssetProducer):
         """ Test samples() """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        samples_df = pd.DataFrame({
-            "ID": ["id1"],
-            "VALUE": ["val1"],
-            "TAG": ["{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"]
-        })
-        ksqlMock.query.side_effect = [samples_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id1",
+                "VALUE": "val1",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         samples = asset.samples()
@@ -204,13 +203,13 @@ class TestBaseAsset(TestCase):
     def test_events(self, MockAssetProducer):
         """ Test events() """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        events_df = pd.DataFrame({
-            "ID": ["id2"],
-            "VALUE": ["val2"],
-            "TAG": ["{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"]
-        })
-        ksqlMock.query.side_effect = [events_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id2",
+                "VALUE": "val2",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         events = asset.events()
@@ -224,13 +223,13 @@ class TestBaseAsset(TestCase):
     def test_conditions(self, MockAssetProducer):
         """ Test conditions() """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        cond_df = pd.DataFrame({
-            "ID": ["id3"],
-            "VALUE": ["val3"],
-            "TAG": ["{urn:mtconnect.org:MTConnectStreams:2.2}Fault"]
-        })
-        ksqlMock.query.side_effect = [cond_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id3",
+                "VALUE": "val3",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}Fault"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         conditions = asset.conditions()
@@ -249,12 +248,9 @@ class TestBaseAsset(TestCase):
     def test_methods(self, MockAssetProducer):
         """ Test methods() """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        meth_df = pd.DataFrame({"ID": ["id4"],
-                                "VALUE": ["val4"]})
-
-        # Mock return values of asyncio.run
-        ksqlMock.query.side_effect = [meth_df]
+        ksqlMock.query.return_value = [
+            {"ID": "id4", "VALUE": "val4"}
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         methods = asset.methods()
@@ -268,9 +264,7 @@ class TestBaseAsset(TestCase):
     def test_method_execution(self, MockAssetProducer):
         """ Test method() sends the correct Kafka message """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        asset_df = pd.DataFrame({'ID': ["ID1"]})
-        ksqlMock.query.side_effect = [asset_df]
+        ksqlMock.query.return_value = [{"ID": "ID1"}]
 
         # Mock the Kafka topic resolution
         ksqlMock.get_kafka_topic.return_value = "test_topic"
@@ -356,13 +350,15 @@ class TestBaseAsset(TestCase):
     def test_getattr_samples(self, MockAssetProducer):
         """ Test __getattr__ returns float for 'Samples' type """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame({"ID": ["id1"],
-                                 "VALUE": ["42.5"],
-                                 "TYPE": ["Samples"],
-                                 "TAG": ["MockedTag"],
-                                 "TIMESTAMP": ["MockedTimeStamp"]})
-        ksqlMock.query.side_effect = [query_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id1",
+                "VALUE": "42.5",
+                "TYPE": "Samples",
+                "TAG": "MockedTag",
+                "TIMESTAMP": "MockedTimeStamp"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id1
@@ -376,13 +372,15 @@ class TestBaseAsset(TestCase):
     def test_getattr_string_value(self, MockAssetProducer):
         """ Test __getattr__ returns raw VALUE for non-'Samples' and non-'Method' types """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame({"ID": ["id2"],
-                                 "VALUE": ["val2"],
-                                 "TYPE": ["Events"],
-                                 "TAG": ["MockedTag"],
-                                 "TIMESTAMP": ["MockedTimeStamp"]})
-        ksqlMock.query.side_effect = [query_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "id2",
+                "VALUE": "val2",
+                "TYPE": "Events",
+                "TAG": "MockedTag",
+                "TIMESTAMP": "MockedTimeStamp"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id2
@@ -399,14 +397,15 @@ class TestBaseAsset(TestCase):
         mock_method.return_value = "Mocked method called successfully"
 
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame({"ID": ["a_method"],
-                                 "VALUE": ["val4"],
-                                 "TYPE": ["Method"],
-                                 "TAG": ["MockedTag"],
-                                 "TIMESTAMP": ["MockedTimeStamp"]})
-
-        ksqlMock.query.side_effect = [query_df]
+        ksqlMock.query.return_value = [
+            {
+                "ID": "a_method",
+                "VALUE": "val4",
+                "TYPE": "Method",
+                "TAG": "MockedTag",
+                "TIMESTAMP": "MockedTimeStamp"
+            }
+        ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         ret = asset.a_method('arg1', 'arg2')
@@ -493,9 +492,7 @@ class TestBaseAsset(TestCase):
     def test_add_reference_above_no_existing_reference(self, MockAssetProducer):
         """ Test add_reference_above when no existing references are present """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame(columns=['VALUE', 'ID'])
-        ksqlMock.query.return_value = query_df
+        ksqlMock.query.return_value = []
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 
@@ -518,10 +515,7 @@ class TestBaseAsset(TestCase):
     def test_add_reference_above_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_above when existing references are present """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame({'VALUE': ["existing-ref1, existing-ref2"],
-                                 'ID': ["ID1"]})
-        ksqlMock.query.return_value = query_df
+        ksqlMock.query.return_value = [{"VALUE": "existing-ref1, existing-ref2", "ID": "ID1"}]
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 
@@ -544,9 +538,7 @@ class TestBaseAsset(TestCase):
     def test_add_reference_below_no_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when no existing references are present """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame(columns=['VALUE', 'ID'])
-        ksqlMock.query.return_value = query_df
+        ksqlMock.query.return_value = []
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 
@@ -569,10 +561,7 @@ class TestBaseAsset(TestCase):
     def test_add_reference_below_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when existing references are present """
         ksqlMock = MagicMock()
-        ksqlMock.query_to_dataframe = MagicMock()
-        query_df = pd.DataFrame({'VALUE': ["existing-ref1, existing-ref2"],
-                                 'ID': ["ID1"]})
-        ksqlMock.query.return_value = query_df
+        ksqlMock.query.return_value = [{"VALUE": "existing-ref1, existing-ref2", "ID": "ID1"}]
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 

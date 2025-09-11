@@ -108,10 +108,12 @@ class BaseAsset:
                 The asset type as stored in the `assets_type` table, or 'UNAVAILABLE' if not found.
         """
         query = f"SELECT TYPE FROM assets_type WHERE ASSET_UUID='{self.asset_uuid}';"
-        df = self.ksql.query(query)
-        if df.empty:
+        result = self.ksql.query(query)
+
+        if not result:  # empty list
             return 'UNAVAILABLE'
-        return df['TYPE'][0]
+
+        return result[0]['TYPE']
 
     def attributes(self) -> List[str]:
         """
@@ -123,8 +125,8 @@ class BaseAsset:
             List[str]: A list of attribute IDs.
         """
         query = f"SELECT ID FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE != 'Method';"
-        df = self.ksql.query(query)
-        return df.ID.tolist()
+        result = self.ksql.query(query)
+        return [row['ID'] for row in result]
 
     def _get_attributes_by_type(self, attr_type: str) -> List[Dict[str, Any]]:
         """
@@ -137,12 +139,15 @@ class BaseAsset:
             List[Dict]: A list of dictionaries containing 'ID', 'VALUE', and cleaned 'TAG'.
         """
         query = f"SELECT ID, VALUE, TAG, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='{attr_type}';"
-        df = self.ksql.query(query)
-        return [{
-            "ID": row.ID,
-            "VALUE": row.VALUE,
-            "TAG": re.sub(r'\{.*?\}', '', row.TAG).strip()
-        } for row in df.itertuples()]
+        result = self.ksql.query(query)
+        return [
+            {
+                "ID": row["ID"],
+                "VALUE": row["VALUE"],
+                "TAG": re.sub(r'\{.*?\}', '', row["TAG"]).strip()
+            }
+            for row in result
+        ]
 
     def samples(self) -> List[Dict[str, Any]]:
         """
@@ -190,8 +195,8 @@ class BaseAsset:
             Dict: A dictionary where keys are method attribute IDs and values are the corresponding method values.
         """
         query = f"SELECT ID, VALUE, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='Method';"
-        df = self.ksql.query(query)
-        return {row.ID: row.VALUE for row in df.itertuples()}
+        result = self.ksql.query(query)
+        return {row["ID"]: row["VALUE"] for row in result}
 
     def method(self, method: str, args: str = "") -> None:
         """
@@ -230,32 +235,29 @@ class BaseAsset:
                 - If the attribute is a method, returns a callable method caller function.
         """
         query = f"SELECT VALUE, TYPE, TAG, TIMESTAMP FROM {self.KSQL_ASSET_TABLE} WHERE key='{self.ASSET_ID}|{attribute_id}';"
-        df = self.ksql.query(query)
+        result = self.ksql.query(query)
 
-        if df.empty:
-            return AssetAttribute(value='UNAVAILABLE',
-                                  type='UNAVAILABLE',
-                                  tag='UNAVAILABLE',
-                                  timestamp='UNAVAILABLE')
+        if not result:
+            return AssetAttribute(
+                value='UNAVAILABLE',
+                type='UNAVAILABLE',
+                tag='UNAVAILABLE',
+                timestamp='UNAVAILABLE'
+            )
 
-        if df['TYPE'][0] == 'Method':
-            def method_caller(*args, **kwargs) -> None:
-                """
-                Callable method caller function.
+        first_row = result[0]
 
-                Args:
-                    *args: Positional arguments for the method.
-                    **kwargs: Keyword arguments for the method.
-                """
+        if first_row['TYPE'] == 'Method':
+            def method_caller(*args, **kwargs):
                 args_str = " ".join(map(str, args))
                 return self.method(attribute_id, args_str)
             return method_caller
 
         return AssetAttribute(
-            value=float(df['VALUE'][0]) if df['TYPE'][0] == 'Samples' and df['VALUE'][0] != 'UNAVAILABLE' else df['VALUE'][0],
-            type=df['TYPE'][0],
-            tag=df['TAG'][0],
-            timestamp=df['TIMESTAMP'][0]
+            value=float(first_row['VALUE']) if first_row['TYPE'] == 'Samples' and first_row['VALUE'] != 'UNAVAILABLE' else first_row['VALUE'],
+            type=first_row['TYPE'],
+            tag=first_row['TAG'],
+            timestamp=first_row['TIMESTAMP']
         )
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -386,12 +388,13 @@ class BaseAsset:
         """
         key = f"{self.asset_uuid}|references_{direction}"
         query = f"SELECT VALUE FROM assets WHERE key='{key}';"
-        df = self.ksql.query(query)
+        result = self.ksql.query(query)  # list of dicts
 
-        if df.empty or df['VALUE'][0].strip() == "":
+        # Determine existing references
+        if not result or not result[0].get("VALUE", "").strip():
             references = new_reference
         else:
-            references = f"{new_reference}, {df['VALUE'][0].strip()}"
+            references = f"{new_reference}, {result[0]['VALUE'].strip()}"
 
         self.producer.send_asset_attribute(
             f"references_{direction}",

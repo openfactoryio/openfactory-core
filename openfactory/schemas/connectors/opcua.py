@@ -56,9 +56,9 @@ YAML Example:
 
     type: opcua
 
-    # --------------------------------------------------------
-    # Example: Server subscription omitted → defaults applied
-    # --------------------------------------------------------
+    # ---------------------------------------------------------
+    # Example 1: Server subscription omitted → defaults applied
+    # ---------------------------------------------------------
     server:
       uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
       namespace_uri: http://examples.openfactory.local/opcua
@@ -78,9 +78,9 @@ YAML Example:
       methods:
         calibrate: Calibrate
 
-    # --------------------------------------------------------
+    # ---------------------------------------------------------
     # Example 2: Server subscription explicitly provided
-    # --------------------------------------------------------
+    # ---------------------------------------------------------
     server:
       uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
       namespace_uri: http://examples.openfactory.local/opcua

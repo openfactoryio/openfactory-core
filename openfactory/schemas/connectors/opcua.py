@@ -9,16 +9,19 @@ Key Models:
 - OPCUASubscriptionConfig:
   Optional subscription parameters (publishing interval, queue size,
   sampling interval). Can be defined at the server level or overridden
-  per variable.
+  per variable. If not provided at the server level, default values are
+  applied (publishing_interval=100 ms, queue_size=1, sampling_interval=0 ms).
 
 - OPCUAServerConfig:
   Configuration for the OPC UA server, including the endpoint URI,
   namespace URI, and optional default subscription parameters.
+  If `subscription` is omitted, default subscription values are used.
 
 - OPCUAVariableConfig:
   Configuration for a single variable. Contains a `browse_name` plus
   optional overrides for queue size and sampling interval. If overrides
-  are not provided, server-level defaults are applied automatically.
+  are not provided, server-level defaults (or the automatic defaults
+  if server subscription is omitted) are applied.
 
 - OPCUADeviceConfig:
   Configuration for a device on the OPC UA server. Devices may be
@@ -41,7 +44,8 @@ Validation Features:
 - Validates `node_id` format and parses it into namespace_index,
   identifier_type, and identifier fields.
 - Normalizes all variables into OPCUAVariableConfig, applying
-  server-level subscription defaults when not overridden.
+  server-level subscription defaults when not overridden. If the server
+  subscription is omitted, default values are applied.
 - Variables and methods are optional, providing flexibility for
   different server setups.
 - Forbids unknown fields to ensure strict schema conformance.
@@ -52,19 +56,22 @@ YAML Example:
 
     type: opcua
 
+    # -------------------------------
+    # Example: Server subscription omitted → defaults applied
+    # -------------------------------
     server:
       uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
       namespace_uri: http://examples.openfactory.local/opcua
-      subscription:               # optional server-level defaults
-        publishing_interval: 100
-        queue_size: 1
-        sampling_interval: 0
+      # subscription omitted → defaults will be used:
+      #   publishing_interval: 100
+      #   queue_size: 1
+      #   sampling_interval: 0
 
     device:
       path: Sensors/TemperatureSensor_1
       variables:
-        temp: Temperature         # simple string (inherits server defaults)
-        hum:                      # explicit variable config (overrides defaults)
+        temp: Temperature         # simple string → inherits server defaults
+        hum:                      # explicit variable config → overrides defaults
           browse_name: Humidity
           queue_size: 5
           sampling_interval: 50
@@ -73,7 +80,7 @@ YAML Example:
 
 .. seealso::
 
-   The runtime class of the class OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
+   The runtime class of the OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
 """
 
 import re
@@ -84,15 +91,15 @@ from pydantic import BaseModel, ConfigDict, model_validator, Field
 class OPCUASubscriptionConfig(BaseModel):
     """ Optional subscription parameters for server or individual variables. """
     publishing_interval: Optional[float] = Field(
-        default=None,
+        default=100.0,
         description="Publishing interval in ms for subscription object (server-level default)."
     )
     queue_size: Optional[int] = Field(
-        default=None,
+        default=1,
         description="Queue size per monitored item (server or variable-level default)."
     )
     sampling_interval: Optional[float] = Field(
-        default=None,
+        default=0.0,
         description="Sampling interval in ms for monitored item; 0 = event-driven if supported."
     )
 
@@ -104,7 +111,7 @@ class OPCUAServerConfig(BaseModel):
     uri: str = Field(..., description="OPC UA server endpoint URI.")
     namespace_uri: str = Field(..., description="Namespace URI of the OPC UA server.")
     subscription: Optional[OPCUASubscriptionConfig] = Field(
-        default=None,
+        default_factory=OPCUASubscriptionConfig,
         description="Server-level default subscription parameters."
     )
 
@@ -228,25 +235,24 @@ class OPCUAConnectorSchema(BaseModel):
         normalized_vars = {}
 
         for local_name, var_cfg in self.device.variables.items():
+            # Start with server defaults
+            base_cfg = dict(
+                queue_size=server_sub.queue_size,
+                sampling_interval=server_sub.sampling_interval,
+            )
+
             if isinstance(var_cfg, str):
+                # Simple string → set browse_name
                 normalized_vars[local_name] = OPCUAVariableConfig(
                     browse_name=var_cfg,
-                    queue_size=server_sub.queue_size,
-                    sampling_interval=server_sub.sampling_interval,
+                    **base_cfg
                 )
             elif isinstance(var_cfg, OPCUAVariableConfig):
+                # Full config → override server defaults where provided
                 normalized_vars[local_name] = OPCUAVariableConfig(
                     browse_name=var_cfg.browse_name,
-                    queue_size=(
-                        var_cfg.queue_size
-                        if var_cfg.queue_size is not None
-                        else server_sub.queue_size
-                    ),
-                    sampling_interval=(
-                        var_cfg.sampling_interval
-                        if var_cfg.sampling_interval is not None
-                        else server_sub.sampling_interval
-                    ),
+                    queue_size=var_cfg.queue_size if var_cfg.queue_size is not None else base_cfg["queue_size"],
+                    sampling_interval=var_cfg.sampling_interval if var_cfg.sampling_interval is not None else base_cfg["sampling_interval"],
                 )
             else:
                 raise ValueError(f"Invalid variable config for {local_name}")

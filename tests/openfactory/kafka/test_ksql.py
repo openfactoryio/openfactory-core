@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import httpx
-import pandas as pd
 import json
 import signal
 from openfactory.kafka.ksql import KSQLDBClient, KSQLDBClientException
@@ -139,10 +138,10 @@ class TestKSQLDBClient(unittest.TestCase):
 
     @patch("openfactory.kafka.ksql.KSQLDBClient._request")
     def test_query_success(self, mock_request):
-        """ Test query method of KSQLDBClient """
+        """ Test query method of KSQLDBClient returns list of dicts """
         query = "SELECT * FROM test_table;"
 
-        # Mock response
+        # Mock response: same as before
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.read.return_value = (
@@ -157,10 +156,14 @@ class TestKSQLDBClient(unittest.TestCase):
         # Call method
         result = self.client.query(query)
 
-        # Assert result
-        expected_df = pd.DataFrame([[1, "a"], [2, "b"]], columns=["id", "value"])
-        pd.testing.assert_frame_equal(result, expected_df)
+        # Assert result is list of dicts
+        expected_result = [
+            {"id": 1, "value": "a"},
+            {"id": 2, "value": "b"}
+        ]
+        assert result == expected_result
 
+        # Verify _request was called correctly
         mock_request.assert_called_once_with(
             "POST",
             "/query",

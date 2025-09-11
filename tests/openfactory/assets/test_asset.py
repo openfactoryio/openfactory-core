@@ -1,6 +1,5 @@
 from unittest import TestCase
 from unittest.mock import MagicMock, patch, call
-import pandas as pd
 from openfactory.kafka import KafkaAssetConsumer
 from openfactory.assets import Asset
 from openfactory.assets.asset_base import BaseAsset
@@ -33,9 +32,8 @@ class TestAsset(TestCase):
 
     def test_get_reference_list_returns_uuids(self, MockAssetProducer):
         """ Test _get_reference_list returns list of UUIDs """
-        mock_df = pd.DataFrame({'VALUE': ['ref_001, ref_002']})
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_df]
+        mock_ksqlClient.query.return_value = [{"VALUE": "ref_001, ref_002"}]
 
         asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('above')
@@ -47,7 +45,7 @@ class TestAsset(TestCase):
     def test_get_reference_list_returns_empty_on_empty_df(self, MockAssetProducer):
         """ Test _get_reference_list returns empty list on empty query """
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [pd.DataFrame()]
+        mock_ksqlClient.query.return_value = []
 
         asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('below')
@@ -55,9 +53,8 @@ class TestAsset(TestCase):
 
     def test_get_reference_list_returns_empty_on_blank_value(self, MockAssetProducer):
         """ Test _get_reference_list returns empty list on blank VALUE """
-        mock_df = pd.DataFrame({'VALUE': ['   ']})
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_df]
+        mock_ksqlClient.query.return_value = [{"VALUE": "   "}]
 
         asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
         result = asset._get_reference_list('above')
@@ -66,9 +63,8 @@ class TestAsset(TestCase):
     @patch('openfactory.assets.asset_class.Asset')
     def test_get_reference_list_returns_assets(self, MockAsset, MockAssetProducer):
         """ Test _get_reference_list returns Asset instances when as_assets=True """
-        mock_df = pd.DataFrame({'VALUE': ['asset_010, asset_020']})
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_df]
+        mock_ksqlClient.query.return_value = [{"VALUE": "asset_010, asset_020"}]
 
         # Setup return values for mocked AssetUNS constructor
         mock_asset_1 = MagicMock()

@@ -1,7 +1,6 @@
 """ OpenFactory ksqlDB client. """
 
 import json
-import pandas as pd
 import time
 import atexit
 import signal
@@ -29,8 +28,18 @@ class KSQLDBClient:
             print('Info:   ', ksql.info())
             print('Streams:', ksql.streams())
             print('Tables: ', ksql.tables())
-            df = ksql.query("SELECT ID, VALUE, TYPE FROM assets WHERE ASSET_UUID='PROVER3018' AND TYPE='Samples';")
-            print(df)
+
+            # Query results are returned as a list of dictionaries
+            results = ksql.query(
+                "SELECT ID, VALUE, TYPE "
+                "FROM assets "
+                "WHERE ASSET_UUID='PROVER3018' AND TYPE='Samples';"
+            )
+
+            # Example of iterating over the results
+            for row in results:
+                print(row['ID'], row['VALUE'], row['TYPE'])
+
             ksql.close()
     """
 
@@ -195,15 +204,17 @@ class KSQLDBClient:
         entry = data[0]
         return [r['name'] for r in entry.get('tables', [])]
 
-    def query(self, ksql: str) -> pd.DataFrame:
+    def query(self, ksql: str) -> list[dict]:
         """
-        Execute a KSQL pull query and return the results as a DataFrame.
+        Execute a KSQL pull query and return the results as a list of dictionaries.
+
+        Each dictionary represents a row, with column names as keys.
 
         Args:
             ksql (str): The KSQL pull query string to execute.
 
         Returns:
-            pandas.DataFrame: A DataFrame containing the query result rows and columns.
+            list[dict]: Query results as a list of row dictionaries.
 
         Raises:
             KSQLDBClientException: If the server returns a non-200 or malformed response.
@@ -212,18 +223,23 @@ class KSQLDBClient:
         with self._request('POST', '/query', json_payload=payload, stream=True) as resp:
             raw = resp.read()
         text = raw.decode(errors='ignore')
+
         if resp.status_code != 200:
             raise KSQLDBClientException(f"Query error: {text}")
 
         rows = []
         cols = []
+
         for line in text.splitlines():
             j = json.loads(line)
             if 'columnNames' in j:
                 cols = j['columnNames']
             elif isinstance(j, list):
                 rows.append(j)
-        return pd.DataFrame(rows, columns=cols)
+
+        # Convert to list of dicts: [{col1: val1, col2: val2, ...}, ...]
+        result = [dict(zip(cols, row)) for row in rows]
+        return result
 
     def statement_query(self, sql: str) -> dict:
         """

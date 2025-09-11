@@ -1,6 +1,5 @@
 import unittest
 import time
-import pandas as pd
 from openfactory.kafka import KSQLDBClient
 import openfactory.config as config
 
@@ -69,15 +68,13 @@ class TestKSQLDBStreamLifecycle(unittest.TestCase):
             SELECT ASSET_UUID, id, value, tag, type
             FROM {self.stream_name};
         """
-        df = self.ksql.query(query)
-        self.assertEqual(len(df), 2)
-        self.assertIn("ASSET_UUID", df.columns)
-        self.assertIn("ID", df.columns)
-
-        expected_df = pd.DataFrame(rows)
+        results = self.ksql.query(query)
+        self.assertEqual(len(results), 2)
+        self.assertIn("ASSET_UUID", results[0])
+        self.assertIn("ID", results[0])
 
         # Sorting both by ASSET_UUID for comparison
-        df_sorted = df.sort_values(by="ASSET_UUID").reset_index(drop=True)
-        expected_df_sorted = expected_df.sort_values(by="ASSET_UUID").reset_index(drop=True)
+        results_sorted = sorted(results, key=lambda r: r["ASSET_UUID"])
+        expected_sorted = sorted(rows, key=lambda r: r["ASSET_UUID"])
 
-        pd.testing.assert_frame_equal(df_sorted, expected_df_sorted, check_dtype=False)
+        self.assertEqual(results_sorted, expected_sorted)

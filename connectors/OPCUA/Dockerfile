@@ -31,47 +31,68 @@
 #   docker build -t opcua-producer -f connectors/OPCUA/Dockerfile .
 # ------------------------------------------------------------------------------
 
-FROM python:3.13-slim
+# -------------------------------
+# Stage 1: Build Stage
+# -------------------------------
+FROM python:3.13-slim AS build
 
-LABEL author="Rolf Wuthrich" 
+LABEL maintainer="Rolf Wuthrich"
 LABEL organisation="Concordia University"
 LABEL description="Docker image for Kafka producer"
 LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main/connectors/OPCUA"
+
+ARG VERSION=latest
+
+# Install build-time dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy OpenFactory project
+COPY . /build/
+
+# Install Python dependencies into system site-packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
+
+# Strip unnecessary files to reduce layer size
+RUN find /usr/local/lib/python3.13/site-packages -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + \
+    && find /usr/local/lib/python3.13/site-packages -name "*.pyc" -delete
+
+# -------------------------------
+# Stage 2: Runtime Stage
+# -------------------------------
+FROM python:3.13-slim
 
 ARG UNAME=opcua_connector
 ARG UID=1200
 ARG GID=1200
 ARG VERSION=latest
 
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
-# Set environment variable from build argument
 ENV APPLICATION_VERSION=${VERSION}
 
-# Create user and install git
+# Create non-root user
 RUN groupadd --gid "${GID}" "${UNAME}" && \
-    useradd --create-home --uid "${UID}" --gid "${GID}" "${UNAME}" && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+    useradd --create-home --uid "${UID}" --gid "${GID}" "${UNAME}"
 
 # Set working directory
-WORKDIR /app
-
-# Copy openfactory project
-COPY . /app/
-
-# Install the package using pyproject.toml
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
-
-# Set working directory and switch user
 WORKDIR /home/${UNAME}
-USER ${UNAME}
 
-# Copy the producer script into the container
+# Copy installed Python packages from build stage
+COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=build /usr/local/bin /usr/local/bin
+
+# Copy producer script
 COPY connectors/OPCUA/opcua_producer.py .
 
-# Set default command
+# Switch to non-root user
+USER ${UNAME}
+
+# Default entrypoint
 CMD ["python3", "-u", "opcua_producer.py"]

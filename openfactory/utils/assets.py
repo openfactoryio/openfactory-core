@@ -153,9 +153,9 @@ def register_device_connector(device: "Device",
     ksqlClient.statement_query(sql)
 
 
-def deregister_device_connector_kafka(device_uuid: str,
-                                      bootstrap_servers: str = config.KAFKA_BROKER,
-                                      topic: str = "device_connector_topic"):
+def deregister_device_connector(device_uuid: str,
+                                bootstrap_servers: str = config.KAFKA_BROKER,
+                                topic: str = "device_connector_topic"):
     """
     Deregister a device connector configuration.
 

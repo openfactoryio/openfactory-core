@@ -3,10 +3,15 @@
 import json
 from typing import Dict
 from datetime import datetime, timezone
+from kafka import KafkaProducer
 from openfactory.assets.utils import AssetAttribute
 from openfactory.kafka import AssetProducer
 from openfactory.kafka.ksql import KSQLDBClient
 import openfactory.config as config
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openfactory.schemas.devices import Device
 
 
 def now_iso_to_epoch_millis() -> int:
@@ -123,4 +128,51 @@ def deregister_asset(asset_uuid: str,
             'updated_at': now_iso_to_epoch_millis()
         })
     )
+    producer.flush()
+
+
+def register_device_connector(device: "Device",
+                              ksqlClient: KSQLDBClient,
+                              table_name: str = "DEVICE_CONNECTOR_SOURCE") -> None:
+    """
+    Register a device connector configuration in KSQLDB.
+
+    Args:
+        device (Device): OpenFactory device for which the connector is to register
+        ksqlClient (KSQLDBClient): OpenFactory ksqlDB client.
+        table_name (str): Name of the ksqlDB table to insert into. Defaults to 'DEVICE_CONNECTOR_SOURCE'.
+
+    Raises:
+        ValueError: If connector_config is invalid or cannot be serialized.
+        KSQLDBClientException: If the insert fails.
+    """
+    sql = f"""
+    INSERT INTO {table_name} (ASST_UUID, CONNECTOR_CONFIG)
+    VALUES ('{device.uuid}', '{device.connector.model_dump_json(exclude_none=True)}');
+    """
+    ksqlClient.statement_query(sql)
+
+
+def deregister_device_connector(device_uuid: str,
+                                bootstrap_servers: str = config.KAFKA_BROKER,
+                                topic: str = "device_connector_topic"):
+    """
+    Deregister a device connector configuration.
+
+    Args:
+        device_uuid (str): UUID of the device to deregister.
+        bootstrap_servers (str): Kafka bootstrap servers. Defaults to config.KAFKA_BROKER.
+        topic (str): Kafka topic backing the device connector table. Defaults to 'device_connector_topic'.
+
+    Raises:
+        KafkaError: If sending the tombstone to the Kafka topic fails.
+    """
+    producer = KafkaProducer(
+        bootstrap_servers=bootstrap_servers,
+        key_serializer=lambda k: k.encode('utf-8'),
+        value_serializer=lambda v: json.dumps(v).encode('utf-8') if v is not None else None
+    )
+
+    # Send tombstone
+    producer.send(topic, key=device_uuid, value=None)
     producer.flush()

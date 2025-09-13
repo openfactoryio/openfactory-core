@@ -51,7 +51,7 @@ from openfactory.schemas.common import constraints, cpus_limit, cpus_reservation
 from openfactory.assets import Asset
 from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
-from openfactory.utils import register_asset, deregister_asset, load_plugin
+from openfactory.utils import register_asset, deregister_asset, load_plugin, register_device_connector, deregister_device_connector
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 from openfactory.connectors.registry import build_connector
@@ -249,6 +249,7 @@ class OpenFactoryManager(OpenFactory):
 
             connector.deploy(device, yaml_config_file)
             self.deploy_device_supervisor(device)
+            register_device_connector(device, self.ksql)
 
             user_notify.success(f"Device {device.uuid} deployed successfully")
 
@@ -332,6 +333,7 @@ class OpenFactoryManager(OpenFactory):
             except docker.errors.APIError as err:
                 raise OFAException(err)
 
+            deregister_device_connector(device.uuid, bootstrap_servers=self.bootstrap_servers)
             deregister_asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"Device {device.uuid} shut down successfully")
 

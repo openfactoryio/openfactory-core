@@ -462,12 +462,21 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.manager.deploy_device_supervisor.assert_not_called()
         mock_user_notify.success.assert_not_called()
 
+    @patch('openfactory.openfactory_manager.register_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
     @patch('openfactory.openfactory_manager.config')
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
-    def test_deploy_devices_from_config_file_success(self, mock_uns_schema_class, mock_user_notify, mock_get_devices, mock_config, mock_build_connector):
+    def test_deploy_devices_from_config_file_success(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_devices,
+        mock_config,
+        mock_build_connector,
+        mock_register_device_connector
+    ):
         """ Test deploy_devices_from_config_file """
 
         mock_config.OPENFACTORY_UNS_SCHEMA = "mocked_schema"
@@ -508,6 +517,7 @@ class TestOpenFactoryManager(unittest.TestCase):
             mock_user_notify.info.assert_any_call(f"{device_key} - {device_obj.uuid}:")
             mock_connector_instance.deploy.assert_any_call(device_obj, "mock_devices.yaml")
             self.manager.deploy_device_supervisor.assert_any_call(device_obj)
+            mock_register_device_connector.assert_any_call(device_obj, self.manager.ksql)
             mock_user_notify.success.assert_any_call(f"Device {device_obj.uuid} deployed successfully")
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
@@ -603,12 +613,20 @@ class TestOpenFactoryManager(unittest.TestCase):
         assert "Mocked error" in fail_msg
         mock_get_apps.assert_not_called()
 
+    @patch('openfactory.openfactory_manager.deregister_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
     @patch('openfactory.openfactory_manager.deregister_asset')
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
-    def test_shut_down_devices_from_config_file(self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file, mock_deregister_asset, mock_build_connector):
+    def test_shut_down_devices_from_config_file(
+        self,
+        mock_uns_schema_class, mock_user_notify,
+        mock_get_devices_from_config_file,
+        mock_deregister_asset,
+        mock_build_connector,
+        mock_deregister_device_connector
+    ):
         """ Test shut_down_devices_from_config_file """
 
         # Mock UNSSchema
@@ -666,6 +684,14 @@ class TestOpenFactoryManager(unittest.TestCase):
         ]
         mock_deregister_asset.assert_has_calls(expected_calls, any_order=False)
         assert mock_deregister_asset.call_count == 2  # strict check
+
+        # Check deregister_device_connector
+        expected_calls = [
+            call("device-uuid-1",
+                 bootstrap_servers=self.manager.bootstrap_servers),
+        ]
+        mock_deregister_device_connector.assert_has_calls(expected_calls, any_order=True)
+        assert mock_deregister_device_connector.call_count == 1
 
         # Success messages
         mock_user_notify.success.assert_any_call("Supervisor for device device-uuid-1 shut down successfully")

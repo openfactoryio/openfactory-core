@@ -162,8 +162,7 @@ def deregister_device_connector(device_uuid: str,
     Args:
         device_uuid (str): UUID of the device to deregister.
         bootstrap_servers (str): Kafka bootstrap servers. Defaults to config.KAFKA_BROKER.
-        topic (str): Kafka topic backing the device connector table. Defaults to
-                     'device_connector_topic'.
+        topic (str): Kafka topic backing the device connector table. Defaults to 'device_connector_topic'.
 
     Raises:
         KafkaError: If sending the tombstone to the Kafka topic fails.

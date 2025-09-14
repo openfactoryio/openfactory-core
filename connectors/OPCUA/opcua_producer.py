@@ -343,8 +343,13 @@ class OPCUAProducer(OpenFactoryApp):
                                 continue
 
                     # Subscribe to OPC UA events
-                    await sub.subscribe_events(device_node)
-                    self.logger.info("Subscribed to events on device node")
+                    try:
+                        await sub.subscribe_events(device_node)
+                        self.logger.info("Subscribed to events on device node")
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to subscribe events: {e}"
+                            )
 
                     # Tag OPC UA device as available
                     self.logger.info(f"Connected to OPC UA server at {schema.server.uri}")

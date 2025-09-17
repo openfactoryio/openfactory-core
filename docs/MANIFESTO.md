@@ -4,7 +4,7 @@
 
 ---
 
-## 🌐 The Problem
+## 🔎 The Problem
 
 Factories today are too often black boxes:
 
@@ -24,7 +24,7 @@ Meanwhile, in the software world:
 
 ---
 
-## 🚀 Our Belief
+## 🎯 Our Belief
 
 We believe factories should be:
 
@@ -40,7 +40,7 @@ We believe factories should be:
 
 ---
 
-## 🔧 What OpenFactory Is
+## 🧩 What OpenFactory Is
 
 **OpenFactory is a deployment and coordination framework for the physical world.**
 
@@ -87,7 +87,7 @@ With OpenFactory:
 
 ---
 
-## 🌍 Our Vision
+## 🧭 Our Vision
 
 Imagine:
 
@@ -112,7 +112,7 @@ This is an invitation:
 
 ---
 
-### 👷 OpenFactory
+### 🏭 OpenFactory
 
 * Factories as Code. 
 * Deployment as API.

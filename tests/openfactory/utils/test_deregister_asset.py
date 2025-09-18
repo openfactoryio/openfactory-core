@@ -34,21 +34,21 @@ class TestDeregisterAsset(unittest.TestCase):
         self.assertEqual(len(calls), 3)
 
         # Check first call: UNAVAILABLE message
-        self.assertEqual(calls[0][0][0], "avail")
-        self.assertIsInstance(calls[0][0][1], AssetAttribute)
-        self.assertEqual(calls[0][0][1].value, "UNAVAILABLE")
-        self.assertEqual(calls[0][0][1].type, "Events")
-        self.assertEqual(calls[0][0][1].tag, "Availability")
+        self.assertIsInstance(calls[0][0][0], AssetAttribute)
+        self.assertEqual(calls[0][0][0].id, "avail")
+        self.assertEqual(calls[0][0][0].value, "UNAVAILABLE")
+        self.assertEqual(calls[0][0][0].type, "Events")
+        self.assertEqual(calls[0][0][0].tag, "Availability")
 
         # Check reference removal messages
         expected_ids = ["references_below", "references_above"]
         for i, ref_id in enumerate(expected_ids, start=1):
             call = calls[i]
-            self.assertEqual(call[0][0], ref_id)
-            self.assertIsInstance(call[0][1], AssetAttribute)
-            self.assertEqual(call[0][1].value, "")
-            self.assertEqual(call[0][1].type, "OpenFactory")
-            self.assertEqual(call[0][1].tag, "AssetsReferences")
+            self.assertIsInstance(call[0][0], AssetAttribute)
+            self.assertEqual(call[0][0].id, ref_id)
+            self.assertEqual(call[0][0].value, "")
+            self.assertEqual(call[0][0].type, "OpenFactory")
+            self.assertEqual(call[0][0].tag, "AssetsReferences")
 
         # Check produce tombstone messages
         expected_topics = ["assets_type", "docker_services"]

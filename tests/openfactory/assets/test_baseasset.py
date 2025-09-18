@@ -2,6 +2,7 @@ import json
 from itertools import chain, repeat
 from unittest import TestCase
 from unittest.mock import Mock, MagicMock, patch
+from datetime import datetime
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient
 from openfactory.assets import AssetAttribute
@@ -31,6 +32,17 @@ class TestBaseAsset(TestCase):
 
     def setUp(self):
         self.ksql_mock = Mock(spec=KSQLDBClient)
+
+        # Freeze datetime for deterministic AssetAttribute.timestamp
+        self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
+        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        self.mock_datetime = datetime_patcher.start()
+        self.addCleanup(datetime_patcher.stop)
+
+        # Make datetime.now() return fixed timestamp
+        self.mock_datetime.now.return_value = self.fixed_ts
+        # Allow datetime(...) constructor to still work
+        self.mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
     def test_valid_subclass(self, MockAssetProducer):
         """ Test valid subclass """
@@ -312,6 +324,7 @@ class TestBaseAsset(TestCase):
 
         with self.assertRaises(OFAException):
             asset.invalid_attr = AssetAttribute(
+                id='mocked_id',
                 value=100,
                 type='Samples',
                 tag='SomeTag')
@@ -322,10 +335,44 @@ class TestBaseAsset(TestCase):
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock(), bootstrap_servers="mock_broker")
         asset.attributes = MagicMock(return_value=["temperature"])
 
-        attr = AssetAttribute(value=25, tag="Temperature", type="Samples")
+        attr = AssetAttribute(id='temperature', value=25, tag="Temperature", type="Samples")
         asset.temperature = attr
 
-        mock_producer.send_asset_attribute.assert_called_once_with("temperature", attr)
+        mock_producer.send_asset_attribute.assert_called_once_with(attr)
+
+    def test_setattr_with_wrong_asset_attribute_id(self, MockAssetProducer):
+        """ Test setting a defined asset attribute with AssetAttribute instance having wrong id raises exception """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock(), bootstrap_servers="mock_broker")
+        asset.attributes = MagicMock(return_value=["temperature"])
+
+        attr = AssetAttribute(id='mocked_id', value=25, tag="Temperature", type="Samples")
+
+        with self.assertRaises(OFAException):
+            asset.temperature = attr
+
+    def test_getattr_returns_unavailable_when_no_result(self, MockAssetProducer):
+        """ Test __getattr__ returns an UNAVAILABLE AssetAttribute when query yields no results """
+        ksqlMock = MagicMock()
+        ksqlMock.query.return_value = []  # Simulate no data
+
+        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
+        attribute = asset.some_missing_attribute
+
+        expected = AssetAttribute(
+            id="some_missing_attribute",
+            value="UNAVAILABLE",
+            type="UNAVAILABLE",
+            tag="UNAVAILABLE",
+            timestamp="UNAVAILABLE"
+        )
+        self.assertEqual(attribute, expected)
+
+        # Ensure correct query was executed
+        expected_query = (
+            "SELECT VALUE, TYPE, TAG, TIMESTAMP "
+            "FROM assets WHERE key='uuid-123|some_missing_attribute';"
+        )
+        ksqlMock.query.assert_any_call(expected_query)
 
     def test_setattr_valid_asset_attribute_with_raw_value(self, MockAssetProducer):
         """ Test setting a defined asset attribute with a raw value (not an AssetAttribute) """
@@ -334,18 +381,14 @@ class TestBaseAsset(TestCase):
         asset.attributes = MagicMock(return_value=["temperature"])
 
         # Simulate current attribute with metadata
-        current_attr = AssetAttribute(value=10, tag="Temperature", type="Samples")
+        current_attr = AssetAttribute(id="temperature", value=10, tag="Temperature", type="Samples")
         asset.__getattr__ = MagicMock(return_value=current_attr)
 
         asset.temperature = 30
 
         mock_producer.send_asset_attribute.assert_called_once()
-        args = mock_producer.send_asset_attribute.call_args[0]
-        self.assertEqual(args[0], "temperature")
-        self.assertIsInstance(args[1], AssetAttribute)
-        self.assertEqual(args[1].value, 30)
-        self.assertEqual(args[1].tag, "Temperature")
-        self.assertEqual(args[1].type, "Samples")
+        expected = AssetAttribute(id="temperature", value=30, tag="Temperature", type="Samples")
+        mock_producer.send_asset_attribute.assert_called_once_with(expected)
 
     def test_getattr_samples(self, MockAssetProducer):
         """ Test __getattr__ returns float for 'Samples' type """
@@ -363,7 +406,8 @@ class TestBaseAsset(TestCase):
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id1
 
-        self.assertEqual(attribute, AssetAttribute(value=42.5, type='Samples', tag='MockedTag', timestamp='MockedTimeStamp'))
+        expected = AssetAttribute(id='id1', value=42.5, type='Samples', tag='MockedTag', timestamp='MockedTimeStamp')
+        self.assertEqual(attribute, expected)
 
         # Ensure correct query was exectued
         expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|id1';"
@@ -385,7 +429,8 @@ class TestBaseAsset(TestCase):
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id2
 
-        self.assertEqual(attribute, AssetAttribute(value="val2", type='Events', tag='MockedTag', timestamp='MockedTimeStamp'))
+        expected = AssetAttribute(id='id2', value='val2', type='Events', tag='MockedTag', timestamp='MockedTimeStamp')
+        self.assertEqual(attribute, expected)
 
         # Ensure correct query was exectued
         expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|id2';"
@@ -503,14 +548,14 @@ class TestBaseAsset(TestCase):
         expected_query = "SELECT VALUE FROM assets WHERE key='asset-001|references_above';"
         ksqlMock.query.assert_any_call(expected_query)
 
-        # Capture the actual call arguments
-        actual_call = asset.producer.send_asset_attribute.call_args
-        _, actual_attribute = actual_call[0]  # Get the second positional argument (the AssetAttribute)
-
-        # Check the non-timestamp fields
-        assert actual_attribute.value == "new-ref"
-        assert actual_attribute.type == "OpenFactory"
-        assert actual_attribute.tag == "AssetsReferences"
+        # Assert producer called with the expected AssetAttribute
+        expected_attr = AssetAttribute(
+            id="references_above",
+            value="new-ref",
+            type="OpenFactory",
+            tag="AssetsReferences"
+        )
+        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
 
     def test_add_reference_above_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_above when existing references are present """
@@ -526,14 +571,14 @@ class TestBaseAsset(TestCase):
         expected_query = "SELECT VALUE FROM assets WHERE key='asset-001|references_above';"
         ksqlMock.query.assert_any_call(expected_query)
 
-        # Capture the actual call arguments
-        actual_call = asset.producer.send_asset_attribute.call_args
-        _, actual_attribute = actual_call[0]  # Get the second positional argument (the AssetAttribute)
-
-        # Check the non-timestamp fields
-        assert actual_attribute.value == "new-ref, existing-ref1, existing-ref2"
-        assert actual_attribute.type == "OpenFactory"
-        assert actual_attribute.tag == "AssetsReferences"
+        # Assert producer called with the expected AssetAttribute
+        expected_attr = AssetAttribute(
+            id="references_above",
+            value="new-ref, existing-ref1, existing-ref2",
+            type="OpenFactory",
+            tag="AssetsReferences"
+        )
+        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
 
     def test_add_reference_below_no_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when no existing references are present """
@@ -549,14 +594,14 @@ class TestBaseAsset(TestCase):
         expected_query = "SELECT VALUE FROM assets WHERE key='asset-001|references_below';"
         ksqlMock.query.assert_any_call(expected_query)
 
-        # Capture the actual call arguments
-        actual_call = asset.producer.send_asset_attribute.call_args
-        _, actual_attribute = actual_call[0]  # Get the second positional argument (the AssetAttribute)
-
-        # Check the non-timestamp fields
-        assert actual_attribute.value == "new-ref"
-        assert actual_attribute.type == "OpenFactory"
-        assert actual_attribute.tag == "AssetsReferences"
+        # Assert producer called with the expected AssetAttribute
+        expected_attr = AssetAttribute(
+            id="references_below",
+            value="new-ref",
+            type="OpenFactory",
+            tag="AssetsReferences"
+        )
+        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
 
     def test_add_reference_below_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when existing references are present """
@@ -572,14 +617,14 @@ class TestBaseAsset(TestCase):
         expected_query = "SELECT VALUE FROM assets WHERE key='asset-001|references_below';"
         ksqlMock.query.assert_any_call(expected_query)
 
-        # Capture the actual call arguments
-        actual_call = asset.producer.send_asset_attribute.call_args
-        _, actual_attribute = actual_call[0]  # Get the second positional argument (the AssetAttribute)
-
-        # Check the non-timestamp fields
-        assert actual_attribute.value == "new-ref, existing-ref1, existing-ref2"
-        assert actual_attribute.type == "OpenFactory"
-        assert actual_attribute.tag == "AssetsReferences"
+        # Assert producer called with the expected AssetAttribute
+        expected_attr = AssetAttribute(
+            id="references_below",
+            value="new-ref, existing-ref1, existing-ref2",
+            type="OpenFactory",
+            tag="AssetsReferences"
+        )
+        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
 
     @patch('openfactory.assets.asset_base.uuid.uuid4')
     @patch('openfactory.assets.asset_base.time.time')

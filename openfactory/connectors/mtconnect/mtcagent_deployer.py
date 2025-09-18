@@ -198,12 +198,13 @@ class MTConnectAgentDeployer:
 
         agent_asset = Asset(agent_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         agent_asset.add_reference_above(self.device.uuid)
-        agent_asset.add_attribute('agent_port',
-                                  AssetAttribute(
-                                      value=self.device.connector.agent.port,
-                                      type='Events',
-                                      tag='NetworkPort',
-                                  ))
+        agent_asset.add_attribute(
+            AssetAttribute(
+                id='agent_port',
+                value=self.device.connector.agent.port,
+                type='Events',
+                tag='NetworkPort'
+                ))
 
     def deploy(self) -> None:
         """

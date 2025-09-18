@@ -8,7 +8,8 @@ class MockAssetAttribute:
     """
     Mock of AssetAttribute
     """
-    def __init__(self):
+    def __init__(self, id):
+        self.id = id
         self.value = "123.45"
         self.type = "Samples"
         self.tag = "temperature"
@@ -46,8 +47,8 @@ class TestAssetProducer(unittest.TestCase):
         producer.produce = MagicMock()
         producer.flush = MagicMock()
 
-        mock_attr = MockAssetAttribute()
         asset_id = "device-456"
+        mock_attr = MockAssetAttribute(asset_id)
 
         expected_message = {
             "ID": asset_id,
@@ -59,7 +60,7 @@ class TestAssetProducer(unittest.TestCase):
             }
         }
 
-        producer.send_asset_attribute(asset_id, mock_attr)
+        producer.send_asset_attribute(mock_attr)
 
         producer.produce.assert_called_once_with(
             topic="ASSETS_STREAM",

@@ -2,7 +2,6 @@
 
 import json
 from confluent_kafka import Producer
-from typing import Union
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.assets.utils import AssetAttribute
 import openfactory.config as config
@@ -34,18 +33,17 @@ class AssetProducer(Producer):
         self.topic = self.ksql.get_kafka_topic('ASSETS_STREAM')
         self.asset_uuid = asset_uuid
 
-    def send_asset_attribute(self, assetID: Union[str, int], assetAttribute: AssetAttribute) -> None:
+    def send_asset_attribute(self, assetAttribute: AssetAttribute) -> None:
         """
         Sends a Kafka message representing an asset attribute.
 
         Constructs a JSON message from the given asset attribute and sends it to the Kafka ASSETS_STREAM topic.
 
         Args:
-            assetID (Union[str, int]): The unique identifier for the asset instance.
             assetAttribute (AssetAttribute): The asset attribute object containing value, type, tag, and timestamp.
         """
         msg = {
-            "ID": assetID,
+            "ID": assetAttribute.id,
             "VALUE": assetAttribute.value,
             "TAG": assetAttribute.tag,
             "TYPE": assetAttribute.type,

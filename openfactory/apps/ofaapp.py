@@ -104,6 +104,7 @@ class OpenFactoryApp(Asset):
         self.add_attribute(
             attribute_id='application_version',
             asset_attribute=AssetAttribute(
+                id='application_version',
                 value=self.APPLICATION_VERSION,
                 type='Events',
                 tag='Application.Version'
@@ -112,6 +113,7 @@ class OpenFactoryApp(Asset):
         self.add_attribute(
             attribute_id='application_manufacturer',
             asset_attribute=AssetAttribute(
+                id='application_manufacturer',
                 value=self.APPLICATION_MANUFACTURER,
                 type='Events',
                 tag='Application.Manufacturer'
@@ -120,6 +122,7 @@ class OpenFactoryApp(Asset):
         self.add_attribute(
             attribute_id='application_license',
             asset_attribute=AssetAttribute(
+                id='application_license',
                 value=self.APPLICATION_LICENSE,
                 type='Events',
                 tag='Application.License'
@@ -206,7 +209,8 @@ class OpenFactoryApp(Asset):
             Exception: If any exception occurs during the execution of the main loop, it is caught and logged, and the app is stopped.
         """
         self.welcome_banner()
-        self.add_attribute('avail', AssetAttribute(
+        self.add_attribute(AssetAttribute(
+            id='avail',
             value='AVAILABLE',
             tag='Availability',
             type='Events'
@@ -242,7 +246,8 @@ class OpenFactoryApp(Asset):
             async_main_loop: Async function to use as the main loop
         """
         self.welcome_banner()
-        self.add_attribute('avail', AssetAttribute(
+        self.add_attribute(AssetAttribute(
+            id='avail',
             value='AVAILABLE',
             tag='Availability',
             type='Events'

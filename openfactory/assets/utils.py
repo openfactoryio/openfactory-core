@@ -40,6 +40,7 @@ class AssetAttribute:
     Represents a single attribute of an asset, including its value, type, tag, and timestamp.
 
     Attributes:
+        id (str): the ID of the AssetAttribute
         value (Union[str, float]): The actual value of the attribute. Can be a string or float.
         type (Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']):
             The category/type of the attribute, must be one of the allowed literal strings.
@@ -48,6 +49,7 @@ class AssetAttribute:
                          Defaults to the current timestamp if not provided.
     """
 
+    id: str
     value: Union[str, float]
     type: Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']
     tag: str

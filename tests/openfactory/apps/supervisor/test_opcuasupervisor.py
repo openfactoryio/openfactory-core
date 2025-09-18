@@ -21,6 +21,19 @@ class OPCUASupervisorTestCase(unittest.TestCase):
         self.mock_add_attribute = patcher.start()
         self.addCleanup(patcher.stop)
 
+        # Patch out async loop creation so we don’t actually start threads
+        patch_loop = patch("openfactory.apps.supervisor.opcuasupervisor.asyncio.new_event_loop", return_value=MagicMock())
+        self.mock_loop = patch_loop.start()
+        self.addCleanup(patch_loop.stop)
+
+        patch_thread = patch("openfactory.apps.supervisor.opcuasupervisor.threading.Thread")
+        self.mock_thread = patch_thread.start()
+        self.addCleanup(patch_thread.stop)
+
+        patch_run = patch("openfactory.apps.supervisor.opcuasupervisor.asyncio.run_coroutine_threadsafe")
+        self.mock_run = patch_run.start()
+        self.addCleanup(patch_run.stop)
+
     def test_constructor_adds_opcua_attributes(self):
         """ Test if OPCUASupervisor sets its OPC UA attributes correctly """
 
@@ -35,27 +48,43 @@ class OPCUASupervisorTestCase(unittest.TestCase):
 
         calls = self.mock_add_attribute.call_args_list
 
-        expected_ids = {
-            'adapter_uri': {'value': 'opc.tcp://192.168.0.10:4840', 'type': 'Events', 'tag': 'AdapterURI'},
-            'adapter_connection_status': {'value': 'UNAVAILABLE', 'type': 'Events', 'tag': 'ConnectionStatus'},
-            'opcua_namespace_uri': {'value': 'demofactory', 'type': 'Events', 'tag': 'OPCUANamespaceURI'},
-            'opcua_browseName': {'value': 'PROVER3018', 'type': 'Events', 'tag': 'OPCUABrowsName'},
+        expected = {
+            'adapter_uri': {
+                'value': 'opc.tcp://192.168.0.10:4840',
+                'type': 'Events',
+                'tag': 'AdapterURI'
+            },
+            'adapter_connection_status': {
+                'value': 'UNAVAILABLE',
+                'type': 'Events',
+                'tag': 'ConnectionStatus'
+            },
+            'opcua_namespace_uri': {
+                'value': 'demofactory',
+                'type': 'Events',
+                'tag': 'OPCUANamespaceURI'
+            },
+            'opcua_browseName': {
+                'value': 'PROVER3018',
+                'type': 'Events',
+                'tag': 'OPCUABrowsName'
+            },
         }
 
-        # Check that all expected attribute IDs are in the call list
-        actual_ids = [call.kwargs['attribute_id'] for call in calls]
-        for expected_id in expected_ids:
-            self.assertIn(expected_id, actual_ids, f"Missing attribute_id: {expected_id}")
+        # Collect actual ids from AssetAttribute objects
+        actual_ids = [call.kwargs['asset_attribute'].id for call in calls]
 
-        # Check that attribute values/types/tags match expectations
+        for expected_id in expected:
+            self.assertIn(expected_id, actual_ids, f"Missing attribute id: {expected_id}")
+
+        # Verify each attribute’s content
         for call in calls:
-            attr_id = call.kwargs['attribute_id']
-            asset_attr = call.kwargs['asset_attribute']
-            if attr_id in expected_ids:
-                expected = expected_ids[attr_id]
-                self.assertEqual(asset_attr.value, expected['value'], f"Incorrect value for {attr_id}")
-                self.assertEqual(asset_attr.type, expected['type'], f"Incorrect type for {attr_id}")
-                self.assertEqual(asset_attr.tag, expected['tag'], f"Incorrect tag for {attr_id}")
+            attr = call.kwargs['asset_attribute']
+            if attr.id in expected:
+                exp = expected[attr.id]
+                self.assertEqual(attr.value, exp['value'], f"Incorrect value for {attr.id}")
+                self.assertEqual(attr.type, exp['type'], f"Incorrect type for {attr.id}")
+                self.assertEqual(attr.tag, exp['tag'], f"Incorrect tag for {attr.id}")
 
     def test_opcua_client_initialized(self):
         """ Test if OPC UA client is initialized with correct URL """

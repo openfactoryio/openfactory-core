@@ -244,7 +244,8 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
         mock_asset_instance.add_reference_below.assert_called_once_with(expected_agent_uuid)
         mock_asset_instance.add_reference_above.assert_called_once_with(self.device.uuid)
         mock_asset_instance.add_attribute.assert_called_once()
-        attr = mock_asset_instance.add_attribute.call_args[0][1]
+        attr = mock_asset_instance.add_attribute.call_args[0][0]
+        self.assertEqual(attr.id, "agent_port")
         self.assertEqual(attr.type, "Events")
         self.assertEqual(attr.tag, "NetworkPort")
         self.assertEqual(attr.value, self.device.connector.agent.port)

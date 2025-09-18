@@ -44,14 +44,21 @@ class BaseSupervisorTestCase(unittest.TestCase):
     @patch('openfactory.apps.supervisor.base_supervisor.AssetAttribute')
     def test_constructor_adds_device_attribute(self, MockAssetAttribute):
         """ Test if supervisor attributes are set """
-        mock_instance = MagicMock()
-        MockAssetAttribute.return_value = mock_instance
+        mock_asset_attr = MagicMock()
+        MockAssetAttribute.return_value = mock_asset_attr
 
-        TestSupervisor("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        device_uuid = "dev-456"
+        TestSupervisor("sup-123", device_uuid, self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
-        self.mock_add_attribute.assert_any_call(
-            attribute_id='device_added',
-            asset_attribute=mock_instance
+        # Verify that add_attribute was called with only asset_attribute
+        self.mock_add_attribute.assert_any_call(asset_attribute=mock_asset_attr)
+
+        # Verify that AssetAttribute was constructed with the correct values
+        MockAssetAttribute.assert_called_with(
+            id='device_added',
+            value=device_uuid,
+            type='Events',
+            tag='DeviceAdded'
         )
 
     @patch('openfactory.apps.supervisor.base_supervisor.Asset')
@@ -67,27 +74,22 @@ class BaseSupervisorTestCase(unittest.TestCase):
         # Collect call arguments
         calls = mock_asset_instance.add_attribute.call_args_list
 
-        # Check that the expected attribute_ids are present
-        expected_ids = ['start', 'stop']
-        actual_ids = [call_obj.kwargs['attribute_id'] for call_obj in calls]
-        for attr_id in expected_ids:
-            self.assertIn(attr_id, actual_ids, f"{attr_id} not found in add_attribute calls.")
+        # Expected commands
+        expected_commands = {
+            "start": "Start the device",
+            "stop": "Stop the device"
+        }
 
-        # Check content of asset_attribute per attribute_id
+        # Verify that the expected commands were added as AssetAttributes
         for call_obj in calls:
-            attr_id = call_obj.kwargs['attribute_id']
             asset_attr = call_obj.kwargs['asset_attribute']
 
-            if attr_id == 'start':
-                self.assertEqual(asset_attr.value, 'Start the device')
-                self.assertEqual(asset_attr.type, 'Method')
-                self.assertEqual(asset_attr.tag, 'Method')
-            elif attr_id == 'stop':
-                self.assertEqual(asset_attr.value, 'Stop the device')
-                self.assertEqual(asset_attr.type, 'Method')
-                self.assertEqual(asset_attr.tag, 'Method')
-            else:
-                self.fail(f"Unexpected attribute_id: {attr_id}")
+            self.assertIn(asset_attr.id, expected_commands, f"Unexpected command id: {asset_attr.id}")
+            expected_desc = expected_commands[asset_attr.id]
+            self.assertEqual(asset_attr.value, expected_desc)
+            self.assertEqual(asset_attr.type, 'Method')
+            self.assertEqual(asset_attr.tag, 'Method')
+            self.assertEqual(asset_attr.id, asset_attr.id)
 
     @patch('openfactory.apps.supervisor.base_supervisor.KafkaCommandsConsumer')
     @patch.object(TestSupervisor, '_send_available_commands')

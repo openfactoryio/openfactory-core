@@ -239,6 +239,7 @@ class BaseAsset:
 
         if not result:
             return AssetAttribute(
+                id=attribute_id,
                 value='UNAVAILABLE',
                 type='UNAVAILABLE',
                 tag='UNAVAILABLE',
@@ -254,6 +255,7 @@ class BaseAsset:
             return method_caller
 
         return AssetAttribute(
+            id=attribute_id,
             value=float(first_row['VALUE']) if first_row['TYPE'] == 'Samples' and first_row['VALUE'] != 'UNAVAILABLE' else first_row['VALUE'],
             type=first_row['TYPE'],
             tag=first_row['TAG'],
@@ -301,27 +303,29 @@ class BaseAsset:
 
         # check if value is of type AssetAttribute
         if isinstance(value, AssetAttribute):
-            self.producer.send_asset_attribute(name, value)
+            if value.id != name:
+                raise OFAException(f"The AssetAttribute.id {value.id} does not match the attribute {name}")
+            self.producer.send_asset_attribute(value)
             return
 
         # send kafka message
         attr = self.__getattr__(name)
-        self.producer.send_asset_attribute(name,
-                                           AssetAttribute(
-                                               value=value,
-                                               tag=attr.tag,
-                                               type=attr.type
-                                               ))
+        self.producer.send_asset_attribute(
+            AssetAttribute(
+                id=name,
+                value=value,
+                tag=attr.tag,
+                type=attr.type)
+            )
 
-    def add_attribute(self, attribute_id: str, asset_attribute: AssetAttribute) -> None:
+    def add_attribute(self, asset_attribute: AssetAttribute) -> None:
         """
         Adds a new attribute to the asset.
 
         Args:
-            attribute_id (str): The unique identifier for the asset attribute.
             asset_attribute (AssetAttribute): The attribute to be added.
         """
-        self.producer.send_asset_attribute(attribute_id, asset_attribute)
+        self.producer.send_asset_attribute(asset_attribute)
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[Union[str, Self]]:
         """
@@ -397,8 +401,8 @@ class BaseAsset:
             references = f"{new_reference}, {result[0]['VALUE'].strip()}"
 
         self.producer.send_asset_attribute(
-            f"references_{direction}",
             AssetAttribute(
+                id=f"references_{direction}",
                 value=references,
                 tag="AssetsReferences",
                 type="OpenFactory"

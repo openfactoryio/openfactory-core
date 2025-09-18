@@ -3,7 +3,9 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import signal
 import os
 import json
+from datetime import datetime
 from openfactory.apps import OpenFactoryApp
+from openfactory.assets import AssetAttribute
 from openfactory.filelayer.backend import FileBackend
 
 
@@ -29,6 +31,17 @@ class TestOpenFactoryApp(unittest.TestCase):
         self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
         self.mock_deregister = self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
+
+        # Freeze datetime for deterministic AssetAttribute.timestamp
+        self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
+        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        self.mock_datetime = datetime_patcher.start()
+        self.addCleanup(datetime_patcher.stop)
+
+        # Make datetime.now() return fixed timestamp
+        self.mock_datetime.now.return_value = self.fixed_ts
+        # Allow datetime(...) constructor to still work
+        self.mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
     def test_inheritance(self):
         """ Test if OpenFactoryApp derives from Asset """
@@ -238,6 +251,17 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         self.mock_deregister = self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
 
+        # Freeze datetime for deterministic AssetAttribute.timestamp
+        self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
+        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        self.mock_datetime = datetime_patcher.start()
+        self.addCleanup(datetime_patcher.stop)
+
+        # Make datetime.now() return fixed timestamp
+        self.mock_datetime.now.return_value = self.fixed_ts
+        # Allow datetime(...) constructor to still work
+        self.mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
     async def test_async_main_loop_not_implemented(self):
         """ Verify async_main_loop raises NotImplementedError by default. """
         app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
@@ -248,19 +272,28 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
         app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
 
-        # Patch async_main_loop to avoid NotImplementedError
+        # Mock async_main_loop
         app.async_main_loop = AsyncMock()
 
-        # Patch welcome_banner to track calls
-        patch.object(app, "welcome_banner")
-
-        # Patch welcome_banner to track calls
+        # Patch welcome_banner
         with patch.object(app, "welcome_banner", return_value=None) as mock_banner:
             await app.async_run()
 
+        # Check welcome banner called
         mock_banner.assert_called_once()
-        app.add_attribute.assert_any_call('avail', unittest.mock.ANY)
-        app.async_main_loop.assert_called_once()
+
+        # Check that add_attribute was called with an AssetAttribute
+        self.mock_add_attribute.assert_any_call(
+            AssetAttribute(
+                id="avail",
+                value="AVAILABLE",
+                tag="Availability",
+                type="Events"
+            )
+        )
+
+        # Check async_main_loop executed
+        app.async_main_loop.assert_awaited_once()
 
     async def test_async_run_handles_exception(self):
         """ Verify async_run handles exceptions from async_main_loop. """

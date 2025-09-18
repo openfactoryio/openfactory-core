@@ -88,32 +88,32 @@ class OPCUASupervisor(BaseSupervisor):
 
         # attributes of supervisor
         self.add_attribute(
-            attribute_id='adapter_uri',
             asset_attribute=AssetAttribute(
+                id='adapter_uri',
                 value=f"opc.tcp://{self.adapter_ip}:{self.adapter_port}",
                 type='Events',
                 tag='AdapterURI'
             )
         )
         self.add_attribute(
-            attribute_id='adapter_connection_status',
             asset_attribute=AssetAttribute(
+                id='adapter_connection_status',
                 value='UNAVAILABLE',
                 type='Events',
                 tag='ConnectionStatus'
             )
         )
         self.add_attribute(
-            attribute_id='opcua_namespace_uri',
             asset_attribute=AssetAttribute(
+                id='opcua_namespace_uri',
                 value=self.namespace_uri,
                 type='Events',
                 tag='OPCUANamespaceURI'
             )
         )
         self.add_attribute(
-            attribute_id='opcua_browseName',
             asset_attribute=AssetAttribute(
+                id='opcua_browseName',
                 value=self.browseName,
                 type='Events',
                 tag='OPCUABrowsName'

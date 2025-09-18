@@ -43,8 +43,8 @@ class BaseSupervisor(OpenFactoryApp):
 
         # attributes of supervisor
         self.add_attribute(
-            attribute_id='device_added',
             asset_attribute=AssetAttribute(
+                id='device_added',
                 value=device_uuid,
                 type='Events',
                 tag='DeviceAdded'
@@ -89,8 +89,8 @@ class BaseSupervisor(OpenFactoryApp):
         dev = Asset(asset_uuid=self._device_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         for cmd in self.available_commands():
             dev.add_attribute(
-                attribute_id=cmd['command'],
                 asset_attribute=AssetAttribute(
+                    id=cmd['command'],
                     value=cmd['description'],
                     type='Method',
                     tag='Method'

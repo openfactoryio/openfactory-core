@@ -47,9 +47,9 @@ class TestRegisterAsset(unittest.TestCase):
 
         for i, (key, value, tag) in enumerate(expected_fixed_attributes):
             call = calls[i]
-            self.assertEqual(call[0][0], key)
-            attr = call[0][1]
+            attr = call[0][0]
             self.assertIsInstance(attr, AssetAttribute)
+            self.assertEqual(attr.id, key)
             self.assertEqual(attr.value, value)
             self.assertEqual(attr.type, "OpenFactory")
             self.assertEqual(attr.tag, tag)
@@ -103,8 +103,8 @@ class TestRegisterAsset(unittest.TestCase):
         for call in mock_producer.send_asset_attribute.call_args_list:
             if not call or not call[0]:
                 continue
-            key, attr = call[0][0], call[0][1]
-            if key == "uns_id" and isinstance(attr, AssetAttribute):
+            attr = call[0][0]
+            if attr.id == "uns_id" and isinstance(attr, AssetAttribute):
                 self.assertEqual(attr.value, uns["uns_id"])
                 self.assertEqual(attr.type, "OpenFactory")
                 self.assertEqual(attr.tag, "UNSId")

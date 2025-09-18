@@ -41,32 +41,27 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
     producer = AssetProducer(asset_uuid, ksqlClient, bootstrap_servers)
 
     producer.send_asset_attribute(
-        "AssetType",
-        AssetAttribute(value=asset_type, type="OpenFactory", tag="AssetType")
+        AssetAttribute(id="AssetType", value=asset_type, type="OpenFactory", tag="AssetType")
     )
 
     producer.send_asset_attribute(
-        "DockerService",
-        AssetAttribute(value=docker_service, type="OpenFactory", tag="DockerService")
+        AssetAttribute(id="DockerService", value=docker_service, type="OpenFactory", tag="DockerService")
     )
 
     # Initialize references
     for ref_id in ["references_below", "references_above"]:
         producer.send_asset_attribute(
-            ref_id,
-            AssetAttribute(value="", type="OpenFactory", tag="AssetsReferences")
+            AssetAttribute(id=ref_id, value="", type="OpenFactory", tag="AssetsReferences")
         )
 
     if uns:
         # Set UNS levels
         for level_name, level_value in uns['levels'].items():
             producer.send_asset_attribute(
-                level_name,
-                AssetAttribute(value=level_value, type="OpenFactory", tag="UNSLevel")
+                AssetAttribute(id=level_name, value=level_value, type="OpenFactory", tag="UNSLevel")
             )
         producer.send_asset_attribute(
-            'uns_id',
-            AssetAttribute(value=uns['uns_id'], type="OpenFactory", tag="UNSId")
+            AssetAttribute(id='uns_id', value=uns['uns_id'], type="OpenFactory", tag="UNSId")
         )
         # Set UNS map
         producer.produce(
@@ -96,15 +91,13 @@ def deregister_asset(asset_uuid: str,
 
     # UNAVAILABLE message
     producer.send_asset_attribute(
-        "avail",
-        AssetAttribute(value="UNAVAILABLE", type="Events", tag="Availability")
+        AssetAttribute(id="avail", value="UNAVAILABLE", type="Events", tag="Availability")
     )
 
     # remove references
     for ref_id in ["references_below", "references_above"]:
         producer.send_asset_attribute(
-            ref_id,
-            AssetAttribute(value="", type="OpenFactory", tag="AssetsReferences")
+            AssetAttribute(id=ref_id, value="", type="OpenFactory", tag="AssetsReferences")
         )
 
     # tombstone message for table ASSETS

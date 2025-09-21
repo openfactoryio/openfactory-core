@@ -575,6 +575,55 @@ class TestOpenFactoryManager(unittest.TestCase):
         assert "Mocked error" in fail_msg
         mock_get_devices.assert_not_called()
 
+    @patch('openfactory.openfactory_manager.register_device_connector')
+    @patch('openfactory.openfactory_manager.build_connector')
+    @patch('openfactory.openfactory_manager.config')
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_deploy_devices_from_config_file_with_ofa_exception(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_devices,
+        mock_config,
+        mock_build_connector,
+        mock_register_device_connector
+    ):
+        """ Test deploy_devices_from_config_file when connector.deploy raises OFAException """
+        mock_config.OPENFACTORY_UNS_SCHEMA = "mocked_schema"
+        mock_uns_instance = MagicMock()
+        mock_uns_schema_class.return_value = mock_uns_instance
+
+        # Create a device mock
+        device = create_mock_device(uuid="device-uuid-err", connector_type="mocked_connector")
+        mock_get_devices.return_value = {"DeviceErr": device}
+
+        # Mock connector instance that raises OFAException
+        mock_connector_instance = MagicMock()
+        mock_connector_instance.deploy.side_effect = OFAException("Simulated deployment failure")
+        mock_build_connector.return_value = mock_connector_instance
+
+        self.manager.devices_uuid = MagicMock(return_value=[])
+        self.manager.deploy_device_supervisor = MagicMock()
+
+        # Run method
+        self.manager.deploy_devices_from_config_file("mock_devices.yaml")
+
+        # Ensure connector.deploy was attempted
+        mock_connector_instance.deploy.assert_called_once_with(device, "mock_devices.yaml")
+
+        # Ensure user_notify.fail was called with OFAException message
+        mock_user_notify.fail.assert_called_once()
+        fail_msg = mock_user_notify.fail.call_args[0][0]
+        self.assertIn("Device device-uuid-err not deployed", fail_msg)
+        self.assertIn("Simulated deployment failure", fail_msg)
+
+        # Ensure no success message and no supervisor deploy
+        mock_user_notify.success.assert_not_called()
+        self.manager.deploy_device_supervisor.assert_not_called()
+        mock_register_device_connector.assert_not_called()
+
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')

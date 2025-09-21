@@ -247,11 +247,13 @@ class OpenFactoryManager(OpenFactory):
                 user_notify.warning(f"Device {device.uuid} has an unknown connector {schema.type}")
                 continue
 
-            connector.deploy(device, yaml_config_file)
-            self.deploy_device_supervisor(device)
-            register_device_connector(device, self.ksql)
-
-            user_notify.success(f"Device {device.uuid} deployed successfully")
+            try:
+                connector.deploy(device, yaml_config_file)
+                self.deploy_device_supervisor(device)
+                register_device_connector(device, self.ksql)
+                user_notify.success(f"Device {device.uuid} deployed successfully")
+            except OFAException as e:
+                user_notify.fail(f"Device {device.uuid} not deployed: {e}")
 
     def deploy_apps_from_config_file(self, yaml_config_file: str) -> None:
         """

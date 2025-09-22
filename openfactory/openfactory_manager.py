@@ -322,7 +322,10 @@ class OpenFactoryManager(OpenFactory):
             except ValueError:
                 user_notify.warning(f"Device {device.uuid} has an unknown connector {schema.type}")
                 continue
-            connector.tear_down(device.uuid)
+            try:
+                connector.tear_down(device.uuid)
+            except OFAException as err:
+                user_notify.fail(f"Device {device.uuid} could not be torn down: {err}")
 
             # Tear down Supervisor
             try:

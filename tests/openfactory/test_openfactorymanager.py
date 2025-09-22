@@ -700,11 +700,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         ]
         self.manager.devices = MagicMock(return_value=deployed_devices)
 
-        # Mock deployment_strategy
-        self.manager.deployment_strategy = MagicMock()
-        self.manager.ksql = MagicMock()
-        self.manager.bootstrap_servers = "dummy-bootstrap"
-
         # Call method under test
         self.manager.shut_down_devices_from_config_file("dummy_config.yaml")
 
@@ -767,6 +762,47 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Assertions
         mock_get_devices_from_config_file.assert_called_once_with("dummy_config.yaml", uns_schema=mock_uns_instance)
         self.manager.tear_down_device.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.deregister_device_connector')
+    @patch('openfactory.openfactory_manager.build_connector')
+    @patch('openfactory.openfactory_manager.deregister_asset')
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_shut_down_devices_from_config_file_connector_teardown_failure(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_devices_from_config_file,
+        mock_deregister_asset,
+        mock_build_connector,
+        mock_deregister_device_connector
+    ):
+        """ Test shut_down_devices_from_config_file when connector.tear_down raises OFAException """
+
+        # Mock device from config
+        device = create_mock_device(uuid="device-fail-1", connector_type="mocked_connector")
+        mock_get_devices_from_config_file.return_value = {"DeviceFail": device}
+
+        # Mock connector with failing tear_down
+        mock_connector_instance = MagicMock()
+        mock_connector_instance.tear_down.side_effect = OFAException("Mocked teardown failure")
+        mock_build_connector.return_value = mock_connector_instance
+
+        # Mock deployed devices
+        self.manager.devices = MagicMock(return_value=[MagicMock(asset_uuid="device-fail-1")])
+
+        # Run method
+        self.manager.shut_down_devices_from_config_file("dummy_config.yaml")
+
+        # Connector teardown attempted and failed
+        mock_connector_instance.tear_down.assert_called_once_with("device-fail-1")
+
+        # Failure notification was sent
+        mock_user_notify.fail.assert_called_once()
+        fail_msg = mock_user_notify.fail.call_args[0][0]
+        assert "Device device-fail-1 could not be torn down" in fail_msg
+        assert "Mocked teardown failure" in fail_msg
 
     @patch("openfactory.openfactory_manager.Asset")
     @patch("openfactory.openfactory_manager.user_notify")

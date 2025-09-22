@@ -1,5 +1,4 @@
 import unittest
-import json
 from unittest.mock import MagicMock, patch
 from openfactory.connectors.opcua.opcua_connector import OPCUAConnector
 from openfactory.schemas.devices import Device
@@ -25,17 +24,19 @@ class TestOPCUAConnector(unittest.TestCase):
             bootstrap_servers="kafka:9092"
         )
 
-        # Create mock connector data (similar to MTConnect example)
-        connector_cfg = MagicMock()
-        connector_cfg.type = "opcua"
-        connector_cfg.model_dump.return_value = {"field": "value"}
-
         # Create mock Device
         self.device = MagicMock(spec=Device)
         self.device.uuid = "DEVICE-123"
         self.device.uns = {"meta": "data"}
-        self.device.connector = connector_cfg
         self.device.ksql_tables = ["device"]
+
+        # Connector type
+        connector_cfg = MagicMock()
+        connector_cfg.type = "opcua"
+        self.device.connector = connector_cfg
+
+        # Properly mock model_dump to return a real dict
+        self.device.model_dump = MagicMock(return_value={"field": "value"})
 
     def test_connector_is_registered(self):
         """ OPCUAConnectorSchema should map to OPCUAConnector in CONNECTOR_REGISTRY. """
@@ -48,100 +49,137 @@ class TestOPCUAConnector(unittest.TestCase):
         with self.assertRaises(OFAException):
             self.connector.deploy(self.device, "config.yaml")
 
+    @patch("openfactory.connectors.opcua.opcua_connector.config.OPCUA_CONNECTOR_COORDINATOR",
+           "http://mock-coordinator:8000")
+    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
     @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
-    @patch.object(OPCUAConnector, "deploy_opcua_producer")
-    def test_deploy_calls_register_and_deploy(self, mock_deploy_producer, mock_register_asset):
-        """ Deploy should call register_asset and deploy_opcua_producer for valid device. """
-        self.connector.deploy(self.device, "config.yaml")
-        mock_register_asset.assert_called_once_with(
-            self.device.uuid,
-            uns=self.device.uns,
-            asset_type="Device",
-            ksqlClient=self.ksql_mock,
-            docker_service=""
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.post")
+    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
+    def test_deploy(self, mock_notify, mock_post, mock_register_asset, mock_asset):
+        """ Test deployfull flow """
+        # Mock post return values
+        mock_post.return_value.json.return_value = {"assigned_gateway": "gw-1"}
+        mock_post.return_value.raise_for_status.return_value = None
+
+        # Mocks for device and producer
+        mock_device_asset = MagicMock()
+        mock_producer_asset = MagicMock()
+        mock_asset.side_effect = [mock_device_asset, mock_producer_asset]
+
+        self.connector.deploy(self.device, 'some_file.yml')
+
+        # Assert HTTP POST
+        mock_post.assert_called_once_with(
+            "http://mock-coordinator:8000/register_device",
+            json={'device': {'field': 'value'}}
         )
-        mock_deploy_producer.assert_called_once_with(self.device)
 
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
-    def test_deploy_opcua_producer_calls_deployment_strategy_and_registers_producer(self, mock_register_asset, mock_asset_cls):
-        """ deploy_opcua_producer should call deployment strategy deploy and register_asset. """
+        # Assert register_asset calls
+        expected_calls = [
+            unittest.mock.call(
+                self.device.uuid,
+                uns=self.device.uns,
+                asset_type="Device",
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="kafka:9092"
+            ),
+            unittest.mock.call(
+                self.device.uuid.upper() + "-PRODUCER",
+                uns=None,
+                asset_type="KafkaProducer",
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="kafka:9092"
+            )
+        ]
+        mock_register_asset.assert_has_calls(expected_calls, any_order=False)
 
-        # Mock Asset instance
-        mock_asset_instance = MagicMock()
-        mock_asset_cls.return_value = mock_asset_instance
+        # Assert Asset constructor call order
+        expected_asset_calls = [
+            unittest.mock.call(self.device.uuid, ksqlClient=self.ksql_mock, bootstrap_servers="kafka:9092"),
+            unittest.mock.call(self.device.uuid.upper() + "-PRODUCER", ksqlClient=self.ksql_mock, bootstrap_servers="kafka:9092")
+        ]
+        self.assertEqual(mock_asset.call_args_list, expected_asset_calls)
 
-        self.connector.deploy_opcua_producer(self.device)
+        # Assert references added correctly
+        mock_device_asset.add_reference_below.assert_called_once_with(self.device.uuid.upper() + "-PRODUCER")
+        mock_producer_asset.add_reference_above.assert_called_once_with(self.device.uuid)
 
-        # Deployment strategy should be called
-        self.deploy_strategy_mock.deploy.assert_called()
+        # Assert success notification
+        mock_notify.success.assert_called_once_with(
+            f"OPC UA producer for device {self.device.uuid} registerd succesfully with gateway gw-1"
+        )
 
-        # register_asset should be called
-        mock_register_asset.assert_called_once()
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.post")
+    def test_deploy_opcua_producer_docker_api_error_raises(self, mock_post):
+        """ deploy_opcua_producer should raise OFAException on RequestException. """
+        from requests.exceptions import RequestException
+        mock_post.side_effect = RequestException("Mocked exception")
 
-        # Add reference calls should happen on mocked Asset
-        self.assertTrue(mock_asset_instance.add_reference_below.called)
-        self.assertTrue(mock_asset_instance.add_reference_above.called)
+        with self.assertRaises(OFAException) as cm:
+            self.connector.deploy_opcua_producer(self.device)
+        self.assertIn("Mocked exception", str(cm.exception))
 
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.config.OPCUA_PRODUCER_LOG_LEVEL", "mocked_level")
-    @patch("openfactory.connectors.opcua.opcua_connector.config.KAFKA_BROKER", "mocked_kafka:9092")
-    def test_deploy_opcua_producer_sets_correct_env(self, mock_register_asset, mock_asset_cls):
-        """ deploy_opcua_producer should set correct environment variables. """
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.post")
+    def test_deploy_opcua_producer_connection_error_raises(self, mock_post):
+        """ deploy_opcua_producer should raise OFAException if coordinator not reachable """
+        from requests.exceptions import ConnectionError
+        mock_post.side_effect = ConnectionError("Cannot connect")
 
-        mock_asset_cls.return_value = MagicMock()
-
-        self.connector.deploy_opcua_producer(self.device)
-
-        # Capture arguments passed to deployment_strategy.deploy
-        _, kwargs = self.deploy_strategy_mock.deploy.call_args
-        env_vars = kwargs["env"]
-
-        # Assertions for key env variables
-        self.assertIn("KAFKA_BROKER=mocked_kafka:9092", env_vars)
-        self.assertIn(f"KSQLDB_URL={self.ksql_mock.ksqldb_url}", env_vars)
-        self.assertIn(f"OPCUA_CONNECTOR={json.dumps(self.device.connector.model_dump())}", env_vars)
-        self.assertIn("OPCUA_PRODUCER_UUID=DEVICE-123-PRODUCER", env_vars)
-        self.assertIn("OPCUA_PRODUCER_LOG_LEVEL=mocked_level", env_vars)
-        self.assertIn("DOCKER_SERVICE=device-123-producer", env_vars)
-        self.assertIn("DEVICE_UUID=DEVICE-123", env_vars)
-        self.assertIn("APPLICATION_MANUFACTURER=OpenFactory", env_vars)
-        self.assertIn("APPLICATION_LICENSE=Polyform Noncommercial License 1.0.0", env_vars)
-
-    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
-    def test_deploy_opcua_producer_docker_api_error_raises(self, mock_register_asset):
-        """ deploy_opcua_producer should raise OFAException on Docker APIError. """
-        from docker.errors import APIError
-        self.deploy_strategy_mock.deploy.side_effect = APIError("Docker error")
-        with self.assertRaises(OFAException):
+        with self.assertRaises(OFAException) as cm:
             self.connector.deploy_opcua_producer(self.device)
 
+        self.assertIn("No OPC UA Coordinator running at URL", str(cm.exception))
+
+    @patch("openfactory.connectors.opcua.opcua_connector.config.OPCUA_CONNECTOR_COORDINATOR", "http://mock-coordinator")
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")
     @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    def test_tear_down_success(self, mock_user_notify, mock_deregister):
-        """ tear_down should remove producer and deregister assets on success. """
-        self.connector.tear_down("test-device")
-        self.deploy_strategy_mock.remove.assert_called_once_with("test-device-producer")
-        mock_deregister.assert_called_once_with(
-            "test-device-PRODUCER",
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers=self.connector.bootstrap_servers
+    def test_tear_down_success(self, mock_notify, mock_deregister, mock_delete):
+        """ Test successful tear_down """
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_delete.return_value = mock_response
+
+        self.connector.tear_down(self.device.uuid)
+
+        mock_delete.assert_called_once_with(
+            "http://mock-coordinator/unregister_device/DEVICE-123"
         )
-        mock_user_notify.success.assert_called_once()
+        mock_deregister.assert_called_once_with(
+            "DEVICE-123-PRODUCER",
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="kafka:9092"
+        )
+        mock_notify.success.assert_called_once_with(
+            "OPC UA producer for device DEVICE-123 shut down successfully"
+        )
 
-    @patch("openfactory.connectors.opcua.opcua_connector.docker.errors.NotFound", new=Exception)
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")
+    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    def test_tear_down_not_running(self, mock_user_notify):
-        """ Handle case where producer was not running. """
-        # Simulate NotFound error
-        self.deploy_strategy_mock.remove.side_effect = Exception
-        self.connector.tear_down("test-device")
-        mock_user_notify.info.assert_called()
+    def test_tear_down_connection_error_raises(self, mock_notify, mock_deregister, mock_delete):
+        """ Tear down should raise OFAException if coordinator not reachable """
+        from requests.exceptions import ConnectionError
+        mock_delete.side_effect = ConnectionError("Cannot connect")
 
-    @patch("openfactory.connectors.opcua.opcua_connector.docker.errors.APIError", new=Exception)
-    def test_tear_down_api_error_raises(self):
-        """ tear_down should raise OFAException on Docker APIError. """
-        self.deploy_strategy_mock.remove.side_effect = Exception("API error")
-        with self.assertRaises(OFAException):
-            self.connector.tear_down("test-device")
+        with self.assertRaises(OFAException) as cm:
+            self.connector.tear_down(self.device.uuid)
+
+        self.assertIn("No OPC UA Coordinator running at URL", str(cm.exception))
+        mock_deregister.assert_not_called()
+        mock_notify.success.assert_not_called()
+
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")
+    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
+    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
+    def test_tear_down_request_exception_raises(self, mock_notify, mock_deregister, mock_delete):
+        """ Tear down should raise OFAException on other RequestException """
+        from requests.exceptions import RequestException
+        mock_delete.side_effect = RequestException("HTTP error")
+
+        with self.assertRaises(OFAException) as cm:
+            self.connector.tear_down(self.device.uuid)
+
+        self.assertIn("HTTP error", str(cm.exception))
+        mock_deregister.assert_not_called()
+        mock_notify.success.assert_not_called()

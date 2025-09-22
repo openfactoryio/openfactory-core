@@ -13,8 +13,8 @@ environment. This includes:
    The schema of the OPCUAConnector is :class:`openfactory.schemas.connectors.opcua.OPCUAConnectorSchema`.
 """
 
-import docker
-import json
+import requests
+import requests.exceptions
 import openfactory.config as config
 from openfactory.models.user_notifications import user_notify
 from openfactory.connectors.base_connector import Connector
@@ -72,10 +72,6 @@ class OPCUAConnector(Connector):
         if device.connector.type != 'opcua':
             raise OFAException(f"Device {device.uuid} is not configured with an OPC UA connector")
 
-        # Register device asset
-        register_asset(device.uuid, uns=device.uns, asset_type="Device",
-                       ksqlClient=self.ksql, docker_service="")
-
         # Deploy OPC UA connector
         self.deploy_opcua_producer(device)
 
@@ -91,28 +87,25 @@ class OPCUAConnector(Connector):
         """
         service_name = device.uuid.lower() + '-producer'
         producer_uuid = device.uuid.upper() + '-PRODUCER'
-        connector_dict = device.connector.model_dump(exclude_none=True)
+
+        url = f"{config.OPCUA_CONNECTOR_COORDINATOR}/register_device"
+        payload = {"device": device.model_dump()}
         try:
-            self.deployment_strategy.deploy(
-                image=config.OPCUA_PRODUCER_IMAGE,
-                name=service_name,
-                mode={"Replicated": {"Replicas": 1}},
-                env=[f'KAFKA_BROKER={config.KAFKA_BROKER}',
-                     f"KSQLDB_URL={self.ksql.ksqldb_url}",
-                     f'OPCUA_CONNECTOR={json.dumps(connector_dict)}',
-                     f'OPCUA_PRODUCER_UUID={producer_uuid}',
-                     f"OPCUA_PRODUCER_LOG_LEVEL={config.OPCUA_PRODUCER_LOG_LEVEL}",
-                     f"DOCKER_SERVICE={service_name}",
-                     f"DEVICE_UUID={device.uuid}",
-                     "APPLICATION_MANUFACTURER=OpenFactory",
-                     "APPLICATION_LICENSE=Polyform Noncommercial License 1.0.0"]
-            )
-        except docker.errors.APIError as err:
-            raise OFAException(f"Connector {service_name} could not be created\n{err}")
+            resp = requests.post(url, json=payload)
+            resp.raise_for_status()
+            user_notify.success(f"OPC UA producer for device {device.uuid} registerd succesfully with gateway {resp.json()['assigned_gateway']}")
+        except requests.exceptions.ConnectionError:
+            raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")
+        except Exception as e:
+            raise OFAException(f"Connector {service_name} could not be created\n{e}")
+
+        # Register device asset
+        register_asset(device.uuid, uns=device.uns, asset_type="Device",
+                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
 
         # register producer in OpenFactory
         register_asset(producer_uuid, uns=None, asset_type="KafkaProducer",
-                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=service_name)
+                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         dev = Asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         dev.add_reference_below(producer_uuid)
         producer = Asset(producer_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
@@ -125,11 +118,13 @@ class OPCUAConnector(Connector):
         Args:
             device_uuid (str): Unique identifier of the device to be torn down.
         """
+        url = f"{config.OPCUA_CONNECTOR_COORDINATOR}/unregister_device/{device_uuid}"
         try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-producer')
+            response = requests.delete(url)
+            response.raise_for_status()
             deregister_asset(device_uuid + '-PRODUCER', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"OPC UA producer for device {device_uuid} shut down successfully")
-        except docker.errors.NotFound:
-            user_notify.info(f"OPC UA producer for device {device_uuid} was not running")
-        except docker.errors.APIError as err:
+        except requests.exceptions.ConnectionError:
+            raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")
+        except requests.exceptions.RequestException as err:
             raise OFAException(err)

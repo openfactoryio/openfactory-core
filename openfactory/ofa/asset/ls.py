@@ -9,6 +9,7 @@ from rich.live import Live
 from openfactory import OpenFactory
 from openfactory.ofa.ksqldb import ksql
 
+
 @click.command(name='ls')
 def click_ls() -> None:
     """ List deployed OpenFactory assets. """

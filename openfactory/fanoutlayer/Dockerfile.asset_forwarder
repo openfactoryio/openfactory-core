@@ -25,7 +25,7 @@
 #   - python3 -u -m asset_forwarder.asset_forwarder_service
 #
 # To build the image locally:
-#   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile openfactory/fanoutlayer
+#   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile.asset_forwarder openfactory/fanoutlayer
 # ------------------------------------------------------------------------------
 
 # -------------------------------
@@ -48,8 +48,10 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /build
 
-# Copy OpenFactory project
-COPY . /build/
+# Copy asset_forwarder and utils
+COPY asset_forwarder/ ./asset_forwarder/
+COPY utils/ ./utils/
+COPY asset_forwarder/requirements.txt ./requirements.txt
 
 # Install Python dependencies into system site-packages
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -79,13 +81,13 @@ RUN groupadd --gid "${GID}" "${UNAME}" && \
 
 WORKDIR /home/${UNAME}
 
-# Install dependencies directly (or copy from build stage if needed)
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy installed dependencies from build stage
+COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=build /usr/local/bin /usr/local/bin
 
 # Copy source code with correct ownership
-COPY --chown=ofa_forwarder:ofa_forwarder src asset_forwarder/
+COPY --chown=ofa_forwarder:ofa_forwarder asset_forwarder/ ./asset_forwarder/
+COPY --chown=ofa_forwarder:ofa_forwarder utils/ ./utils/
 
 USER ${UNAME}
 

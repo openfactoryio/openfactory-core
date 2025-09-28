@@ -8,6 +8,6 @@ services:
   asset-forwarder:
     build:
         context: .
-        dockerfile: Dockerfile
+        dockerfile: Dockerfile.asset_forwarder
     image: openfactoryio/asset-forwarder:local
     restart: unless-stopped

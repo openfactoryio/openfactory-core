@@ -53,7 +53,7 @@ from typing import Dict, List, Optional
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 
 from .logger import logger
-from .hash_ring import ConsistentHashRing
+from utils.hash_ring import ConsistentHashRing
 from .nats_cluster import NatsCluster
 
 

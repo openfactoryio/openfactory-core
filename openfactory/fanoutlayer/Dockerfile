@@ -1,0 +1,92 @@
+# ------------------------------------------------------------------------------
+# Dockerfile for OpenFactory Asset Forwarder Service
+#
+# Base image:
+#   - python:3.13-slim (lightweight Python runtime)
+#
+# Build-time arguments:
+#   UNAME    - Linux username inside the container (default: ofa_forwarder)
+#   UID      - User ID (default: 1200)
+#   GID      - Group ID (default: 1200)
+#   VERSION  - Asset Forwarder version (default: latest)
+#
+# Installed tools:
+#   - git (for pip install from GitHub)
+#
+# Environment variables:
+#   PYTHONDONTWRITEBYTECODE=1 - Prevents Python from writing .pyc files
+#   PYTHONUNBUFFERED=1        - Ensures real-time output to logs
+#   APPLICATION_VERSION       - Asset Forwarder version passed as ARG
+#
+# Working directory:
+#   - /home/${UNAME}
+#
+# Entrypoint:
+#   - python3 -u -m asset_forwarder.asset_forwarder_service
+#
+# To build the image locally:
+#   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile openfactory/fanoutlayer
+# ------------------------------------------------------------------------------
+
+# -------------------------------
+# Stage 1: Build Stage
+# -------------------------------
+FROM python:3.13-slim AS build
+
+LABEL maintainer="Rolf Wuthrich"
+LABEL organisation="Concordia University"
+LABEL description="Docker image for OpenFactory Asset Forwarder"
+LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main/openfactory/fanoutlayer"
+
+ARG VERSION=latest
+
+# Install build-time dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy OpenFactory project
+COPY . /build/
+
+# Install Python dependencies into system site-packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Strip unnecessary files to reduce layer size
+RUN find /usr/local/lib/python3.13/site-packages -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + \
+    && find /usr/local/lib/python3.13/site-packages -name "*.pyc" -delete
+
+# -------------------------------
+# Stage 2: Runtime Stage
+# -------------------------------
+FROM python:3.13-slim
+
+ARG UNAME=ofa_forwarder
+ARG UID=1200
+ARG GID=1200
+ARG VERSION=latest
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APPLICATION_VERSION=${VERSION}
+
+# Create non-root user
+RUN groupadd --gid "${GID}" "${UNAME}" && \
+    useradd --create-home --uid "${UID}" --gid "${GID}" "${UNAME}"
+
+WORKDIR /home/${UNAME}
+
+# Install dependencies directly (or copy from build stage if needed)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy source code with correct ownership
+COPY --chown=ofa_forwarder:ofa_forwarder src asset_forwarder/
+
+USER ${UNAME}
+
+CMD ["python3", "-u", "-m", "asset_forwarder.asset_forwarder_service"]

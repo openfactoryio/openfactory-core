@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------------------------------
+# 🐳 Docker Compose file for OpenFactory Fan-out Layer
+# ---------------------------------------------------------------------------------------
+#
+# This file defines the services required to run the OpenFactory Fan-out Layer stack:
+# 1. asset-forwarder   - Streams asset data to Kafka and NATS (scalable service)
+# 2. nats              - Provides lightweight messaging backbone for coordination
+#
+# All services are connected through the 'factory-net' Docker network.
+#
+# ---------------------------------------------------------------------------------------
+# Usage (local):
+#   # Start services
+#   docker compose up -d
+#
+#   # Stop services
+#   docker compose down
+#
+#   # Scale number of forwarders (example: 3 replicas)
+#   docker compose up -d --scale asset-forwarder=3
+#
+# Usage (docker swarm):
+#   # Source environment variables from an .env file
+#   set -a && source .env && set +a
+#   # Deploy the stack
+#   docker stack deploy -c docker-compose.yml asset-fan-out-layer
+#
+#   # Scale number of forwarders (example: 3 replicas)
+#   set -a && source .env && set +a
+#   docker service scale asset-fan-out-layer_asset-forwarder=3
+#
+#   # Remove stack
+#   docker stack rm asset-fan-out-layer
+#
+# ---------------------------------------------------------------------------------------
+# Environment variables for asset-forwarder:
+#
+# Required:
+#   KAFKA_BROKER                Kafka bootstrap server
+#
+# Optional:
+#   FORWARDER_VERSION           Version tag for the asset-forwarder image (default: latest)
+#   ASSET_FORWARDER_LOG_LEVEL   Log level (default: INFO)
+#
+# Fixed (do not change unless customizing deployment):
+#   NATS_CLUSTER_C1             NATS cluster URL (default: nats://nats:4222)
+#
+# ---------------------------------------------------------------------------------------
+# Ports:
+#   NATS: 4222
+#
+# ---------------------------------------------------------------------------------------
+# External network required:
+#   factory-net
+# ---------------------------------------------------------------------------------------
+
+services:
+  asset-forwarder:
+    image: ghcr.io/openfactoryio/asset-forwarder:${FORWARDER_VERSION:-latest}
+    environment:
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - NATS_CLUSTER_C1=nats://nats:4222
+      - ASSET_FORWARDER_LOG_LEVEL=${ASSET_FORWARDER_LOG_LEVEL:-INFO}
+    networks:
+      - factory-net
+    deploy:
+      replicas: 2
+
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+    networks:
+      - factory-net
+
+networks:
+
+    factory-net:
+      external: true

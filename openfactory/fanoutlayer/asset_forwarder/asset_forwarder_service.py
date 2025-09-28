@@ -32,9 +32,10 @@ import asyncio
 import os
 import signal
 import sys
-from typing import Dict, List, Optional
+from typing import Optional
 from .logger import logger
 from .asset_forwarder import AssetForwarder
+from utils.parse_nats_clusters import parse_nats_clusters
 
 
 class AssetForwarderService:
@@ -52,32 +53,6 @@ class AssetForwarderService:
     def __init__(self) -> None:
         """ Initialize the service wrapper. """
         self.forwarder: Optional[AssetForwarder] = None
-
-    def _parse_nats_clusters(self) -> Dict[str, List[str]]:
-        """
-        Parse NATS cluster URLs from environment variables.
-
-        Environment variables must be prefixed with `NATS_CLUSTER_`, e.g.,
-        `NATS_CLUSTER_C1="nats://nats-c1-1:4222,nats://nats-c1-2:4222"`.
-
-        Returns:
-            Dict[str, List[str]]: Mapping from cluster name to list of server URLs.
-
-        Raises:
-            RuntimeError: If no NATS clusters are configured.
-        """
-        nats_clusters: Dict[str, List[str]] = {}
-        for key, value in os.environ.items():
-            if key.startswith("NATS_CLUSTER_"):
-                name = key[len("NATS_CLUSTER_"):]
-                servers = [s.strip() for s in value.split(",") if s.strip()]
-                if servers:
-                    nats_clusters[name] = servers
-
-        if not nats_clusters:
-            raise RuntimeError("No NATS clusters configured")
-
-        return nats_clusters
 
     def build_forwarder(self) -> None:
         """
@@ -108,7 +83,7 @@ class AssetForwarderService:
             "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest"),
         }
 
-        nats_clusters = self._parse_nats_clusters()
+        nats_clusters = parse_nats_clusters()
 
         self.forwarder = AssetForwarder(
             kafka_config=kafka_conf,

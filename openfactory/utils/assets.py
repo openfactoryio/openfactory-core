@@ -38,7 +38,7 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
         bootstrap_servers (str): Kafka bootstrap server address.
         docker_service (str): Docker service name associated with the asset.
     """
-    producer = AssetProducer(asset_uuid, ksqlClient, bootstrap_servers)
+    producer = AssetProducer(ksqlClient, bootstrap_servers)
 
     producer.send_asset_attribute(
         AssetAttribute(id="AssetType", value=asset_type, type="OpenFactory", tag="AssetType")
@@ -87,7 +87,7 @@ def deregister_asset(asset_uuid: str,
         ksqlClient: (KSQLDBClient) KSQL client for executing queries.
         bootstrap_servers (str): Kafka bootstrap server address.
     """
-    producer = AssetProducer(asset_uuid, ksqlClient, bootstrap_servers)
+    producer = AssetProducer(ksqlClient, bootstrap_servers)
 
     # UNAVAILABLE message
     producer.send_asset_attribute(

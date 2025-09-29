@@ -27,7 +27,7 @@ class TestDeregisterAsset(unittest.TestCase):
         deregister_asset(asset_uuid, mock_ksql_client, bootstrap_servers)
 
         # Check instantiation
-        MockAssetProducer.assert_called_once_with(asset_uuid, mock_ksql_client, bootstrap_servers)
+        MockAssetProducer.assert_called_once_with(mock_ksql_client, bootstrap_servers)
 
         # Check send_asset_attribute calls
         calls = mock_producer_instance.send_asset_attribute.call_args_list

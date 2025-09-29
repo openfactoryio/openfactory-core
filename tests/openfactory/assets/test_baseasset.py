@@ -33,6 +33,9 @@ class TestBaseAsset(TestCase):
     def setUp(self):
         self.ksql_mock = Mock(spec=KSQLDBClient)
 
+        # Reset singleton before each test
+        BaseAsset._shared_producer = None
+
         # Freeze datetime for deterministic AssetAttribute.timestamp
         self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
         datetime_patcher = patch("openfactory.assets.utils.datetime")
@@ -52,7 +55,7 @@ class TestBaseAsset(TestCase):
 
         # Confirm mock constructor was called
         MockAssetProducer.assert_called_once_with(
-            'some_id', ksqlClient=self.ksql_mock, bootstrap_servers='MockedBroker'
+            ksqlClient=self.ksql_mock, bootstrap_servers='MockedBroker'
         )
         # Confirm the asset is using the mock instance
         self.assertEqual(asset.producer, MockAssetProducer.return_value)
@@ -105,17 +108,6 @@ class TestBaseAsset(TestCase):
 
         with self.assertRaises(TypeError):
             InvalidConsumer('some_id', self.ksql_mock)
-
-    def test_asset_uuid_not_implemented(self, MockAssetProducer):
-        """ Test if missing asset_uuid implementation raise error """
-        class NoAssetUUID(BaseAsset):
-            KSQL_ASSET_TABLE = "assets"
-            KSQL_ASSET_ID = "asset_uuid"
-            ASSET_ID = "uuid-123"
-            ASSET_CONSUMER_CLASS = KafkaAssetConsumer
-
-        with self.assertRaises(NotImplementedError):
-            _ = NoAssetUUID(self.ksql_mock)
 
     def test_type_returns_unavailable_when_empty(self, MockAssetProducer):
         """ Test if asset.type returns 'UNAVAILABLE' when the ksql query yields no results """
@@ -338,7 +330,7 @@ class TestBaseAsset(TestCase):
         attr = AssetAttribute(id='temperature', value=25, tag="Temperature", type="Samples")
         asset.temperature = attr
 
-        mock_producer.send_asset_attribute.assert_called_once_with(attr)
+        mock_producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
 
     def test_setattr_with_wrong_asset_attribute_id(self, MockAssetProducer):
         """ Test setting a defined asset attribute with AssetAttribute instance having wrong id raises exception """
@@ -388,7 +380,7 @@ class TestBaseAsset(TestCase):
 
         mock_producer.send_asset_attribute.assert_called_once()
         expected = AssetAttribute(id="temperature", value=30, tag="Temperature", type="Samples")
-        mock_producer.send_asset_attribute.assert_called_once_with(expected)
+        mock_producer.send_asset_attribute.assert_called_once_with("uuid-123", expected)
 
     def test_getattr_samples(self, MockAssetProducer):
         """ Test __getattr__ returns float for 'Samples' type """
@@ -555,7 +547,7 @@ class TestBaseAsset(TestCase):
             type="OpenFactory",
             tag="AssetsReferences"
         )
-        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
+        asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
     def test_add_reference_above_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_above when existing references are present """
@@ -578,7 +570,7 @@ class TestBaseAsset(TestCase):
             type="OpenFactory",
             tag="AssetsReferences"
         )
-        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
+        asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
     def test_add_reference_below_no_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when no existing references are present """
@@ -601,7 +593,7 @@ class TestBaseAsset(TestCase):
             type="OpenFactory",
             tag="AssetsReferences"
         )
-        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
+        asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
     def test_add_reference_below_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when existing references are present """
@@ -624,7 +616,7 @@ class TestBaseAsset(TestCase):
             type="OpenFactory",
             tag="AssetsReferences"
         )
-        asset.producer.send_asset_attribute.assert_called_once_with(expected_attr)
+        asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
     @patch('openfactory.assets.asset_base.uuid.uuid4')
     @patch('openfactory.assets.asset_base.time.time')

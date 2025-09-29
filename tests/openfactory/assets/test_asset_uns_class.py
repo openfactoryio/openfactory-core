@@ -51,7 +51,6 @@ class TestAssetUNS(unittest.TestCase):
         """ Test _get_reference_list returns list of UUIDs """
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.side_effect = [
-            [{'ASSET_UUID': 'uuid-123'}],  # asset_uuid lookup
             [{'VALUE': 'ref_001, ref_002'}]  # references query
         ]
 
@@ -85,10 +84,8 @@ class TestAssetUNS(unittest.TestCase):
     @patch('openfactory.assets.asset_uns_class.AssetUNS')
     def test_get_reference_list_returns_assets(self, MockAssetUNS, MockAssetProducer):
         """ Test _get_reference_list returns AssetUNS instances when as_assets=True """
-        mock_map = [{'ASSET_UUID': 'uuid-123'}]
-        mock_df = [{'VALUE': 'uns_010, uns_020'}]
         mock_ksqlClient = MagicMock()
-        mock_ksqlClient.query.side_effect = [mock_map, mock_df]
+        mock_ksqlClient.query.side_effect = [[{'VALUE': 'uns_010, uns_020'}]]
 
         # Setup return values for mocked AssetUNS constructor
         mock_asset_1 = MagicMock()

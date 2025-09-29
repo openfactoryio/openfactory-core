@@ -47,8 +47,10 @@ class BaseAsset:
         ksql (KSQLDBClient): Client for interacting with ksqlDB.
         bootstrap_servers (str): Kafka bootstrap server address.
         ASSET_CONSUMER_CLASS (KafkaAssetConsumer|KafkaAssetUNSConsumer): Kafka consumer class for reading messages from Asset strean.
-        producer (AssetProducer): Kafka producer instance for sending asset messages.
+        producer (AssetProducer): Shared Kafka producer instance used to publish asset messages (singleton across all ``BaseAsset`` subclasses).
     """
+
+    _shared_producer: AssetProducer = None   # class-level singleton producer
 
     KSQL_ASSET_TABLE = None
     KSQL_ASSET_ID = None
@@ -76,7 +78,16 @@ class BaseAsset:
 
         super().__setattr__('ksql', ksqlClient)
         super().__setattr__('bootstrap_servers', bootstrap_servers)
-        super().__setattr__('producer', AssetProducer(self.asset_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers))
+
+        # Initialize the shared producer once
+        if BaseAsset._shared_producer is None:
+            BaseAsset._shared_producer = AssetProducer(
+                ksqlClient=ksqlClient,
+                bootstrap_servers=bootstrap_servers
+            )
+
+        # Use shared producer
+        super().__setattr__('producer', BaseAsset._shared_producer)
 
     @property
     def asset_uuid(self) -> str:
@@ -305,12 +316,13 @@ class BaseAsset:
         if isinstance(value, AssetAttribute):
             if value.id != name:
                 raise OFAException(f"The AssetAttribute.id {value.id} does not match the attribute {name}")
-            self.producer.send_asset_attribute(value)
+            self.producer.send_asset_attribute(self.asset_uuid, value)
             return
 
         # send kafka message
         attr = self.__getattr__(name)
         self.producer.send_asset_attribute(
+            self.asset_uuid,
             AssetAttribute(
                 id=name,
                 value=value,
@@ -325,7 +337,7 @@ class BaseAsset:
         Args:
             asset_attribute (AssetAttribute): The attribute to be added.
         """
-        self.producer.send_asset_attribute(asset_attribute)
+        self.producer.send_asset_attribute(self.asset_uuid, asset_attribute)
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[Union[str, Self]]:
         """
@@ -401,6 +413,7 @@ class BaseAsset:
             references = f"{new_reference}, {result[0]['VALUE'].strip()}"
 
         self.producer.send_asset_attribute(
+            self.asset_uuid,
             AssetAttribute(
                 id=f"references_{direction}",
                 value=references,

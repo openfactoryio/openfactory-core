@@ -30,7 +30,7 @@ class TestRegisterAsset(unittest.TestCase):
                        mock_ksql_client, bootstrap_servers, docker_service)
 
         # Check that AssetProducer is instantiated correctly
-        MockAssetProducer.assert_called_once_with(asset_uuid, mock_ksql_client, bootstrap_servers)
+        MockAssetProducer.assert_called_once_with(mock_ksql_client, bootstrap_servers)
 
         calls = mock_producer_instance.send_asset_attribute.call_args_list
 

@@ -4,9 +4,17 @@
 #
 # This file defines the services required to run the OpenFactory Fan-out Layer stack:
 # 1. asset-forwarder   - Streams asset data to Kafka and NATS (scalable service)
-# 2. nats              - Provides lightweight messaging backbone for coordination
+# 2. asset-router      - Provides deterministic routing of asset IDs to NATS clusters
+# 3. nats              - Provides lightweight messaging backbone for coordination
 #
 # All services are connected through the 'factory-net' Docker network.
+#
+# ---------------------------------------------------------------------------------------
+# Intended usage:
+#   - This compose file is designed for developers to easily start and test the
+#     OpenFactory Fan-out Layer locally.
+#   - It can also serve as a starting point for production deployment with
+#     additional configuration.
 #
 # ---------------------------------------------------------------------------------------
 # Usage (local):
@@ -46,7 +54,15 @@
 #   NATS_CLUSTER_C1             NATS cluster URL (default: nats://nats:4222)
 #
 # ---------------------------------------------------------------------------------------
+# Environment variables for asset-router:
+#
+# Optional:
+#   ASSET_ROUTER_VERSION        Version tag for the asset-router image (default: latest)
+#   ASSET_ROUTER_URL            NATS cluster URL to route assets to (default: nats://nats:4222)
+#
+# ---------------------------------------------------------------------------------------
 # Ports:
+#   asset-router: 8002
 #   NATS: 4222
 #
 # ---------------------------------------------------------------------------------------

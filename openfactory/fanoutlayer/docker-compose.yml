@@ -56,7 +56,7 @@
 
 services:
   asset-forwarder:
-    image: ghcr.io/openfactoryio/asset-forwarder:${FORWARDER_VERSION:-latest}
+    image: ghcr.io/openfactoryio/asset-forwarder:${ASSET_FORWARDER_VERSION:-latest}
     environment:
       - KAFKA_BROKER=${KAFKA_BROKER}
       - NATS_CLUSTER_C1=nats://nats:4222
@@ -65,6 +65,17 @@ services:
       - factory-net
     deploy:
       replicas: 2
+
+  asset-router:
+    image: ghcr.io/openfactoryio/asset-router:${ASSET_ROUTER_VERSION:-latest}
+    environment:
+      - NATS_CLUSTER_C1=${ASSET_ROUTER_URL:-nats://nats:4222}
+    ports:
+      - "8002:8002"
+    deploy:
+      replicas: 2
+    networks:
+      - factory-net
 
   nats:
     image: nats:latest

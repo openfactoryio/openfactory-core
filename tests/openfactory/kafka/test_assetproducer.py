@@ -23,15 +23,13 @@ class TestAssetProducer(unittest.TestCase):
 
     def test_init_sets_attributes_correctly(self):
         """ Test constructor """
-        asset_uuid = "asset-xyz"
         expected_topic = "ASSETS_STREAM"
 
         mock_ksql = MagicMock()
         mock_ksql.get_kafka_topic.return_value = expected_topic
 
-        producer = AssetProducer(asset_uuid, mock_ksql, bootstrap_servers="test-broker:9092")
+        producer = AssetProducer(mock_ksql, bootstrap_servers="test-broker:9092")
 
-        self.assertEqual(producer.asset_uuid, asset_uuid)
         self.assertEqual(producer.ksql, mock_ksql)
         self.assertEqual(producer.topic, expected_topic)
 
@@ -41,7 +39,7 @@ class TestAssetProducer(unittest.TestCase):
         mock_ksql = MagicMock()
         mock_ksql.get_kafka_topic.return_value = "ASSETS_STREAM"
         asset_uuid = "asset-123"
-        producer = AssetProducer(asset_uuid, mock_ksql)
+        producer = AssetProducer(mock_ksql)
 
         # Patch methods on the instance, not the class
         producer.produce = MagicMock()
@@ -60,7 +58,7 @@ class TestAssetProducer(unittest.TestCase):
             }
         }
 
-        producer.send_asset_attribute(mock_attr)
+        producer.send_asset_attribute(asset_uuid, mock_attr)
 
         producer.produce.assert_called_once_with(
             topic="ASSETS_STREAM",

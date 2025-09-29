@@ -1,0 +1,22 @@
+# ------------------------------------------------------------------------------
+# 🐳 docker-compose.override.yml
+# ------------------------------------------------------------------------------
+# Local deployment overrides (non-Swarm)
+# ------------------------------------------------------------------------------
+
+services:
+  asset-forwarder:
+    build:
+        context: .
+        dockerfile: Dockerfile.asset_forwarder
+    image: openfactoryio/asset-forwarder:local
+    restart: unless-stopped
+
+  asset-router:
+    build:
+        context: .
+        dockerfile: Dockerfile.asset_router
+    image: openfactoryio/asset-router:local
+    deploy:
+      replicas: 1
+    restart: unless-stopped

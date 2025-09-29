@@ -1,0 +1,94 @@
+# ------------------------------------------------------------------------------
+# Dockerfile for OpenFactory Asset Router Service
+#
+# Base image:
+#   - python:3.13-slim (lightweight Python runtime)
+#
+# Build-time arguments:
+#   UNAME    - Linux username inside the container (default: ofa_router)
+#   UID      - User ID (default: 1300)
+#   GID      - Group ID (default: 1300)
+#   VERSION  - Asset Router version (default: latest)
+#
+# Installed tools:
+#   - git (for pip install from GitHub if needed)
+#
+# Environment variables:
+#   PYTHONDONTWRITEBYTECODE=1 - Prevents Python from writing .pyc files
+#   PYTHONUNBUFFERED=1        - Ensures real-time output to logs
+#   APPLICATION_VERSION       - Asset Router version passed as ARG
+#
+# Working directory:
+#   - /home/${UNAME}
+#
+# Entrypoint:
+#   - python3 -u -m asset_router.asset_router
+#
+# To build the image locally:
+#   docker build -t asset-router -f openfactory/fanoutlayer/Dockerfile.asset_router openfactory/fanoutlayer
+# ------------------------------------------------------------------------------
+
+# -------------------------------
+# Stage 1: Build Stage
+# -------------------------------
+FROM python:3.13-slim AS build
+
+LABEL maintainer="Rolf Wuthrich"
+LABEL organisation="Concordia University"
+LABEL description="Docker image for OpenFactory Asset Router"
+LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main/openfactory/fanoutlayer"
+
+ARG VERSION=latest
+
+# Install build-time dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy asset_router and utils
+COPY asset_router/ ./asset_router/
+COPY utils/ ./utils/
+COPY asset_router/requirements.txt ./requirements.txt
+
+# Install Python dependencies into system site-packages
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Strip unnecessary files to reduce layer size
+RUN find /usr/local/lib/python3.13/site-packages -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + \
+    && find /usr/local/lib/python3.13/site-packages -name "*.pyc" -delete
+
+# -------------------------------
+# Stage 2: Runtime Stage
+# -------------------------------
+FROM python:3.13-slim
+
+ARG UNAME=ofa_router
+ARG UID=1300
+ARG GID=1300
+ARG VERSION=latest
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APPLICATION_VERSION=${VERSION}
+
+# Create non-root user
+RUN groupadd --gid "${GID}" "${UNAME}" && \
+    useradd --create-home --uid "${UID}" --gid "${GID}" "${UNAME}"
+
+WORKDIR /home/${UNAME}
+
+# Copy installed dependencies from build stage
+COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=build /usr/local/bin /usr/local/bin
+
+# Copy source code with correct ownership
+COPY --chown=ofa_router:ofa_router asset_router/ ./openfactory/fanoutlayer/asset_router/
+COPY --chown=ofa_router:ofa_router utils/ ./openfactory/fanoutlayer/utils/
+
+USER ${UNAME}
+
+CMD ["python3", "-u", "-m", "openfactory.fanoutlayer.asset_router.asset_router"]

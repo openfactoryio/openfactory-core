@@ -19,27 +19,26 @@ class AssetProducer(Producer):
         asset_uuid (str): Unique identifier of the asset being tracked.
     """
 
-    def __init__(self, asset_uuid: str, ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER) -> None:
+    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER) -> None:
         """
         Initializes the AssetProducer.
 
         Args:
-            asset_uuid (str): UUID of the asset this producer is associated with.
             ksqlClient (KSQLDBClient): Client to retrieve Kafka topic info, typically a wrapper over ksqlDB.
             bootstrap_servers (str): Kafka bootstrap server address, defaults to value from config.
         """
         super().__init__({'bootstrap.servers': bootstrap_servers})
         self.ksql = ksqlClient
         self.topic = self.ksql.get_kafka_topic('ASSETS_STREAM')
-        self.asset_uuid = asset_uuid
 
-    def send_asset_attribute(self, assetAttribute: AssetAttribute) -> None:
+    def send_asset_attribute(self, asset_uuid: str, assetAttribute: AssetAttribute) -> None:
         """
         Sends a Kafka message representing an asset attribute.
 
         Constructs a JSON message from the given asset attribute and sends it to the Kafka ASSETS_STREAM topic.
 
         Args:
+            asset_uuid (str): UUID of the asset this producer is associated with.
             assetAttribute (AssetAttribute): The asset attribute object containing value, type, tag, and timestamp.
         """
         msg = {
@@ -52,6 +51,6 @@ class AssetProducer(Producer):
                 }
         }
         self.produce(topic=self.topic,
-                     key=self.asset_uuid,
+                     key=asset_uuid,
                      value=json.dumps(msg))
         self.flush()

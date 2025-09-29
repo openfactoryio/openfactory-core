@@ -25,7 +25,7 @@ Forwarder:
   ASSET_FORWARDER_QUEUE_SIZE            (default: 10000)
   ASSET_FORWARDER_CONCURRENCY           (default: 20)
   ASSET_FORWARDER_MAX_RETRIES           (default: 5)
-  ASSET_FORWARDER_CONSISTENT_REPLICAS   (default: 128)
+  HASH_RING_REPLICAS                    (default: 128)
 """
 
 import asyncio
@@ -68,7 +68,7 @@ class AssetForwarderService:
             ASSET_FORWARDER_QUEUE_SIZE: queue size (default: 10000)
             ASSET_FORWARDER_CONCURRENCY: number of async workers (default: 20)
             ASSET_FORWARDER_MAX_RETRIES: max retries for NATS publish (default: 5)
-            ASSET_FORWARDER_CONSISTENT_REPLICAS: consistent hash replicas (default: 128)
+            HASH_RING_REPLICAS: consistent hash replicas (default: 128)
         """
         logger.info('Building forwarder')
         kafka_broker = os.environ["KAFKA_BROKER"]
@@ -93,7 +93,7 @@ class AssetForwarderService:
             queue_maxsize=int(os.getenv("ASSET_FORWARDER_QUEUE_SIZE", "10000")),
             nats_publish_concurrency=int(os.getenv("ASSET_FORWARDER_CONCURRENCY", "20")),
             max_retries=int(os.getenv("ASSET_FORWARDER_MAX_RETRIES", "5")),
-            consistent_replicas=int(os.getenv("ASSET_FORWARDER_CONSISTENT_REPLICAS", "128")),
+            consistent_replicas=int(os.getenv("HASH_RING_REPLICAS", "128")),
         )
 
     async def run(self) -> None:

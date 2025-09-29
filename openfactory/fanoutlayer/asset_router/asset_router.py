@@ -16,8 +16,8 @@ Environment Variables
 import os
 from typing import Dict
 from fastapi import FastAPI, HTTPException
-from utils.hash_ring import ConsistentHashRing
-from utils.parse_nats_clusters import parse_nats_clusters
+from openfactory.fanoutlayer.utils.hash_ring import ConsistentHashRing
+from openfactory.fanoutlayer.utils.parse_nats_clusters import parse_nats_clusters
 
 app = FastAPI(title="Asset Router for NATS")
 
@@ -69,16 +69,16 @@ def get_asset_nats_route(asset_id: str) -> Dict[str, str]:
 # ---------------------------------------------------------------------------------------
 # Entry point
 #
-# Run it with (from the openfactory/fanoutlayer folder)
+# Run it with (from the project root)
 #
-#  python -m asset_router.asset_router
+#  python -m openfactory.fanoutlayer.asset_router.asset_router
 #
 # ---------------------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "asset_router.asset_router:app",
+        "openfactory.fanoutlayer.asset_router.asset_router:app",
         host="0.0.0.0",
         port=8002,
     )

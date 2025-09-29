@@ -1,1 +1,1 @@
-from .src.hash_ring import ConsistentHashRing
+from openfactory.fanoutlayer.utils.hash_ring import ConsistentHashRing

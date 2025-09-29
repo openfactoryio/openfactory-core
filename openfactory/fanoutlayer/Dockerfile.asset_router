@@ -86,9 +86,9 @@ COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3
 COPY --from=build /usr/local/bin /usr/local/bin
 
 # Copy source code with correct ownership
-COPY --chown=ofa_router:ofa_router asset_router/ ./asset_router/
-COPY --chown=ofa_router:ofa_router utils/ ./utils/
+COPY --chown=ofa_router:ofa_router asset_router/ ./openfactory/fanoutlayer/asset_router/
+COPY --chown=ofa_router:ofa_router utils/ ./openfactory/fanoutlayer/utils/
 
 USER ${UNAME}
 
-CMD ["python3", "-u", "-m", "asset_router.asset_router"]
+CMD ["python3", "-u", "-m", "openfactory.fanoutlayer.asset_router.asset_router"]

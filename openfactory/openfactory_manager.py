@@ -233,10 +233,11 @@ class OpenFactoryManager(OpenFactory):
         if devices is None:
             return
 
+        deployed_devices = self.assets_uuid()
         for dev_name, device in devices.items():
             user_notify.info(f"{dev_name} - {device.uuid}:")
 
-            if device.uuid in self.devices_uuid():
+            if device.uuid in deployed_devices:
                 user_notify.info(f"Device {device.uuid} exists already and was not deployed")
                 continue
 

@@ -169,6 +169,29 @@ class TestOPCUAConnector(unittest.TestCase):
         mock_deregister.assert_not_called()
         mock_notify.success.assert_not_called()
 
+    @patch("openfactory.connectors.opcua.opcua_connector.config.OPCUA_CONNECTOR_COORDINATOR", "http://mock-coordinator")
+    @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")
+    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
+    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
+    def test_tear_down_http_error_with_detail(self, mock_notify, mock_deregister, mock_delete):
+        """ Tear down should surface FastAPI detail message on HTTPError """
+        from requests.exceptions import HTTPError
+
+        # Mock response with JSON detail
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = HTTPError("404 Client Error")
+        mock_response.json.return_value = {"detail": "Device DEVICE-123 not found"}
+        mock_delete.return_value = mock_response
+
+        with self.assertRaises(OFAException) as cm:
+            self.connector.tear_down(self.device.uuid)
+
+        # Assert the detail text is included in the raised exception
+        self.assertIn("Device DEVICE-123 not found", str(cm.exception))
+
+        mock_deregister.assert_not_called()
+        mock_notify.success.assert_not_called()
+
     @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")
     @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")

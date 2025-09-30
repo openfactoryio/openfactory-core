@@ -41,16 +41,19 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
     producer = AssetProducer(ksqlClient, bootstrap_servers)
 
     producer.send_asset_attribute(
+        asset_uuid,
         AssetAttribute(id="AssetType", value=asset_type, type="OpenFactory", tag="AssetType")
     )
 
     producer.send_asset_attribute(
+        asset_uuid,
         AssetAttribute(id="DockerService", value=docker_service, type="OpenFactory", tag="DockerService")
     )
 
     # Initialize references
     for ref_id in ["references_below", "references_above"]:
         producer.send_asset_attribute(
+            asset_uuid,
             AssetAttribute(id=ref_id, value="", type="OpenFactory", tag="AssetsReferences")
         )
 
@@ -58,9 +61,11 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
         # Set UNS levels
         for level_name, level_value in uns['levels'].items():
             producer.send_asset_attribute(
+                asset_uuid,
                 AssetAttribute(id=level_name, value=level_value, type="OpenFactory", tag="UNSLevel")
             )
         producer.send_asset_attribute(
+            asset_uuid,
             AssetAttribute(id='uns_id', value=uns['uns_id'], type="OpenFactory", tag="UNSId")
         )
         # Set UNS map
@@ -91,12 +96,14 @@ def deregister_asset(asset_uuid: str,
 
     # UNAVAILABLE message
     producer.send_asset_attribute(
+        asset_uuid,
         AssetAttribute(id="avail", value="UNAVAILABLE", type="Events", tag="Availability")
     )
 
     # remove references
     for ref_id in ["references_below", "references_above"]:
         producer.send_asset_attribute(
+            asset_uuid,
             AssetAttribute(id=ref_id, value="", type="OpenFactory", tag="AssetsReferences")
         )
 

@@ -121,12 +121,12 @@ class OPCUAConnector(Connector):
         url = f"{config.OPCUA_CONNECTOR_COORDINATOR}/unregister_device/{device_uuid}"
         try:
             response = requests.delete(url)
-            response.raise_for_status()
             deregister_asset(
                 device_uuid + '-PRODUCER',
                 ksqlClient=self.ksql,
                 bootstrap_servers=self.bootstrap_servers
             )
+            response.raise_for_status()
             user_notify.success(f"OPC UA producer for device {device_uuid} shut down successfully")
 
         except requests.exceptions.ConnectionError:
@@ -141,7 +141,7 @@ class OPCUAConnector(Connector):
                 error_detail = response.text or str(err)
 
             raise OFAException(
-                f"Failed to unregister device {device_uuid}: {error_detail} on OPC UA Coordinator"
+                f"Failed to unregister device {device_uuid} on OPC UA Coordinator: {error_detail}"
             ) from err
         except requests.exceptions.RequestException as err:
             raise OFAException(err)

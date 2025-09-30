@@ -122,9 +122,26 @@ class OPCUAConnector(Connector):
         try:
             response = requests.delete(url)
             response.raise_for_status()
-            deregister_asset(device_uuid + '-PRODUCER', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+            deregister_asset(
+                device_uuid + '-PRODUCER',
+                ksqlClient=self.ksql,
+                bootstrap_servers=self.bootstrap_servers
+            )
             user_notify.success(f"OPC UA producer for device {device_uuid} shut down successfully")
+
         except requests.exceptions.ConnectionError:
             raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")
+
+        except requests.exceptions.HTTPError as err:
+            # Try to extract the detail from the response body
+            try:
+                error_detail = response.json().get("detail", response.text)
+            except ValueError:
+                # Fallback if not JSON
+                error_detail = response.text or str(err)
+
+            raise OFAException(
+                f"Failed to unregister device {device_uuid}: {error_detail} on OPC UA Coordinator"
+            ) from err
         except requests.exceptions.RequestException as err:
             raise OFAException(err)

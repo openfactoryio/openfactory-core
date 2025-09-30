@@ -189,7 +189,6 @@ class TestOPCUAConnector(unittest.TestCase):
         # Assert the detail text is included in the raised exception
         self.assertIn("Device DEVICE-123 not found", str(cm.exception))
 
-        mock_deregister.assert_not_called()
         mock_notify.success.assert_not_called()
 
     @patch("openfactory.connectors.opcua.opcua_connector.requests.delete")

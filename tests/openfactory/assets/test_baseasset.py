@@ -1,5 +1,4 @@
 import json
-from itertools import chain, repeat
 from unittest import TestCase
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
@@ -38,7 +37,7 @@ class TestBaseAsset(TestCase):
 
         # Freeze datetime for deterministic AssetAttribute.timestamp
         self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
-        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        datetime_patcher = patch("openfactory.assets.utils.time_methods.datetime")
         self.mock_datetime = datetime_patcher.start()
         self.addCleanup(datetime_patcher.stop)
 
@@ -46,6 +45,11 @@ class TestBaseAsset(TestCase):
         self.mock_datetime.now.return_value = self.fixed_ts
         # Allow datetime(...) constructor to still work
         self.mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        # Patch NATSSubsriber for all tests
+        nats_patcher = patch("openfactory.assets.asset_base.NATSSubscriber")
+        self.MockNATSSubscriber = nats_patcher.start()
+        self.addCleanup(nats_patcher.stop)
 
     def test_valid_subclass(self, MockAssetProducer):
         """ Test valid subclass """
@@ -623,8 +627,7 @@ class TestBaseAsset(TestCase):
     def test_wait_until_attribute_matches_initially(self, mock_time, mock_uuid, MockAssetProducer):
         """ Test wait_until when the attribute matches initially """
         # Mock the Asset object
-        mock_ksql = MagicMock()
-        asset = ValidAsset("test_uuid", ksqlClient=mock_ksql)
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
 
         # Mock the attribute value to match
         mock_attribute = MagicMock()
@@ -632,143 +635,68 @@ class TestBaseAsset(TestCase):
         asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
         # Call the method
-        result = asset.wait_until(attribute="test_attribute", value="expected_value")
+        result = asset.wait_until(attribute_id="test_attribute", value="expected_value")
 
         # Assert the result is True
         self.assertTrue(result)
         asset.__getattr__.assert_called_once_with("test_attribute")
 
-    @patch("openfactory.assets.asset_base.delete_consumer_group")
-    def test_wait_until_matches_kafka_message(self, mock_delete_group, MockAssetProducer):
-        """ Test wait_until returns True when a Kafka message matches (In case of none-Samples DataItems) """
+    def test_wait_until_matches_nats_message(self, MockAssetProducer):
+        """ Test wait_until returns True when a NATS message matches the desired attribute/value """
 
-        # Simulate a Kafka message that matches the desired attribute and value
-        mock_msg = Mock()
-        mock_msg.key.return_value = b"test_uuid"
-        mock_msg.value.return_value = json.dumps({
-            "id": "test_attribute",
-            "type": "Events",
-            "value": "expected_value"
-        }).encode("utf-8")
-        mock_msg.error.return_value = None
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        attribute_id = "test_attribute"
+        expected_value = 42
 
-        # Create mock Kafka consumer that yields that message
-        mock_consumer_instance = Mock()
-        mock_consumer_instance.poll.side_effect = [mock_msg]
+        # Mock __getattr__ to return a dummy attribute initially
+        mock_attribute = MagicMock()
+        mock_attribute.value = "not_expected_value"
+        asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
-        # Create dummy consumer class
-        class DummyKafkaConsumer(KafkaAssetConsumer):
-            def __init__(self, *args, **kwargs):
-                self.consumer = mock_consumer_instance
+        # Patch the NATS consumer start/stop
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start, \
+             patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
 
-        # Subclass BaseAsset with correct consumer
-        class AssetWithConsumer(BaseAsset):
-            KSQL_ASSET_TABLE = "assets"
-            KSQL_ASSET_ID = "asset_uuid"
-            ASSET_CONSUMER_CLASS = DummyKafkaConsumer
+            def fake_start(subject, callback, sub_key):
+                # Simulate a NATS message with the expected value
+                callback(f"{asset.asset_uuid.upper()}.{attribute_id}", {"type": "Samples", "value": expected_value})
 
-            def __init__(self, asset_id, ksqlClient, bootstrap_servers="mock_broker"):
-                object.__setattr__(self, "ASSET_ID", asset_id)
-                super().__init__(ksqlClient, bootstrap_servers)
+            mock_start.side_effect = fake_start
 
-            @property
-            def asset_uuid(self):
-                return self.ASSET_ID
+            result = asset.wait_until(attribute_id=attribute_id, value=expected_value, timeout=1)
 
-            def __getattr__(self, attr):
-                return Mock(value="not_expected_value")  # simulate initial mismatch
+            # Assertions
+            assert result is True
+            asset.__getattr__.assert_called_with(attribute_id)
+            mock_start.assert_called_once()
+            mock_stop.assert_called_once()
 
-        asset = AssetWithConsumer("test_uuid", ksqlClient=Mock())
-        result = asset.wait_until(attribute="test_attribute", value='expected_value', timeout=1)
+    def test_wait_until_times_out_nats(self, MockAssetProducer):
+        """ Test wait_until returns False on timeout when no NATS message matches """
 
-        assert result is True
-        mock_consumer_instance.close.assert_called_once()
-        mock_delete_group.assert_called_once()
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        attribute_id = "temperature"
+        expected_value = 42.0
 
-    @patch("openfactory.assets.asset_base.delete_consumer_group")
-    def test_wait_until_matches_kafka_samples_message(self, mock_delete_group, MockAssetProducer):
-        """ Test wait_until returns True when a Kafka message matches (In case of Samples DataItems) """
+        # Mock __getattr__ to simulate initial mismatch
+        mock_attribute = MagicMock()
+        mock_attribute.value = "not_expected_value"
+        asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
-        # Simulate a Kafka message that matches the desired attribute and value
-        mock_msg = Mock()
-        mock_msg.key.return_value = b"test_uuid"
-        mock_msg.value.return_value = json.dumps({
-            "id": "temperature",
-            "type": "Samples",
-            "value": "42.0"
-        }).encode("utf-8")
-        mock_msg.error.return_value = None
+        # Patch NATS start/stop
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start, \
+             patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
 
-        # Create mock Kafka consumer that yields that message
-        mock_consumer_instance = Mock()
-        mock_consumer_instance.poll.side_effect = [mock_msg]
+            # Do not call the callback, simulating no matching message
+            mock_start.side_effect = lambda subject, callback, sub_key: None
 
-        # Create dummy consumer class
-        class DummyKafkaConsumer(KafkaAssetConsumer):
-            def __init__(self, *args, **kwargs):
-                self.consumer = mock_consumer_instance
+            result = asset.wait_until(attribute_id=attribute_id, value=expected_value, timeout=0.5)
 
-        # Subclass BaseAsset with correct consumer
-        class AssetWithConsumer(BaseAsset):
-            KSQL_ASSET_TABLE = "assets"
-            KSQL_ASSET_ID = "asset_uuid"
-            ASSET_CONSUMER_CLASS = DummyKafkaConsumer
-
-            def __init__(self, asset_id, ksqlClient, bootstrap_servers="mock_broker"):
-                object.__setattr__(self, "ASSET_ID", asset_id)
-                super().__init__(ksqlClient, bootstrap_servers)
-
-            @property
-            def asset_uuid(self):
-                return self.ASSET_ID
-
-            def __getattr__(self, attr):
-                return Mock(value="not_42")  # simulate initial mismatch
-
-        asset = AssetWithConsumer("test_uuid", ksqlClient=Mock())
-        result = asset.wait_until(attribute="temperature", value=42.0, timeout=1)
-
-        assert result is True
-        mock_consumer_instance.close.assert_called_once()
-        mock_delete_group.assert_called_once()
-
-    @patch("openfactory.assets.asset_base.delete_consumer_group")
-    def test_wait_until_times_out(self, mock_delete_group, MockAssetProducer):
-        """ Test wait_until returns False on timeout with no matching Kafka message """
-
-        # Simulated Kafka consumer that always returns None (no messages)
-        mock_consumer_instance = Mock()
-        mock_consumer_instance.poll.return_value = None
-
-        # Dummy Kafka consumer class that injects the mock consumer
-        class DummyKafkaConsumer(KafkaAssetConsumer):
-            def __init__(self, *args, **kwargs):
-                self.consumer = mock_consumer_instance
-
-        # Subclass of BaseAsset using the dummy consumer
-        class AssetWithTimeout(BaseAsset):
-            KSQL_ASSET_TABLE = "assets"
-            KSQL_ASSET_ID = "asset_uuid"
-            ASSET_CONSUMER_CLASS = DummyKafkaConsumer
-
-            def __init__(self, asset_id, ksqlClient, bootstrap_servers="mock_broker"):
-                object.__setattr__(self, "ASSET_ID", asset_id)
-                super().__init__(ksqlClient, bootstrap_servers)
-
-            @property
-            def asset_uuid(self):
-                return self.ASSET_ID
-
-            def __getattr__(self, attr):
-                return Mock(value="not_42")  # initial mismatch
-
-        # Instantiate asset and invoke wait_until with short timeout
-        asset = AssetWithTimeout("uuid-timeout", ksqlClient=Mock())
-        result = asset.wait_until(attribute="temperature", value=42.0, timeout=1)
-
-        assert result is False
-        mock_consumer_instance.close.assert_called_once()
-        mock_delete_group.assert_called_once()
+            # Assertions
+            assert result is False
+            asset.__getattr__.assert_called_with(attribute_id)
+            mock_start.assert_called_once()
+            mock_stop.assert_called_once()
 
     def test_wait_until_ksqldb_matches(self, MockAssetProducer):
         """ Test wait_until with use_ksqlDB=True returns True when ksqlDB eventually matches """
@@ -776,7 +704,7 @@ class TestBaseAsset(TestCase):
         asset.__getattr__ = MagicMock(side_effect=[MagicMock(value="initial"), MagicMock(value="target")])
 
         # Test when use_ksqlDB is True
-        result = asset.wait_until(attribute="test_attribute", value="target", timeout=10, use_ksqlDB=True)
+        result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=10, use_ksqlDB=True)
         self.assertTrue(result)
 
     def test_wait_until_ksqldb_timeout(self, MockAssetProducer):
@@ -785,42 +713,186 @@ class TestBaseAsset(TestCase):
         asset.__getattr__ = MagicMock(return_value=MagicMock(value="initial"))
 
         # Test timeout when use_ksqlDB is True
-        result = asset.wait_until(attribute="test_attribute", value="target", timeout=1, use_ksqlDB=True)
+        result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=1, use_ksqlDB=True)
         self.assertFalse(result)
 
-    @patch("openfactory.assets.asset_base.delete_consumer_group")
-    def test_wait_until_handles_invalid_json_message(self, mock_delete_group, MockAssetProducer):
-        """ Test wait_until gracefully skips invalid JSON Kafka messages """
+    def test___start_nats_consumer_starts_and_registers_subscriber(self, MockAssetProducer):
+        """ Test that `__start_nats_consumer` creates, starts, and registers a NATSSubscriber """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        mock_loop = MagicMock()
+        object.__setattr__(asset, "loop_thread", mock_loop)  # avoid recursion in __setattr__
+        callback = MagicMock()
+        sub_key = "test_sub"
 
-        class FakeKafkaMessage:
-            def key(self):
-                return b"test_uuid"
+        with patch("openfactory.assets.asset_base.NATSSubscriber") as MockSubscriber, \
+             patch("openfactory.assets.asset_base.get_nats_cluster_url", return_value="nats://mocked_cluster"):
 
-            def value(self):
-                return b"not-a-json"
+            mock_sub_instance = MockSubscriber.return_value
 
-            def error(self):
-                return None
+            # Call the private method
+            asset._BaseAsset__start_nats_consumer("subject.test", callback, sub_key=sub_key)
 
-        # Create a mock consumer instance with poll side_effect returning one bad message then Nones
-        mock_consumer_instance = Mock()
-        mock_consumer_instance.poll.side_effect = chain([FakeKafkaMessage()], repeat(None))
+            # Ensure NATSSubscriber initialized with correct args
+            MockSubscriber.assert_called_once_with(mock_loop, "nats://mocked_cluster", "subject.test", callback)
+            # Ensure subscriber start() is called
+            mock_sub_instance.start.assert_called_once()
+            # Ensure subscriber stored in self.subscribers
+            assert asset.subscribers[sub_key] == mock_sub_instance
 
-        # DummyKafkaConsumer overriding consumer with the mock
-        class DummyKafkaConsumer(KafkaAssetConsumer):
-            def __init__(self, *args, **kwargs):
-                self.consumer = mock_consumer_instance
+    def test___stop_subscription_stops_and_removes_subscriber(self, MockAssetProducer):
+        """ Test that `__stop_subscription` stops and removes a NATSSubscriber """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        mock_sub = MagicMock()
+        asset.subscribers["test_sub"] = mock_sub
 
-        class AssetWithConsumer(ValidAsset):
-            ASSET_CONSUMER_CLASS = DummyKafkaConsumer
+        # Call the private method
+        asset._BaseAsset__stop_subscription("test_sub")
 
-            def __getattr__(self, attr):
-                return Mock(value="not_42")
+        # Ensure stop() is called
+        mock_sub.stop.assert_called_once()
+        # Ensure subscriber removed from self.subscribers
+        assert "test_sub" not in asset.subscribers
 
-        asset = AssetWithConsumer("test_uuid", ksqlClient=Mock())
+    def test___stop_subscription_with_nonexistent_key_does_nothing(self, MockAssetProducer):
+        """ Test that `__stop_subscription` gracefully handles a missing subscriber key """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        # No subscriber registered
+        asset._BaseAsset__stop_subscription("nonexistent_key")
+        # Should not raise and self.subscribers remains empty
+        assert asset.subscribers == {}
 
-        result = asset.wait_until(attribute="temperature", value=42.0, timeout=0.5)
+    def test_subscribe_to_messages_starts_nats_consumer(self, MockAssetProducer):
+        """ Test that `subscribe_to_messages` starts a NATS consumer correctly """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
 
-        assert result is False
-        mock_consumer_instance.close.assert_called_once()
-        mock_delete_group.assert_called_once()
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
+            asset.subscribe_to_messages(callback)
+            mock_start.assert_called_once_with(
+                f"{asset.asset_uuid.upper()}.*",
+                callback,
+                sub_key="messages"
+            )
+
+    def test_stop_messages_subscription_stops_nats_consumer(self, MockAssetProducer):
+        """ Test that `stop_messages_subscription` stops the NATS consumer correctly """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
+            asset.stop_messages_subscription()
+            mock_stop.assert_called_once_with("messages")
+
+    def test_subscribe_to_samples_starts_nats_consumer(self, MockAssetProducer):
+        """ Test that `subscribe_to_samples` starts a NATS consumer and filters messages by TYPE=='Samples' """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
+            asset.subscribe_to_samples(callback)
+
+            # Check correct subject and sub_key
+            subject_arg = f"{asset.asset_uuid.upper()}.*"
+            mock_start.assert_called_once()
+            args, kwargs = mock_start.call_args
+            assert args[0] == subject_arg
+            assert kwargs['sub_key'] == "samples"
+
+            # Extract the filter and test filtering
+            filter = args[1]
+
+            # Should call callback for TYPE == 'Samples'
+            sample_msg = {"TYPE": "Samples", "VALUE": 123}
+            filter("subject.test", sample_msg)
+            callback.assert_called_once_with("subject.test", sample_msg)
+
+            # Should NOT call callback for other types
+            callback.reset_mock()
+            other_msg = {"TYPE": "Events", "VALUE": 456}
+            filter("subject.test", other_msg)
+            callback.assert_not_called()
+
+    def test_stop_samples_subscription_stops_nats_consumer(self, MockAssetProducer):
+        """ Test that `stop_samples_subscription` stops the NATS consumer correctly """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
+            asset.stop_samples_subscription()
+            mock_stop.assert_called_once_with("samples")
+
+    def test_subscribe_to_events_starts_nats_consumer(self, MockAssetProducer):
+        """ Test that `subscribe_to_events` starts a NATS consumer and filters messages by TYPE=='Events' """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
+            asset.subscribe_to_events(callback)
+
+            # Check correct subject and sub_key
+            subject_arg = f"{asset.asset_uuid.upper()}.*"
+            mock_start.assert_called_once()
+            args, kwargs = mock_start.call_args
+            assert args[0] == subject_arg
+            assert kwargs['sub_key'] == "events"
+
+            # Extract the filter and test filtering
+            filter_fn = args[1]
+
+            # Should call callback for TYPE == 'Events'
+            event_msg = {"TYPE": "Events", "VALUE": 123}
+            filter_fn("subject.test", event_msg)
+            callback.assert_called_once_with("subject.test", event_msg)
+
+            # Should NOT call callback for other types
+            callback.reset_mock()
+            other_msg = {"TYPE": "Samples", "VALUE": 456}
+            filter_fn("subject.test", other_msg)
+            callback.assert_not_called()
+
+    def test_stop_events_subscription_stops_nats_consumer(self, MockAssetProducer):
+        """ Test that `stop_events_subscription` stops the NATS consumer """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        mock_subscriber = MagicMock()
+        asset.subscribers["events"] = mock_subscriber
+
+        asset.stop_events_subscription()
+        mock_subscriber.stop.assert_called_once()
+        assert "events" not in asset.subscribers
+
+    def test_subscribe_to_conditions_starts_nats_consumer(self, MockAssetProducer):
+        """ Test that `subscribe_to_conditions` starts a NATS consumer and filters messages by TYPE=='Condition' """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
+            asset.subscribe_to_conditions(callback)
+
+            # Check correct subject and sub_key
+            subject_arg = f"{asset.asset_uuid.upper()}.*"
+            mock_start.assert_called_once()
+            args, kwargs = mock_start.call_args
+            assert args[0] == subject_arg
+            assert kwargs['sub_key'] == "conditions"
+
+            # Extract the filter and test filtering
+            filter_fn = args[1]
+
+            # Should call callback for TYPE == 'Condition'
+            condition_msg = {"TYPE": "Condition", "VALUE": 123}
+            filter_fn("subject.test", condition_msg)
+            callback.assert_called_once_with("subject.test", condition_msg)
+
+            # Should NOT call callback for other types
+            callback.reset_mock()
+            other_msg = {"TYPE": "Samples", "VALUE": 456}
+            filter_fn("subject.test", other_msg)
+            callback.assert_not_called()
+
+    def test_stop_conditions_subscription_stops_nats_consumer(self, MockAssetProducer):
+        """ Test that `stop_conditions_subscription` stops the NATS consumer """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        mock_subscriber = MagicMock()
+        asset.subscribers["conditions"] = mock_subscriber
+
+        asset.stop_conditions_subscription()
+        mock_subscriber.stop.assert_called_once()
+        assert "conditions" not in asset.subscribers

@@ -52,6 +52,10 @@ KAFKA_BROKER: ${KAFKA_BROKER}
 KSQLDB_URL: ${KSQLDB_URL}
 
 # ---------------------------------------------------------------------------
+# Asset Fan-out Layer
+ASSET_ROUTER_URL: ${ASSET_ROUTER_URL}
+
+# ---------------------------------------------------------------------------
 # Docker Images
 
 MTCONNECT_AGENT_IMAGE: ghcr.io/openfactoryio/mtcagent:v2.5.0.11

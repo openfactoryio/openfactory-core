@@ -23,6 +23,7 @@ dependencies = [
     "docker",
     "fsspec",
     "PyGithub",
+    "nats-py",
 
     # Custom Git dependency
     "mtc2kafka @ git+https://github.com/rwuthric/python-mtc2kafka.git",
@@ -30,7 +31,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "nats-py",
     "fastapi",
     "uvicorn[standard]",
     "flake8",

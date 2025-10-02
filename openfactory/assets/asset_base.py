@@ -2,28 +2,14 @@
 
 import json
 import re
-import threading
 import time
 import uuid
-from typing import Protocol, Literal, List, Dict, Any, Union, Callable, Self, Optional
-from confluent_kafka import KafkaError
+import threading
+from typing import Literal, List, Dict, Any, Union, Callable, Self
 import openfactory.config as config
 from openfactory.exceptions import OFAException
-from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict, delete_consumer_group
-from openfactory.assets.utils import AssetAttribute
-
-
-class AssetKafkaMessagesCallback(Protocol):
-    """
-    Interface for callback used to handle Kafka asset messages.
-
-    Args:
-        msg_key (str): The key of the Kafka message (the asset UUID).
-        msg_value (dict): The JSON-decoded value of the Kafka message.
-    """
-    def __call__(self, msg_key: str, msg_value: dict) -> None:
-        """ Event messages callback interface method. """
-        ...
+from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict
+from openfactory.assets.utils import AssetAttribute, AssetNATSCallback, AsyncLoopThread, NATSSubscriber, get_nats_cluster_url
 
 
 class BaseAsset:
@@ -38,16 +24,19 @@ class BaseAsset:
     and state tables.
 
     Note:
-        All write operations to the asset take place in the `assets` stream.
+        - All write operations to the asset take place in the `assets` stream.
+        - NATS subscribers allow filtering messages by TYPE ('Samples', 'Events', 'Condition').
 
     Attributes:
-        KSQL_ASSET_TABLE (str): Name of ksqlDB table of asset states (`assets` or `assets_uns`)
-        KSQL_ASSET_ID (str): ksqlDB ID used to identify the asset (`asset_uuid` or `uns_id`) in the KSQL_ASSET_TABLE
-        ASSET_ID (str): value of the identifer of the asset (asset_uuid or uns_id) used in the KSQL_ASSET_TABLE
+        KSQL_ASSET_TABLE (str): Name of ksqlDB table of asset states (`assets` or `assets_uns`).
+        KSQL_ASSET_ID (str): ksqlDB ID used to identify the asset (`asset_uuid` or `uns_id`) in the KSQL_ASSET_TABLE.
+        ASSET_ID (str): Value of the identifier of the asset (asset_uuid or uns_id) used in the KSQL_ASSET_TABLE.
         ksql (KSQLDBClient): Client for interacting with ksqlDB.
         bootstrap_servers (str): Kafka bootstrap server address.
-        ASSET_CONSUMER_CLASS (KafkaAssetConsumer|KafkaAssetUNSConsumer): Kafka consumer class for reading messages from Asset strean.
-        producer (AssetProducer): Shared Kafka producer instance used to publish asset messages (singleton across all ``BaseAsset`` subclasses).
+        ASSET_CONSUMER_CLASS (KafkaAssetConsumer|KafkaAssetUNSConsumer): Kafka consumer class for reading messages from asset stream.
+        producer (AssetProducer): Shared Kafka producer instance used to publish asset messages (singleton across all BaseAsset subclasses).
+        loop_thread (AsyncLoopThread): Async event loop thread used for NATS subscriptions.
+        subscribers (dict): Mapping of subscription keys to NATSSubscriber instances.
     """
 
     _shared_producer: AssetProducer = None   # class-level singleton producer
@@ -78,6 +67,8 @@ class BaseAsset:
 
         super().__setattr__('ksql', ksqlClient)
         super().__setattr__('bootstrap_servers', bootstrap_servers)
+        super().__setattr__('loop_thread', AsyncLoopThread())
+        super().__setattr__('subscribers', {})
 
         # Initialize the shared producer once
         if BaseAsset._shared_producer is None:
@@ -440,33 +431,24 @@ class BaseAsset:
         """
         self._add_reference(direction="below", new_reference=below_asset_reference)
 
-    def wait_until(self, attribute: str, value: Any, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
+    def wait_until(self, attribute_id: str, value: Any, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
         """
         Waits until the asset attribute has a specific value or times out.
 
-        Monitors either the Kafka topic or ksqlDB to check if the attribute value matches the expected value.
-        The method will return `True` if the value is found within the given timeout, and `False` if the timeout is reached.
-
-        Attention:
-            Using ksqlDB introduces slightly higher latency due to internal stream processing
-            and state materialization, but it is significantly more efficient for the Kafka cluster,
-            especially when multiple consumers are involved.
-
-            Direct Kafka topic consumption offers lower latency but requires reading and filtering
-            all messages, which increases load on the brokers and duplicates work across consumers.
-
-            Whenever possible, prefer `use_ksqlDB=True` to reduce resource usage and improve scalability.
+        Monitors either the NATS cluster or ksqlDB to check if the attribute value matches the expected value.
+        Returns True if the value is found within the given timeout, False otherwise.
 
         Args:
-            attribute (str): The attribute of the asset to monitor.
+            attribute_id (str): The attribute ID of the asset to monitor.
             value (Any): The value to wait for the attribute to match.
             timeout (int): The maximum time to wait, in seconds. Default is 30 seconds.
-            use_ksqlDB (bool): If `True`, uses ksqlDB instead of Kafka topic to check the attribute value. Default is `False`.
+            use_ksqlDB (bool): If `True`, uses ksqlDB instead of NATS to check the attribute value. Default is `False`.
 
         Returns:
             bool: `True` if the attribute value matches the expected value within the timeout, `False` otherwise.
         """
-        if self.__getattr__(attribute).value == value:
+        # First, check the current attribute value
+        if self.__getattr__(attribute_id).value == value:
             return True
 
         start_time = time.time()
@@ -476,304 +458,125 @@ class BaseAsset:
                 # Check for timeout
                 if (time.time() - start_time) > timeout:
                     return False
-
-                if self.__getattr__(attribute).value == value:
+                if self.__getattr__(attribute_id).value == value:
                     return True
                 time.sleep(0.1)
 
-        kafka_group_id = f"{self.ASSET_ID}_{uuid.uuid4()}"
+        event = threading.Event()
+        result = {"found": False}
 
-        consumer = self.ASSET_CONSUMER_CLASS(
-            self.ASSET_ID,
-            consumer_group_id=kafka_group_id,
-            on_message=None,
-            ksqlClient=self.ksql,
-            bootstrap_servers=self.bootstrap_servers)
-
-        while True:
-            # Check for timeout
-            if (time.time() - start_time) > timeout:
-                consumer.consumer.close()
-                delete_consumer_group(kafka_group_id, bootstrap_servers=self.bootstrap_servers)
-                return False
-
-            msg = consumer.consumer.poll(timeout=0.1)
-            if msg is None:
-                continue
-
-            if msg.error():
-                print(msg.error().code())
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                else:
-                    print(f"Error: {msg.error()}")
-                    break
-
-            msg_key = msg.key().decode('utf-8') if msg.key() else None
-            try:
-                msg_value = json.loads(msg.value().decode('utf-8'))
-            except json.JSONDecodeError:
-                print("Skipping invalid JSON message:", msg.value())
-                continue
+        def on_message(subject: str, msg_value: dict):
             msg_value = CaseInsensitiveDict(msg_value)
+            if msg_value.get("type") == "Samples" and msg_value.get("value") != "UNAVAILABLE":
+                try:
+                    if float(msg_value["value"]) == value:
+                        result["found"] = True
+                        event.set()
+                except ValueError:
+                    pass
+            else:
+                if msg_value.get("value") == value:
+                    result["found"] = True
+                    event.set()
 
-            if msg_key != self.ASSET_ID:
-                continue
+        sub_key = f"wait_{attribute_id}_{uuid.uuid4()}"
+        self.__start_nats_consumer(f"{self.asset_uuid.upper()}.{attribute_id}", on_message, sub_key=sub_key)
 
-            if msg_value['id'] == attribute:
-                if msg_value['type'] == 'Samples' and msg_value['value'] != 'UNAVAILABLE':
-                    try:
-                        if float(msg_value['value']) == value:
-                            consumer.consumer.close()
-                            delete_consumer_group(kafka_group_id, bootstrap_servers=self.bootstrap_servers)
-                            return True
-                    except ValueError:
-                        continue
-                else:
-                    if msg_value['value'] == value:
-                        consumer.consumer.close()
-                        delete_consumer_group(kafka_group_id, bootstrap_servers=self.bootstrap_servers)
-                        return True
+        finished = event.wait(timeout=timeout)
 
-        consumer.consumer.close()
-        delete_consumer_group(kafka_group_id, bootstrap_servers=self.bootstrap_servers)
-        return False
+        self.__stop_subscription(sub_key)
 
-    def __start_kafka_consumer(
-            self,
-            consumer_key: str,
-            kafka_group_id: str,
-            on_message: AssetKafkaMessagesCallback,
-            expected_type: Optional[str] = None
-            ) -> None:
+        return finished and result["found"]
+
+    def __start_nats_consumer(self, subject: str, on_message, sub_key: str):
         """
-        Starts a Kafka consumer for the asset and begins consuming messages.
+        Starts a NATS subscriber and stores it in self.subscribers with a unique key.
+        """
+        sub = NATSSubscriber(self.loop_thread, get_nats_cluster_url(self.asset_uuid), subject, on_message)
+        sub.start()
+        self.subscribers[sub_key] = sub
 
-        Initializes a `TypedKafkaConsumer` instance for the specified Kafka consumer group ID and
-        message handler. If an expected message type is provided, the consumer will filter messages
-        by type. The consumer instance is stored as an attribute using the provided `consumer_key`.
+    def __stop_subscription(self, subject: str) -> None:
+        """
+        Stops a NATS subscription and cleans up associated resources.
 
         Args:
-            consumer_key (str): A unique identifier for the consumer (used to name internal attributes).
-            kafka_group_id (str): The Kafka consumer group ID.
-            on_message (AssetKafkaMessagesCallback): Callback function to process received messages.
-                It should accept two arguments: `msg_key` (str) and `msg_value` (dict).
-            expected_type (Optional[str]): The expected message type to filter for (e.g., "Samples").
-                If None, all message types will be accepted.
+            subject (str): Subject of NATS subsription to stop
         """
+        sub = self.subscribers.pop(subject, None)
+        if sub:
+            sub.stop()
 
-        class TypedKafkaConsumer(self.ASSET_CONSUMER_CLASS):
-
-            def __init__(self, expected_type: Union[str, None], *args, **kwargs):
-                self.expected_type = expected_type
-                super().__init__(*args, **kwargs)
-
-            def filter_messages(self, msg_value):
-                if self.expected_type is None:
-                    return msg_value
-                return msg_value if msg_value.get('type') == self.expected_type else None
-
-        consumer = TypedKafkaConsumer(
-            expected_type,
-            self.ASSET_ID,
-            consumer_group_id=kafka_group_id,
-            on_message=on_message,
-            ksqlClient=self.ksql,
-            bootstrap_servers=self.bootstrap_servers
-        )
-        super().__setattr__(f"_{consumer_key}_consumer_instance", consumer)
-        consumer.consume()
-
-    def __subscribe(
-            self,
-            kind: str,
-            on_message: AssetKafkaMessagesCallback,
-            kafka_group_id: str,
-            expected_type: Optional[str] = None
-            ) -> threading.Thread:
+    def subscribe_to_messages(self, on_message: AssetNATSCallback) -> None:
         """
-        Subscribes to a Kafka topic for a specific message type in a background thread.
-
-        Creates and starts a daemon thread that runs a typed Kafka consumer.
-        The thread and group ID are stored on the instance using the provided `kind`
-        as part of the attribute name. The consumer filters messages by type if `expected_type` is given.
+        Subscribes to asset messages using a NATS consumer.
 
         Args:
-            kind (str): A string identifier used to name internal thread and group ID attributes
-                        ("samples", "events", "conditions", or "messages").
-            on_message (AssetKafkaMessagesCallback): Callback function to handle incoming messages.
-                Should accept two arguments: `msg_key` (str) and `msg_value` (dict).
-            kafka_group_id (str): The Kafka consumer group ID used for the subscription.
-            expected_type (Optional[str]): If provided, the consumer will only process messages
-                where `msg_value["type"] == expected_type`.
-
-        Returns:
-            threading.Thread: The daemon thread running the Kafka consumer.
+            on_message (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict) and handles messages.
         """
-        consumer_thread = threading.Thread(
-            target=self.__start_kafka_consumer,
-            args=(kind, kafka_group_id, on_message, expected_type),
-            daemon=True
-        )
-        super().__setattr__(f"_{kind}_consumer_thread", consumer_thread)
-        super().__setattr__(f"__{kind}_kafka_group_id", kafka_group_id)
-        consumer_thread.start()
-        return consumer_thread
-
-    def __stop_subscription(self, kind: str) -> None:
-        """
-        Stops a Kafka consumer subscription and cleans up associated resources.
-
-        Stops the consumer instance, joins the consumer thread, and deletes
-        the corresponding Kafka consumer group. Internal attributes are looked up dynamically
-        using the provided `kind` identifier.
-
-        Args:
-            kind (str): A string identifier used to locate internal consumer/thread/group ID attributes
-                        ("samples", "events", "conditions", or "messages").
-        """
-        consumer_attr = f"_{kind}_consumer_instance"
-        thread_attr = f"_{kind}_consumer_thread"
-        group_id_attr = f"__{kind}_kafka_group_id"
-
-        if hasattr(self, consumer_attr):
-            getattr(self, consumer_attr).stop()
-        if hasattr(self, thread_attr):
-            getattr(self, thread_attr).join()
-        if hasattr(self, group_id_attr):
-            delete_consumer_group(
-                getattr(self, group_id_attr),
-                bootstrap_servers=self.bootstrap_servers
-            )
-
-    def subscribe_to_messages(self, on_message: AssetKafkaMessagesCallback, kafka_group_id: str) -> threading.Thread:
-        """
-        Subscribes to asset messages and starts a consumer thread.
-
-        This method creates and starts a Kafka consumer thread that listens for messages
-        related to the asset. The provided callback is invoked for each received message.
-
-        Warning:
-            A Kafka consumer is used to subscribe to the kafka Assets topic.
-            Direct Kafka topic consumption offers lower latency but requires reading and filtering all messages,
-            from all Assets deployed on the cluster, which increases load on the brokers and duplicates work across consumers.
-
-            Whenever possible, a loop reading from asset attributes (which queries a ksqlDB table) should be prefered
-            if the design allows for it. Alternatively consider deploying a stream processing topology.
-
-        Args:
-            on_message (AssetKafkaMessagesCallback): Callable that takes (msg_key: str, msg_value: dict) and handles messages.
-            kafka_group_id (str): The Kafka consumer group ID to subscribe to.
-
-        Returns:
-            threading.Thread: The thread object running the Kafka consumer.
-        """
-        return self.__subscribe("messages", on_message, kafka_group_id)
+        subject = f"{self.asset_uuid.upper()}.*"
+        self.__start_nats_consumer(subject, on_message, sub_key="messages")
 
     def stop_messages_subscription(self) -> None:
-        """
-        Stops the Kafka consumer and gracefully shuts down the subscription.
-
-        If a consumer instance exists, it is stopped and the associated consumer thread joined.
-        The consumer group is deleted from Kafka to clean up the subscription.
-        """
+        """ Stops the NATS consumer and gracefully shuts down the subscription. """
         self.__stop_subscription("messages")
 
-    def subscribe_to_samples(self, on_sample: AssetKafkaMessagesCallback, kafka_group_id: str) -> threading.Thread:
+    def subscribe_to_samples(self, on_sample: AssetNATSCallback) -> None:
         """
-        Subscribes to 'Samples' messages and starts a consumer thread.
-
-        This method creates and starts a Kafka consumer thread that listens for 'Samples' messages
-        related to the asset. The provided callback is invoked for each received sample.
-
-        Warning:
-            A Kafka consumer is used to subscribe to the kafka Assets topic.
-            Direct Kafka topic consumption offers lower latency but requires reading and filtering all messages,
-            from all Assets deployed on the cluster, which increases load on the brokers and duplicates work across consumers.
-
-            Whenever possible, a loop reading from asset attributes (which queries a ksqlDB table) should be prefered
-            if the design allows for it. Alternatively consider deploying a stream processing topology.
+        Subscribes to asset samples using a NATS consumer.
+        Only messages with TYPE == 'Samples' are forwarded to the callback.
 
         Args:
-            on_sample (AssetKafkaMessagesCallback): Callable that takes (msg_key: str, msg_value: dict) and handles samples messages.
-            kafka_group_id (str): The Kafka consumer group ID to subscribe to.
-
-        Returns:
-            threading.Thread: The thread object running the Kafka consumer.
+            on_meon_samplessage (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        return self.__subscribe("samples", on_sample, kafka_group_id, expected_type="Samples")
+        subject = f"{self.asset_uuid.upper()}.*"
+
+        def _filter_samples(msg_subject: str, msg_value: dict):
+            if msg_value.get("TYPE") == "Samples":
+                on_sample(msg_subject, msg_value)
+
+        self.__start_nats_consumer(subject, _filter_samples, sub_key="samples")
 
     def stop_samples_subscription(self) -> None:
-        """
-        Stops the Kafka consumer and gracefully shuts down the subscription to 'Samples'.
-
-        If a consumer instance exists, it is stopped, and the associated consumer thread is joined.
-        The consumer group is deleted from Kafka to clean up the subscription.
-        """
+        """ Stops the NATS consumer and gracefully shuts down the subscription for samples. """
         self.__stop_subscription("samples")
 
-    def subscribe_to_events(self, on_event: AssetKafkaMessagesCallback, kafka_group_id: str) -> threading.Thread:
+    def subscribe_to_events(self, on_event: AssetNATSCallback) -> None:
         """
-        Subscribes to 'Events' messages and starts a consumer thread.
-
-        This method creates and starts a Kafka consumer thread that listens for 'Events' messages
-        related to the asset. The provided callback is invoked for each received event.
-
-        Warning:
-            A Kafka consumer is used to subscribe to the kafka Assets topic.
-            Direct Kafka topic consumption offers lower latency but requires reading and filtering all messages,
-            from all Assets deployed on the cluster, which increases load on the brokers and duplicates work across consumers.
-
-            Whenever possible, a loop reading from asset attributes (which queries a ksqlDB table) should be prefered
-            if the design allows for it. Alternatively consider deploying a stream processing topology.
+        Subscribes to asset events using a NATS consumer.
+        Only messages with TYPE == 'Events' are forwarded to the callback.
 
         Args:
-            on_event (AssetKafkaMessagesCallback): Callable that takes (msg_key: str, msg_value: dict) and handles event messages.
-            kafka_group_id (str): The Kafka consumer group ID to subscribe to.
-
-        Returns:
-            threading.Thread: The thread object running the Kafka consumer.
+            on_event (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        return self.__subscribe("events", on_event, kafka_group_id, expected_type="Events")
+        subject = f"{self.asset_uuid.upper()}.*"
+
+        def _filter_events(msg_subject: str, msg_value: dict):
+            if msg_value.get("TYPE") == "Events":
+                on_event(msg_subject, msg_value)
+
+        self.__start_nats_consumer(subject, _filter_events, sub_key="events")
 
     def stop_events_subscription(self) -> None:
-        """
-        Stops the Kafka consumer and gracefully shuts down the subscription to 'Events'.
-
-        If a consumer instance exists, it is stopped, and the associated consumer thread is joined.
-        The consumer group is deleted from Kafka to clean up the subscription.
-        """
+        """ Stops the NATS consumer and gracefully shuts down the subscription for events. """
         self.__stop_subscription("events")
 
-    def subscribe_to_conditions(self, on_condition: AssetKafkaMessagesCallback, kafka_group_id: str) -> threading.Thread:
+    def subscribe_to_conditions(self, on_condition: AssetNATSCallback) -> None:
         """
-        Subscribes to 'Condition' messages and starts a consumer in a separate thread.
-
-        This method creates and starts a Kafka consumer thread that listens for 'Condition' messages
-        related to the asset. The provided callback is invoked for each received condition.
-
-        Warning:
-            A Kafka consumer is used to subscribe to the kafka Assets topic.
-            Direct Kafka topic consumption offers lower latency but requires reading and filtering all messages,
-            from all Assets deployed on the cluster, which increases load on the brokers and duplicates work across consumers.
-
-            Whenever possible, a loop reading from asset attributes (which queries a ksqlDB table) should be prefered
-            if the design allows for it. Alternatively consider deploying a stream processing topology.
+        Subscribes to asset conditions using a NATS consumer.
+        Only messages with TYPE == 'Condition' are forwarded to the callback.
 
         Args:
-            on_condition (AssetKafkaMessagesCallback): Callable that takes (msg_key: str, msg_value: dict) and handles condition messages.
-            kafka_group_id (str): The Kafka consumer group ID to subscribe to.
-
-        Returns:
-            threading.Thread: The consumer thread that is now running.
+            on_condition (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        return self.__subscribe("conditions", on_condition, kafka_group_id, expected_type="Condition")
+        subject = f"{self.asset_uuid.upper()}.*"
+
+        def _filter_conditions(msg_subject: str, msg_value: dict):
+            if msg_value.get("TYPE") == "Condition":
+                on_condition(msg_subject, msg_value)
+
+        self.__start_nats_consumer(subject, _filter_conditions, sub_key="conditions")
 
     def stop_conditions_subscription(self) -> None:
-        """
-        Stops the Kafka consumer and gracefully shuts down the subscription.
-
-        If a consumer instance exists, it is stopped and the associated consumer thread is joined.
-        The consumer group is deleted from Kafka to clean up the subscription.
-        """
+        """ Stops the NATS consumer and gracefully shuts down the subscription for conditions. """
         self.__stop_subscription("conditions")

@@ -32,7 +32,7 @@ class TestNATSSubscriber(unittest.TestCase):
         # Run the loop until tasks complete
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
-        mock_nats_connect.assert_awaited_once_with(servers)
+        mock_nats_connect.assert_awaited_once_with(servers, max_reconnect_attempts=2, connect_timeout=2, reconnect_time_wait=1)
         mock_nc.subscribe.assert_awaited_once()
         self.assertEqual(subscriber.sub, mock_sub)
         self.assertEqual(subscriber.nc, mock_nc)
@@ -99,5 +99,5 @@ class TestNATSSubscriber(unittest.TestCase):
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
         # Assert that the list of servers was passed as-is
-        mock_nats_connect.assert_awaited_once_with(servers)
+        mock_nats_connect.assert_awaited_once_with(servers, max_reconnect_attempts=2, connect_timeout=2, reconnect_time_wait=1)
         mock_nc.subscribe.assert_awaited_once()

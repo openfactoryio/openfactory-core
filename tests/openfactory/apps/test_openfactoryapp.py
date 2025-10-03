@@ -34,7 +34,7 @@ class TestOpenFactoryApp(unittest.TestCase):
 
         # Freeze datetime for deterministic AssetAttribute.timestamp
         self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
-        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        datetime_patcher = patch("openfactory.assets.utils.time_methods.datetime")
         self.mock_datetime = datetime_patcher.start()
         self.addCleanup(datetime_patcher.stop)
 
@@ -253,7 +253,7 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
         # Freeze datetime for deterministic AssetAttribute.timestamp
         self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
-        datetime_patcher = patch("openfactory.assets.utils.datetime")
+        datetime_patcher = patch("openfactory.assets.utils.time_methods.datetime")
         self.mock_datetime = datetime_patcher.start()
         self.addCleanup(datetime_patcher.stop)
 

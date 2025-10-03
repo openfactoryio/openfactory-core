@@ -547,7 +547,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_uns_schema_class.return_value = mock_uns_instance
         device_mock = create_mock_device(uuid="device-uuid-1")
         mock_get_devices.return_value = {"Device1": device_mock}
-        self.manager.devices_uuid = MagicMock(return_value=["device-uuid-1"])
+        self.manager.assets_uuid = MagicMock(return_value=["device-uuid-1"])
 
         # Call the method
         self.manager.deploy_devices_from_config_file("mock_config.yaml")

@@ -85,7 +85,7 @@ services:
   asset-router:
     image: ghcr.io/openfactoryio/asset-router:${ASSET_ROUTER_VERSION:-latest}
     environment:
-      - NATS_CLUSTER_C1=${ASSET_ROUTER_URL:-nats://nats:4222}
+      - NATS_CLUSTER_C1=${NATS_CLUSTER_C1:-nats://nats:4222}
     ports:
       - "8002:8002"
     deploy:

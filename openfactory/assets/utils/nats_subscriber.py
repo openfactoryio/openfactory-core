@@ -48,7 +48,12 @@ class NATSSubscriber:
 
     async def _connect_and_subscribe(self) -> None:
         """ Connects to NATS and subscribes to the subject with an internal handler. """
-        self.nc = await nats.connect(self.servers)
+        self.nc = await nats.connect(
+            self.servers,
+            max_reconnect_attempts=2,
+            connect_timeout=2,
+            reconnect_time_wait=1
+        )
 
         async def _handler(msg):
             data = json.loads(msg.data.decode())
@@ -58,7 +63,13 @@ class NATSSubscriber:
 
     def start(self) -> None:
         """ Starts the NATS subscriber in the background event loop. """
-        self.loop_thread.run_coro(self._connect_and_subscribe())
+        future = self.loop_thread.run_coro(self._connect_and_subscribe())
+        try:
+            future.result()  # <-- this will raise the exception if connection fails
+        except nats.errors.NoServersError as e:
+            print(f"❌ Failed to connect to NATS servers {self.servers}: {e}")
+        except Exception as e:
+            print(f"❌ Unexpected error connecting to NATS: {e}")
 
     def stop(self) -> None:
         """ Stops the NATS subscription and closes the connection. """

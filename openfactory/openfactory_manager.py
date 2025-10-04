@@ -308,7 +308,7 @@ class OpenFactoryManager(OpenFactory):
         if devices is None:
             return
 
-        uuid_list = [device.asset_uuid for device in self.devices()]
+        uuid_list = self.devices_uuid()
 
         for dev_name, device in devices.items():
             user_notify.info(f"{dev_name}:")

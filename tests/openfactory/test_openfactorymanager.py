@@ -694,11 +694,8 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_build_connector.return_value = mock_connector_instance
 
         # Mock devices already deployed in manager
-        deployed_devices = [
-            MagicMock(asset_uuid="device-uuid-1"),
-            MagicMock(asset_uuid="device-uuid-2")
-        ]
-        self.manager.devices = MagicMock(return_value=deployed_devices)
+        deployed_devices = ["device-uuid-1", "device-uuid-2"]
+        self.manager.devices_uuid = MagicMock(return_value=deployed_devices)
 
         # Call method under test
         self.manager.shut_down_devices_from_config_file("dummy_config.yaml")
@@ -790,7 +787,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_build_connector.return_value = mock_connector_instance
 
         # Mock deployed devices
-        self.manager.devices = MagicMock(return_value=[MagicMock(asset_uuid="device-fail-1")])
+        self.manager.devices_uuid = MagicMock(return_value=["device-fail-1"])
 
         # Run method
         self.manager.shut_down_devices_from_config_file("dummy_config.yaml")

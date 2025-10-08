@@ -129,6 +129,13 @@ class OPCUAConnector(Connector):
             response.raise_for_status()
             user_notify.success(f"OPC UA producer for device {device_uuid} shut down successfully")
 
+        except requests.exceptions.HTTPError as e:
+            try:
+                detail = response.json().get("detail", str(e))
+            except Exception:
+                detail = str(e)
+            raise OFAException(f"{config.OPCUA_CONNECTOR_COORDINATOR}: {detail}")
+
         except requests.exceptions.ConnectionError:
             raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")
 

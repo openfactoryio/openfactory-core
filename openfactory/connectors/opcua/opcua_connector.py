@@ -134,7 +134,7 @@ class OPCUAConnector(Connector):
                 detail = response.json().get("detail", str(e))
             except Exception:
                 detail = str(e)
-            raise OFAException(f"{config.OPCUA_CONNECTOR_COORDINATOR}: {detail}")
+            raise OFAException(f"OPC UA Coordinator: {detail}")
 
         except requests.exceptions.ConnectionError:
             raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")

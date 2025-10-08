@@ -96,6 +96,12 @@ class OPCUAConnector(Connector):
             user_notify.success(f"OPC UA producer for device {device.uuid} registerd succesfully with gateway {resp.json()['assigned_gateway']}")
         except requests.exceptions.ConnectionError:
             raise OFAException(f"No OPC UA Coordinator running at URL {config.OPCUA_CONNECTOR_COORDINATOR}")
+        except requests.exceptions.HTTPError as e:
+            try:
+                detail = resp.json().get("detail", str(e))
+            except Exception:
+                detail = str(e)
+            raise OFAException(f"OPC UA Coordinator: {detail}")
         except Exception as e:
             raise OFAException(f"Connector {service_name} could not be created\n{e}")
 

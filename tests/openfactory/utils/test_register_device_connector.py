@@ -32,7 +32,7 @@ class TestRegisterDeviceConnector(unittest.TestCase):
         register_device_connector(self.device, self.ksql_client)
 
         expected_sql = """
-        INSERT INTO DEVICE_CONNECTOR_SOURCE (ASST_UUID, CONNECTOR_CONFIG)
+        INSERT INTO DEVICE_CONNECTOR_SOURCE (ASSET_UUID, CONNECTOR_CONFIG)
         VALUES ('test-uuid', '{"config": "value"}');
         """
 
@@ -45,7 +45,7 @@ class TestRegisterDeviceConnector(unittest.TestCase):
         """ Test successful registration with a custom table name. """
         register_device_connector(self.device, self.ksql_client, table_name="MY_TABLE")
         expected_sql = """
-        INSERT INTO MY_TABLE (ASST_UUID, CONNECTOR_CONFIG)
+        INSERT INTO MY_TABLE (ASSET_UUID, CONNECTOR_CONFIG)
         VALUES ('test-uuid', '{"config": "value"}');
         """
         self.ksql_client.statement_query.assert_called_once()

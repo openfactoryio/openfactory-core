@@ -147,7 +147,7 @@ def register_device_connector(device: "Device",
         KSQLDBClientException: If the insert fails.
     """
     sql = f"""
-    INSERT INTO {table_name} (ASST_UUID, CONNECTOR_CONFIG)
+    INSERT INTO {table_name} (ASSET_UUID, CONNECTOR_CONFIG)
     VALUES ('{device.uuid}', '{device.connector.model_dump_json(exclude_none=True)}');
     """
     ksqlClient.statement_query(sql)

@@ -148,7 +148,7 @@ def register_device_connector(device: "Device",
     """
     sql = f"""
     INSERT INTO {table_name} (ASSET_UUID, CONNECTOR_CONFIG)
-    VALUES ('{device.uuid}', '{device.connector.model_dump_json(exclude_none=True)}');
+    VALUES ('{device.uuid}', '{device.model_dump_json(exclude_none=True)}');
     """
     ksqlClient.statement_query(sql)
 

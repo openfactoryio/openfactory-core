@@ -22,7 +22,7 @@ class TestRegisterDeviceConnector(unittest.TestCase):
 
         # Mock connector on the device
         self.device.connector = MagicMock()
-        self.device.connector.model_dump_json.return_value = '{"config": "value"}'
+        self.device.model_dump_json.return_value = '{"config": "value"}'
 
         # Mock KSQLDB client
         self.ksql_client = MagicMock(spec=KSQLDBClient)

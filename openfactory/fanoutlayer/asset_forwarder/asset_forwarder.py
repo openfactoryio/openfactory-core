@@ -59,6 +59,48 @@ from .nats_cluster import NatsCluster
 from . import asset_forwarder_metrics as forwarder_metrics
 
 
+def log_task_exceptions(task: asyncio.Task, name: Optional[str] = None) -> None:
+    """
+    Logs exceptions from an asyncio.Task safely and consistently.
+
+    This function inspects an asyncio task upon completion and logs its
+    outcome in a standardized way. It handles normal completion, cancellation,
+    and exceptional termination, including rare cases where retrieving the
+    exception itself fails.
+
+    The function:
+      * Logs an info message if the task was cancelled.
+      * Logs an error if retrieving the exception raises an unexpected error.
+      * Logs the exception and its traceback if the task raised an exception.
+      * Logs an info message if the task completed successfully.
+
+    Args:
+        task (asyncio.Task): The asyncio task whose result or exception should
+            be logged.
+        name (Optional[str]): An optional name to identify the task in log
+            messages. If not provided, the task's `repr()` will be used.
+    """
+    if name is None:
+        name = repr(task)
+
+    if task.cancelled():
+        logger.info("Task %s cancelled", name)
+        return
+
+    try:
+        exc = task.exception()  # may raise if something odd happens
+    except Exception as e:
+        # This should be rare; log it (include traceback).
+        logger.error("Error retrieving exception from task %s: %s", name, e, exc_info=True)
+        return
+
+    if exc is not None:
+        # exc is the exception instance; provide an exc_info tuple so logging prints the traceback.
+        logger.error("Task %s failed: %s", name, exc, exc_info=(type(exc), exc, exc.__traceback__))
+    else:
+        logger.info("Task %s completed cleanly", name)
+
+
 class AssetForwarder:
     """
     Forward asset data from Kafka to NATS clusters.
@@ -288,13 +330,14 @@ class AssetForwarder:
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
 
             duration = time.perf_counter() - start_time
-            forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(cluster=cluster_name).observe(duration)
+            forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(cluster=cluster_name).set(duration)
 
             # Commit Kafka offset if publish succeeded
             if ok and self.consumer:
                 try:
                     tp = TopicPartition(topic, partition, offset + 1)
                     self.consumer.commit(offsets=[tp], asynchronous=False)
+                    forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
                 except Exception as e:
                     logger.error("Commit failed: %s", e)
             else:
@@ -322,7 +365,11 @@ class AssetForwarder:
         logger.info("Starting metrics monitoring task.")
         queue_monitor_task = asyncio.create_task(self._queue_monitor())
 
-        workers = [asyncio.create_task(self._worker(i)) for i in range(self.concurrency)]
+        workers = []
+        for i in range(self.concurrency):
+            t = asyncio.create_task(self._worker(i))
+            t.add_done_callback(lambda task, wid=i: log_task_exceptions(task, f"worker[{wid}]"))
+            workers.append(t)
 
         # Run until stopped
         while not self._stop_event.is_set():

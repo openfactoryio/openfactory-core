@@ -77,6 +77,7 @@ services:
       - KAFKA_BROKER=${KAFKA_BROKER}
       - NATS_CLUSTER_C1=nats://nats:4222
       - ASSET_FORWARDER_LOG_LEVEL=${ASSET_FORWARDER_LOG_LEVEL:-INFO}
+      - ASSET_FORWARDER_CONCURRENCY=${ASSET_FORWARDER_CONCURRENCY:-20}
     networks:
       - factory-net
     deploy:

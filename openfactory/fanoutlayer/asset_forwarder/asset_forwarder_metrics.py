@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge
 
 # Messages processed from Kafka
 KAFKA_MESSAGES_CONSUMED = Counter(
@@ -22,11 +22,10 @@ NATS_PUBLISH_FAILURES = Counter(
 )
 
 # Processing latency (Kafka → NATS)
-MESSAGE_PROCESSING_LATENCY = Histogram(
+MESSAGE_PROCESSING_LATENCY = Gauge(
     "asset_forwarder_message_processing_latency_seconds",
     "Time taken to process and forward a single message",
-    ["cluster"],
-    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5)
+    ["cluster"]
 )
 
 # Queue backlog

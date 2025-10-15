@@ -49,12 +49,14 @@ Usage
 import asyncio
 import json
 import threading
+import time
 from typing import Dict, List, Optional
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 
 from .logger import logger
 from utils.hash_ring import ConsistentHashRing
 from .nats_cluster import NatsCluster
+from . import asset_forwarder_metrics as forwarder_metrics
 
 
 class AssetForwarder:
@@ -126,6 +128,19 @@ class AssetForwarder:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     # -------------------------
+    # Metrics monitor coroutine
+    # -------------------------
+    async def _queue_monitor(self, interval: float = 0.5) -> None:
+        """ Background task that updates the QUEUE_SIZE gauge while running. """
+        while not self._stop_event.is_set():
+            try:
+                forwarder_metrics.QUEUE_SIZE.set(self.queue.qsize())
+            except Exception:
+                # avoid raising in monitor (never crash the service for a metrics error)
+                logger.exception("Failed to update queue size metric")
+            await asyncio.sleep(interval)
+
+    # -------------------------
     # Kafka Consumer callbacks
     # -------------------------
     def _on_assign(self, consumer: Consumer, partitions) -> None:
@@ -170,6 +185,7 @@ class AssetForwarder:
                     "key": msg.key(),
                     "value": msg.value(),
                 }
+                forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(topic=msg.topic()).inc()
 
                 try:
                     loop = self._loop
@@ -227,6 +243,7 @@ class AssetForwarder:
                 self.queue.task_done()
                 break
 
+            start_time = time.perf_counter()
             topic = envelope.get("topic")
             partition = envelope.get("partition")
             offset = envelope.get("offset")
@@ -270,6 +287,9 @@ class AssetForwarder:
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
 
+            duration = time.perf_counter() - start_time
+            forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(cluster=cluster_name).observe(duration)
+
             # Commit Kafka offset if publish succeeded
             if ok and self.consumer:
                 try:
@@ -277,6 +297,8 @@ class AssetForwarder:
                     self.consumer.commit(offsets=[tp], asynchronous=False)
                 except Exception as e:
                     logger.error("Commit failed: %s", e)
+            else:
+                forwarder_metrics.NATS_PUBLISH_FAILURES.labels(cluster=cluster_name).inc()
 
             self.queue.task_done()
 
@@ -296,6 +318,10 @@ class AssetForwarder:
             except Exception as e:
                 logger.warning("NATS connect failed: %s", e)
 
+        # start queue monitor
+        logger.info("Starting metrics monitoring task.")
+        queue_monitor_task = asyncio.create_task(self._queue_monitor())
+
         workers = [asyncio.create_task(self._worker(i)) for i in range(self.concurrency)]
 
         # Run until stopped
@@ -303,6 +329,13 @@ class AssetForwarder:
             await asyncio.sleep(0.5)
 
         # Graceful shutdown
+        logger.info("Shuting down metrics monitoring task.")
+        queue_monitor_task.cancel()
+        try:
+            await queue_monitor_task
+        except asyncio.CancelledError:
+            pass
+
         for _ in workers:
             await self.queue.put(None)
         await self.queue.join()

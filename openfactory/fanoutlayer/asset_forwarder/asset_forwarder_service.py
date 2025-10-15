@@ -33,6 +33,7 @@ import os
 import signal
 import sys
 from typing import Optional
+from prometheus_client import start_http_server
 from .logger import logger
 from .asset_forwarder import AssetForwarder
 from utils.parse_nats_clusters import parse_nats_clusters
@@ -131,6 +132,11 @@ class AssetForwarderService:
 # Entrypoint
 # -------------------------
 def main():
+    # Start Prometheus metrics server on port 8000
+    metrics_port = int(os.getenv("METRICS_PORT", "8000"))
+    start_http_server(metrics_port)
+    logger.info(f"Prometheus metrics available at :{metrics_port}/metrics")
+
     service = AssetForwarderService()
     try:
         asyncio.run(service.run())

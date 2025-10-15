@@ -33,6 +33,7 @@ dependencies = [
 dev = [
     "fastapi",
     "uvicorn[standard]",
+    "prometheus-client",
     "flake8",
     "tomlkit",
 ]

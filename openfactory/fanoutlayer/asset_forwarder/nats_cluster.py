@@ -88,13 +88,41 @@ class NatsCluster:
             Exception: If the connection attempt fails (NATS will retry internally).
         """
         async with self._lock:
-            if self.nc and self.nc.is_connected:
-                return
-            logger.info(f"Connecting to NATS server {self.name} at {self.servers} ...")
+            if self.nc:
+                try:
+                    if self.nc.is_connected:
+                        return
+                    # close dead client
+                    await self.nc.close()
+                except Exception:
+                    pass
+
+            async def disconnected_cb():
+                logger.warning(f"NATS[{self.name}] disconnected — will attempt reconnect...")
+
+            async def reconnected_cb():
+                logger.info(f"NATS[{self.name}] reconnected successfully.")
+
+            async def closed_cb():
+                logger.warning(f"NATS[{self.name}] connection permanently closed.")
+
+            async def error_handler(e):
+                logger.warning("NATS[{self.name}] client error: %s", e)
+
             nc = NATS()
+            logger.info(f"Connecting to NATS server {self.name} at {self.servers} ...")
             await nc.connect(
                 servers=self.servers,
                 reconnect_time_wait=self.reconnect_time_wait,
+                max_reconnect_attempts=-1,  # retry indefinitely
+                allow_reconnect=True,
+                ping_interval=10,
+                disconnected_cb=disconnected_cb,
+                reconnected_cb=reconnected_cb,
+                closed_cb=closed_cb,
+                error_cb=error_handler,
+                connect_timeout=5,  # don't block forever on connect
+                verbose=False,
             )
             self.nc = nc
             logger.info(f"NATS server {self.name} connected")

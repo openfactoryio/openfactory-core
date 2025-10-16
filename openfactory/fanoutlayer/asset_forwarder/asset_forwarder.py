@@ -52,6 +52,7 @@ import threading
 import time
 from typing import Dict, List, Optional
 from confluent_kafka import Consumer, KafkaError, TopicPartition
+from nats.errors import ConnectionClosedError
 
 from .logger import logger
 from utils.hash_ring import ConsistentHashRing
@@ -263,13 +264,26 @@ class AssetForwarder:
         """
         attempt = 0
         while attempt <= self.max_retries:
+            if self._stop_event.is_set():
+                # Service is shutting down, stop retrying
+                logger.info("Service shutting down, skipping publish to %s", cluster.name)
+                return False
+
             try:
                 await cluster.publish(subject, payload)
                 return True
+            except ConnectionClosedError as e:
+                # NATS connection was closed — force reconnect before retrying
+                logger.warning("Connection closed for %s, reconnecting: %s", cluster.name, e)
+                try:
+                    await cluster.connect()
+                except Exception as ce:
+                    logger.warning("Reconnect to %s failed: %s", cluster.name, ce)
             except Exception as e:
                 attempt += 1
-                logger.warning("Publish fail %s attempt %s: %s", cluster.name, attempt, e)
+                logger.warning("Publish failed %s attempt %s: %s", cluster.name, attempt, e)
                 await asyncio.sleep(min(2 ** attempt, 10))
+
         return False
 
     async def _worker(self, worker_id: int) -> None:
@@ -383,14 +397,20 @@ class AssetForwarder:
         except asyncio.CancelledError:
             pass
 
+        logger.info("Shuting down worker tasks.")
         for _ in workers:
             await self.queue.put(None)
         await self.queue.join()
         for w in workers:
             w.cancel()
 
+        logger.info("Shuting down NATS clusters connections.")
         for cluster in self.nats_clusters.values():
-            await cluster.close()
+            try:
+                await cluster.close()
+                logger.info("Closed connection to NATS server %s", cluster.name)
+            except Exception as e:
+                logger.warning("NATS close failed for %s: %s", cluster.name, e)
 
         if self._consumer_thread and self._consumer_thread.is_alive():
             self._consumer_thread.join(timeout=5)

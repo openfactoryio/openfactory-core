@@ -48,11 +48,24 @@ class NATSSubscriber:
 
     async def _connect_and_subscribe(self) -> None:
         """ Connects to NATS and subscribes to the subject with an internal handler. """
+
+        async def error_handler(e):
+            print("NATS client error:", e)
+
+        async def disconnected_cb():
+            print("NATS disconnected — will attempt reconnect...")
+
+        async def reconnected_cb():
+            print("NATS reconnected successfully.")
+
         self.nc = await nats.connect(
-            self.servers,
-            max_reconnect_attempts=2,
+            servers=self.servers,
+            max_reconnect_attempts=-1,
             connect_timeout=2,
-            reconnect_time_wait=1
+            reconnect_time_wait=1,
+            error_cb=error_handler,
+            disconnected_cb=disconnected_cb,
+            reconnected_cb=reconnected_cb,
         )
 
         async def _handler(msg):

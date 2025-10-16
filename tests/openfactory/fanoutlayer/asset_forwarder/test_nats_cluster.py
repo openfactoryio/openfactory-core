@@ -30,8 +30,29 @@ class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
         """ Test that connect sets nc and calls NATS.connect with expected args. """
         mock_nc = mock_nats_cls.return_value
         mock_nc.connect = AsyncMock()
+
         await self.cluster.connect()
-        mock_nc.connect.assert_awaited_once_with(servers=self.servers, reconnect_time_wait=1)
+
+        # Check that connect was called once
+        mock_nc.connect.assert_awaited_once()
+
+        # Inspect call kwargs
+        call_kwargs = mock_nc.connect.call_args.kwargs
+        self.assertEqual(call_kwargs["servers"], self.cluster.servers)
+        self.assertEqual(call_kwargs["reconnect_time_wait"], self.cluster.reconnect_time_wait)
+        self.assertEqual(call_kwargs["max_reconnect_attempts"], -1)
+        self.assertEqual(call_kwargs["allow_reconnect"], True)
+        self.assertEqual(call_kwargs["ping_interval"], 10)
+        self.assertEqual(call_kwargs["connect_timeout"], 5)
+        self.assertEqual(call_kwargs["verbose"], False)
+
+        # Ensure callbacks are present
+        self.assertIn("disconnected_cb", call_kwargs)
+        self.assertIn("reconnected_cb", call_kwargs)
+        self.assertIn("closed_cb", call_kwargs)
+        self.assertIn("error_cb", call_kwargs)
+
+        # Ensure self.nc is assigned
         self.assertEqual(self.cluster.nc, mock_nc)
 
     @patch("openfactory.fanoutlayer.asset_forwarder.nats_cluster.NATS", autospec=True)

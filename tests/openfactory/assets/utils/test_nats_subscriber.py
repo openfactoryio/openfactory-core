@@ -29,10 +29,23 @@ class TestNATSSubscriber(unittest.TestCase):
         subscriber = NATSSubscriber(self.loop_thread, servers, subject, self.mock_callback)
         subscriber.start()
 
-        # Run the loop until tasks complete
+        # Run the loop briefly to allow coroutines to schedule
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
-        mock_nats_connect.assert_awaited_once_with(servers, max_reconnect_attempts=2, connect_timeout=2, reconnect_time_wait=1)
+        # Check that connect was awaited with new callback parameters
+        mock_nats_connect.assert_awaited_once()
+        connect_kwargs = mock_nats_connect.call_args.kwargs
+        self.assertEqual(connect_kwargs["servers"], servers)
+        self.assertEqual(connect_kwargs["max_reconnect_attempts"], -1)
+        self.assertEqual(connect_kwargs["connect_timeout"], 2)
+        self.assertEqual(connect_kwargs["reconnect_time_wait"], 1)
+
+        # Check callbacks are passed
+        self.assertIn("error_cb", connect_kwargs)
+        self.assertIn("disconnected_cb", connect_kwargs)
+        self.assertIn("reconnected_cb", connect_kwargs)
+
+        # Ensure subscription happened
         mock_nc.subscribe.assert_awaited_once()
         self.assertEqual(subscriber.sub, mock_sub)
         self.assertEqual(subscriber.nc, mock_nc)
@@ -98,6 +111,20 @@ class TestNATSSubscriber(unittest.TestCase):
         subscriber.start()
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
-        # Assert that the list of servers was passed as-is
-        mock_nats_connect.assert_awaited_once_with(servers, max_reconnect_attempts=2, connect_timeout=2, reconnect_time_wait=1)
+        # Check that connect was awaited
+        mock_nats_connect.assert_awaited_once()
+        connect_kwargs = mock_nats_connect.call_args.kwargs
+        self.assertEqual(connect_kwargs["servers"], servers)
+        self.assertEqual(connect_kwargs["max_reconnect_attempts"], -1)
+        self.assertEqual(connect_kwargs["connect_timeout"], 2)
+        self.assertEqual(connect_kwargs["reconnect_time_wait"], 1)
+
+        # Ensure callbacks are passed
+        self.assertIn("error_cb", connect_kwargs)
+        self.assertIn("disconnected_cb", connect_kwargs)
+        self.assertIn("reconnected_cb", connect_kwargs)
+
+        # Ensure subscription happened
         mock_nc.subscribe.assert_awaited_once()
+        self.assertEqual(subscriber.sub, mock_sub)
+        self.assertEqual(subscriber.nc, mock_nc)

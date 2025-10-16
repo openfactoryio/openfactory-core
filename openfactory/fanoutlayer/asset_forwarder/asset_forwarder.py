@@ -46,6 +46,7 @@ Usage
     asyncio.run(forwarder.start())
 """
 
+import os
 import asyncio
 import json
 import threading
@@ -156,7 +157,7 @@ class AssetForwarder:
         self.kafka_config = dict(kafka_config)
         self.kafka_config["group.id"] = group_id
         self.kafka_config["enable.auto.commit"] = False
-        self.kafka_config["auto.offset.reset"] = self.kafka_config.get("auto.offset.reset", "earliest")
+        self.kafka_config["auto.offset.reset"] = os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest")
 
         self.consumer: Optional[Consumer] = None
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)

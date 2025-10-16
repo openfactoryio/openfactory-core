@@ -80,8 +80,6 @@ class AssetForwarderService:
         kafka_conf = {
             "bootstrap.servers": kafka_broker,
             "group.id": kafka_group,
-            "enable.auto.commit": False,
-            "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest"),
         }
 
         nats_clusters = parse_nats_clusters()

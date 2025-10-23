@@ -36,7 +36,7 @@ from typing import Optional
 from prometheus_client import start_http_server
 from .logger import logger
 from .asset_forwarder import AssetForwarder
-from utils.parse_nats_clusters import parse_nats_clusters
+from openfactory.fanoutlayer.utils.parse_nats_clusters import parse_nats_clusters
 
 
 class AssetForwarderService:

@@ -56,7 +56,7 @@ from confluent_kafka import Consumer, KafkaError, TopicPartition
 from nats.errors import ConnectionClosedError
 
 from .logger import logger
-from utils.hash_ring import ConsistentHashRing
+from openfactory.fanoutlayer.utils.hash_ring import ConsistentHashRing
 from .nats_cluster import NatsCluster
 from . import asset_forwarder_metrics as forwarder_metrics
 

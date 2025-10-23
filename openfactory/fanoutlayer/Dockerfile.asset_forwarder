@@ -86,9 +86,9 @@ COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3
 COPY --from=build /usr/local/bin /usr/local/bin
 
 # Copy source code with correct ownership
-COPY --chown=ofa_forwarder:ofa_forwarder asset_forwarder/ ./asset_forwarder/
-COPY --chown=ofa_forwarder:ofa_forwarder utils/ ./utils/
+COPY --chown=ofa_forwarder:ofa_forwarder asset_forwarder/ ./openfactory/fanoutlayer/asset_forwarder/
+COPY --chown=ofa_forwarder:ofa_forwarder utils/ ./openfactory/fanoutlayer/utils/
 
 USER ${UNAME}
 
-CMD ["python3", "-u", "-m", "asset_forwarder.asset_forwarder_service"]
+CMD ["python3", "-u", "-m", "openfactory.fanoutlayer.asset_forwarder.asset_forwarder_service"]

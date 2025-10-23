@@ -53,7 +53,7 @@ def init_environment() -> bool:
 
 def main():
     """ Command line interface of OpenFactory. """
-    skip_env_commands = {"--help", "version", "config"}
+    skip_env_commands = {"--help", "version", "config", "templates"}
     if len(sys.argv) == 1 or sys.argv[1] in skip_env_commands:
         cli()
         return

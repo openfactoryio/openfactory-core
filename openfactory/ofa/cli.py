@@ -48,6 +48,12 @@ def asset():
     pass
 
 
+@cli.group()
+def templates():
+    """ Manage OpenFactory templates. """
+    pass
+
+
 # Register commands
 config.add_command(ofa.config.ls)
 
@@ -70,6 +76,9 @@ asset.add_command(ofa.asset.register)
 asset.add_command(ofa.asset.deregister)
 asset.add_command(ofa.asset.click_ls)
 asset.add_command(ofa.asset.click_inspect)
+
+templates.add_command(ofa.templates.ls)
+templates.add_command(ofa.templates.copy_templates)
 
 
 @cli.command(name='version')

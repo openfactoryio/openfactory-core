@@ -49,6 +49,7 @@
 # Optional:
 #   FORWARDER_VERSION           Version tag for the asset-forwarder image (default: latest)
 #   ASSET_FORWARDER_LOG_LEVEL   Log level (default: INFO)
+#   ASSET_FORWARDER_CONCURRENCY Number of async workers (default: 20)
 #
 # Fixed (do not change unless customizing deployment):
 #   NATS_CLUSTER_C1             NATS cluster URL (default: nats://nats:4222)

@@ -1,3 +1,5 @@
 include openfactory/config/openfactory.yml
 include openfactory/resources/mtcagent/agent.cfg
 recursive-include openfactory/resources/ksql *.sql
+include openfactory/fanoutlayer/docker-compose.yml
+include openfactory/fanoutlayer/docker-compose.override.yml

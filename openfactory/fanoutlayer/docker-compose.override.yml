@@ -10,6 +10,8 @@ services:
         context: .
         dockerfile: Dockerfile.asset_forwarder
     image: openfactoryio/asset-forwarder:local
+    deploy:
+      replicas: 1
     restart: unless-stopped
 
   asset-router:

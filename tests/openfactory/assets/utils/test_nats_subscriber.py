@@ -91,9 +91,11 @@ class TestNATSSubscriber(unittest.TestCase):
         subscriber.start()
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
+        # Stop should run _stop_all coroutine internally
         subscriber.stop()
         self.loop_thread.run_coro(asyncio.sleep(0.01)).result(timeout=1)
 
+        # Make sure unsubscribe and close coroutines were awaited
         mock_sub.unsubscribe.assert_awaited_once()
         mock_nc.close.assert_awaited_once()
 
@@ -128,3 +130,53 @@ class TestNATSSubscriber(unittest.TestCase):
         mock_nc.subscribe.assert_awaited_once()
         self.assertEqual(subscriber.sub, mock_sub)
         self.assertEqual(subscriber.nc, mock_nc)
+
+    @patch("openfactory.assets.utils.nats_subscriber.nats.connect", new_callable=AsyncMock)
+    def test_closing_flag_set_on_stop(self, mock_nats_connect):
+        """ Test that the _closing flag is True after stop() is called """
+        mock_nc = AsyncMock()
+        mock_sub = AsyncMock()
+        mock_nats_connect.return_value = mock_nc
+        mock_nc.subscribe.return_value = mock_sub
+
+        servers = "nats://localhost:4222"
+        subject = "TEST.*"
+        subscriber = NATSSubscriber(self.loop_thread, servers, subject, self.mock_callback)
+        subscriber.start()
+
+        # Initially, _closing should be False
+        self.assertFalse(subscriber._closing)
+
+        # Call stop
+        subscriber.stop()
+
+        # After stop, _closing should be True
+        self.assertTrue(subscriber._closing)
+
+    @patch("openfactory.assets.utils.nats_subscriber.nats.connect", new_callable=AsyncMock)
+    def test_disconnected_cb_skipped_when_closing(self, mock_nats_connect):
+        """ Test that disconnected callback does not print reconnect message if _closing is True """
+        mock_nc = AsyncMock()
+        mock_sub = AsyncMock()
+        mock_nats_connect.return_value = mock_nc
+        mock_nc.subscribe.return_value = mock_sub
+
+        servers = "nats://localhost:4222"
+        subject = "TEST.*"
+        subscriber = NATSSubscriber(self.loop_thread, servers, subject, self.mock_callback)
+        subscriber.start()
+
+        # Capture the disconnected_cb that was passed to nats.connect
+        connect_kwargs = mock_nats_connect.call_args.kwargs
+        disconnected_cb = connect_kwargs["disconnected_cb"]
+
+        # Initially, _closing is False, so callback should print the message
+        with patch("builtins.print") as mock_print:
+            asyncio.run(disconnected_cb())
+            mock_print.assert_called_with("NATS disconnected — will attempt reconnect...")
+
+        # Set _closing to True and call the callback again
+        subscriber._closing = True
+        with patch("builtins.print") as mock_print:
+            asyncio.run(disconnected_cb())
+            mock_print.assert_not_called()

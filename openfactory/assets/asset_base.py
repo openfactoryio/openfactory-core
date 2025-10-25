@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 import threading
+import asyncio
 from typing import Literal, List, Dict, Any, Union, Callable, Self
 import openfactory.config as config
 from openfactory.exceptions import OFAException
@@ -79,6 +80,41 @@ class BaseAsset:
 
         # Use shared producer
         super().__setattr__('producer', BaseAsset._shared_producer)
+
+    def close(self):
+        """
+        Gracefully closes the Asset and frees ressources.
+
+        Steps performed:
+            1. Stops all NATS subscribers (unsubscribe + close NATS connection).
+            2. Cancels any remaining tasks in the AsyncLoopThread.
+            3. Stops the AsyncLoopThread and joins the thread.
+
+        .. warning::
+            After calling this method, the Asset instance should not be used again.
+        """
+        # Stop all NATS subscribers
+        for key, sub in list(self.subscribers.items()):
+            try:
+                sub.stop()
+            except Exception as e:
+                print(f"Warning: failed to close NATS subscriber {key}: {e}")
+        self.subscribers.clear()
+
+        # Cancel any remaining pending tasks in the loop
+        loop = self.loop_thread.loop
+        pending = asyncio.all_tasks(loop=loop)
+        for task in pending:
+            task.cancel()
+        if pending:
+            try:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception:
+                pass  # ignore exceptions from cancelled tasks
+
+        # Stop the AsyncLoopThread
+        self.loop_thread.stop()
+        print(f'{self.asset_uuid} closed gracefully')
 
     @property
     def asset_uuid(self) -> str:

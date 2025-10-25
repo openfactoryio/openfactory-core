@@ -45,6 +45,7 @@ class NATSSubscriber:
         self.servers = servers
         self.nc = None
         self.sub = None
+        self._closing = False
 
     async def _connect_and_subscribe(self) -> None:
         """ Connects to NATS and subscribes to the subject with an internal handler. """
@@ -53,7 +54,8 @@ class NATSSubscriber:
             print("NATS client error:", e)
 
         async def disconnected_cb():
-            print("NATS disconnected — will attempt reconnect...")
+            if not self._closing:
+                print("NATS disconnected — will attempt reconnect...")
 
         async def reconnected_cb():
             print("NATS reconnected successfully.")
@@ -86,7 +88,22 @@ class NATSSubscriber:
 
     def stop(self) -> None:
         """ Stops the NATS subscription and closes the connection. """
-        if self.sub:
-            self.loop_thread.run_coro(self.sub.unsubscribe())
-        if self.nc:
-            self.loop_thread.run_coro(self.nc.close())
+        self._closing = True
+
+        async def _stop_all():
+            if self.sub:
+                try:
+                    await self.sub.unsubscribe()
+                except Exception as e:
+                    print(f"Warning: unsub error: {e}")
+            if self.nc:
+                try:
+                    await self.nc.close()
+                except Exception as e:
+                    print(f"Warning: nc close error: {e}")
+
+        # Schedule the coroutine on the loop thread and wait
+        try:
+            self.loop_thread.run_coro(_stop_all()).result()
+        except Exception as e:
+            print(f"Warning: NATS stop failed: {e}")

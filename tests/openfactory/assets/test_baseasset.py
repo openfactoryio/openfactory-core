@@ -113,6 +113,51 @@ class TestBaseAsset(TestCase):
         with self.assertRaises(TypeError):
             InvalidConsumer('some_id', self.ksql_mock)
 
+    def test_close_stops_all_subscribers(self, MockAssetProducer):
+        """ Test close stops all NATS subscribers """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        # Register fake subscribers
+        mock_sub1 = MagicMock()
+        mock_sub2 = MagicMock()
+        asset.subscribers = {"s1": mock_sub1, "s2": mock_sub2}
+
+        # Patch loop thread functions to avoid real async interaction
+        asset.loop_thread.stop = MagicMock()
+
+        asset.close()
+
+        mock_sub1.stop.assert_called_once()
+        mock_sub2.stop.assert_called_once()
+        self.assertEqual(asset.subscribers, {})  # should be cleared
+
+    @patch("asyncio.all_tasks")
+    @patch("asyncio.gather")
+    def test_close_cancels_pending_tasks(self, mock_gather, mock_all_tasks, MockAssetProducer):
+        """ Test close cancles pending tasks """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        # Mock one pending task
+        mock_task = MagicMock()
+        mock_all_tasks.return_value = [mock_task]
+
+        asset.loop_thread.stop = MagicMock()
+
+        asset.close()
+
+        mock_task.cancel.assert_called_once()
+        mock_gather.assert_called_once()
+
+    def test_close_stops_loop_thread(self, MockAssetProducer):
+        """ Test close stops loop_thread """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset.loop_thread.stop = MagicMock()
+
+        asset.close()
+
+        asset.loop_thread.stop.assert_called_once()
+
     def test_type_returns_unavailable_when_empty(self, MockAssetProducer):
         """ Test if asset.type returns 'UNAVAILABLE' when the ksql query yields no results """
 

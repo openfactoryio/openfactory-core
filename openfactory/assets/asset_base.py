@@ -114,7 +114,6 @@ class BaseAsset:
 
         # Stop the AsyncLoopThread
         self.loop_thread.stop()
-        print(f'{self.asset_uuid} closed gracefully')
 
     @property
     def asset_uuid(self) -> str:

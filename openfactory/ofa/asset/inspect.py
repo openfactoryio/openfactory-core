@@ -48,4 +48,5 @@ def click_inspect(asset_uuid: str) -> None:
                       'Condition',
                       cond['TAG'])
 
+    asset.close()
     console.print(table)

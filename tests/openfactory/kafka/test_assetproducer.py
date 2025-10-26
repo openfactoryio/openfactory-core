@@ -66,3 +66,43 @@ class TestAssetProducer(unittest.TestCase):
             value=json.dumps(expected_message)
         )
         producer.flush.assert_called_once()
+
+    def test_send_asset_attribute_with_extra_attributes(self):
+        """ Test send_asset_attribute with additional attributes """
+
+        mock_ksql = MagicMock()
+        mock_ksql.get_kafka_topic.return_value = "ASSETS_STREAM"
+        asset_uuid = "asset-789"
+        producer = AssetProducer(mock_ksql)
+
+        producer.produce = MagicMock()
+        producer.flush = MagicMock()
+
+        asset_id = "device-987"
+        mock_attr = MockAssetAttribute(asset_id)
+
+        extra_attributes = {
+            "unit": "Celsius",
+            "sensorLocation": "BoilerRoom"
+        }
+
+        expected_message = {
+            "ID": asset_id,
+            "VALUE": mock_attr.value,
+            "TAG": mock_attr.tag,
+            "TYPE": mock_attr.type,
+            "attributes": {
+                "timestamp": mock_attr.timestamp,
+                "unit": "Celsius",
+                "sensorLocation": "BoilerRoom"
+            }
+        }
+
+        producer.send_asset_attribute(asset_uuid, mock_attr, extra_attributes)
+
+        producer.produce.assert_called_once_with(
+            topic="ASSETS_STREAM",
+            key=asset_uuid,
+            value=json.dumps(expected_message)
+        )
+        producer.flush.assert_called_once()

@@ -140,8 +140,10 @@ class OpenFactoryManager(OpenFactory):
                        ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=device.uuid.lower() + '-supervisor')
         dev = Asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         dev.add_reference_below(supervisor_uuid)
+        dev.close()
         sup = Asset(supervisor_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         sup.add_reference_above(device.uuid)
+        sup.close()
 
         user_notify.success(f"Supervisor {supervisor_uuid} deployed successfully")
 
@@ -356,6 +358,7 @@ class OpenFactoryManager(OpenFactory):
         try:
             app = Asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             self.deployment_strategy.remove(app.DockerService.value)
+            app.close()
         except docker.errors.NotFound:
             # the application was not running as a Docker swarm service
             deregister_asset(app_uuid, ksqlClient=self.ksql)

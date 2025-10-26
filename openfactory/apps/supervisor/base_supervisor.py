@@ -97,6 +97,7 @@ class BaseSupervisor(OpenFactoryApp):
                 )
             )
             self.logger.info(f"Sent method: [{cmd['command']} | {cmd['description']}]")
+        dev.close()
 
     def on_command(self, msg_key: str, msg_value: dict[str, Any]) -> None:
         """

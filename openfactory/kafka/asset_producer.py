@@ -31,7 +31,7 @@ class AssetProducer(Producer):
         self.ksql = ksqlClient
         self.topic = self.ksql.get_kafka_topic('ASSETS_STREAM')
 
-    def send_asset_attribute(self, asset_uuid: str, assetAttribute: AssetAttribute) -> None:
+    def send_asset_attribute(self, asset_uuid: str, assetAttribute: AssetAttribute, attributes: dict | None = None) -> None:
         """
         Sends a Kafka message representing an asset attribute.
 
@@ -40,16 +40,23 @@ class AssetProducer(Producer):
         Args:
             asset_uuid (str): UUID of the asset this producer is associated with.
             assetAttribute (AssetAttribute): The asset attribute object containing value, type, tag, and timestamp.
+            attributes (dict, optional): Additional attributes to include under the "attributes" field in the message.
         """
+        # Base attributes with timestamp
+        attr_payload = {"timestamp": assetAttribute.timestamp}
+
+        # If additional attributes were provided, merge them in
+        if attributes:
+            attr_payload.update(attributes)
+
         msg = {
             "ID": assetAttribute.id,
             "VALUE": assetAttribute.value,
             "TAG": assetAttribute.tag,
             "TYPE": assetAttribute.type,
-            "attributes": {
-                "timestamp": assetAttribute.timestamp
-                }
+            "attributes": attr_payload,
         }
+
         self.produce(topic=self.topic,
                      key=asset_uuid,
                      value=json.dumps(msg))

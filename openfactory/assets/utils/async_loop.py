@@ -38,7 +38,7 @@ class AsyncLoopThread:
             coro (Coroutine): The coroutine to run in the loop.
 
         Returns:
-            asyncio.Future: A Future representing the execution of the coroutine.
+            :class:`asyncio.Future`: A Future representing the execution of the coroutine.
         """
         return asyncio.run_coroutine_threadsafe(coro, self.loop)
 

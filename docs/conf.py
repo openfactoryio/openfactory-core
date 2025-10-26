@@ -25,11 +25,13 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
     'fsspec': ('https://filesystem-spec.readthedocs.io/en/latest/', None),
+    'requests': ('https://requests.readthedocs.io/en/latest/', None),
 }
 
 nitpick_ignore = [
     ('py:exc', 'docker.errors.APIError'),
     ('py:exc', 'docker.errors.NotFound'),
+    ('py:exc', 'KafkaError'),
     ('py:class', 'asyncua.Client'),
     ('py:class', 'cimpl.Producer'),
     ('py:class', 'pydantic.main.BaseModel'),

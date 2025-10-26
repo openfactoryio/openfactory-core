@@ -12,8 +12,8 @@ class AssetAttribute:
 
     Attributes:
         id (str): the ID of the AssetAttribute
-        value (Union[str, float]): The actual value of the attribute. Can be a string or float.
-        type (Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']):
+        value (typing.Union[str, float]): The actual value of the attribute. Can be a string or float.
+        type (typing.Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']):
             The category/type of the attribute, must be one of the allowed literal strings.
         tag (str): The tag or identifier associated with this attribute.
         timestamp (str): Timestamp when the attribute was recorded, in OpenFactory format.

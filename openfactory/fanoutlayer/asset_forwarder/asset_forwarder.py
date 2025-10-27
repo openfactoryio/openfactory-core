@@ -54,7 +54,7 @@ import time
 from typing import Dict, List, Optional
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from nats.errors import ConnectionClosedError
-
+from datetime import datetime, timezone
 from .logger import logger
 from openfactory.fanoutlayer.utils.hash_ring import ConsistentHashRing
 from .nats_cluster import NatsCluster
@@ -222,12 +222,38 @@ class AssetForwarder:
                     logger.error("Kafka error: %s", msg.error())
                     continue
 
+                # Parse value (handle bytes/str/dict)
+                raw_value = msg.value()
+                try:
+                    if isinstance(raw_value, (bytes, bytearray)):
+                        value = json.loads(raw_value.decode("utf-8"))
+                    elif isinstance(raw_value, str):
+                        value = json.loads(raw_value)
+                except Exception:
+                    logger.warning("Failed to parse msg.value() as JSON; leaving raw value", exc_info=True)
+                    continue
+
+                # Add timestamps to 'attributes'
+                ts_type, ts = msg.timestamp()
+                attrs = value.setdefault("attributes", {})
+                attrs["asset_forwarder_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                if ts is not None:
+                    dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+                    attrs["kafka_timestamp"] = dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+                    if ts_type == 1:
+                        attrs["kafka_timestamp_type"] = "producer"
+                    elif ts_type == 2:
+                        attrs["kafka_timestamp_type"] = "broker"
+                    else:
+                        attrs["kafka_timestamp_type"] = "unknown"
+
                 envelope = {
                     "topic": msg.topic(),
                     "partition": msg.partition(),
                     "offset": msg.offset(),
                     "key": msg.key(),
-                    "value": msg.value(),
+                    "value": value,
                 }
                 forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(topic=msg.topic()).inc()
 

@@ -51,6 +51,7 @@ import asyncio
 import json
 import threading
 import time
+from copy import deepcopy
 from typing import Dict, List, Optional
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from nats.errors import ConnectionClosedError
@@ -171,18 +172,13 @@ class AssetForwarder:
         self._consumer_thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
-    # -------------------------
-    # Metrics monitor coroutine
-    # -------------------------
-    async def _queue_monitor(self, interval: float = 0.5) -> None:
-        """ Background task that updates the QUEUE_SIZE gauge while running. """
-        while not self._stop_event.is_set():
-            try:
-                forwarder_metrics.QUEUE_SIZE.set(self.queue.qsize())
-            except Exception:
-                # avoid raising in monitor (never crash the service for a metrics error)
-                logger.exception("Failed to update queue size metric")
-            await asyncio.sleep(interval)
+        self.forwarder_id = os.environ.get('TASK_SLOT', 'unknown')
+
+        forwarder_metrics.BUILD_INFO.info({
+            "version": os.environ.get('APPLICATION_VERSION', 'UNKNOWN'),
+            "swarm_node": os.environ.get('NODE_HOSTNAME', 'unknown'),
+            "forwarder": self.forwarder_id,
+        })
 
     # -------------------------
     # Kafka Consumer callbacks
@@ -222,6 +218,14 @@ class AssetForwarder:
                     logger.error("Kafka error: %s", msg.error())
                     continue
 
+                try:
+                    tp = TopicPartition(msg.topic(), msg.partition(), msg.offset() + 1)
+                    self.consumer.commit(offsets=[tp], asynchronous=False)
+                except Exception as e:
+                    logger.error("Kafka commit failed: %s", e)
+
+                logger.debug("POLLED msg offset=%s partition=%s", msg.offset(), msg.partition())
+
                 # Parse value (handle bytes/str/dict)
                 raw_value = msg.value()
                 try:
@@ -249,20 +253,36 @@ class AssetForwarder:
                         attrs["kafka_timestamp_type"] = "unknown"
 
                 envelope = {
-                    "topic": msg.topic(),
-                    "partition": msg.partition(),
-                    "offset": msg.offset(),
                     "key": msg.key(),
+                    "msg_offset": msg.offset(),
                     "value": value,
+                    "enqueue_ts": time.perf_counter(),
                 }
-                forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(topic=msg.topic()).inc()
+                forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(forwarder=self.forwarder_id).inc()
 
                 try:
                     loop = self._loop
                     if loop and loop.is_running():
-                        asyncio.run_coroutine_threadsafe(self.queue.put(envelope), loop)
+                        def _put():
+                            try:
+                                logger.debug(f"[ENQUEUE] msg offset={msg.offset()} object_id={id(value)}")
+                                self.queue.put_nowait(deepcopy(envelope))
+                            except asyncio.QueueFull:
+                                logger.warning("Queue full, dropping message")
+                        loop.call_soon_threadsafe(_put)
+                        """
+                        try:
+                            tp = TopicPartition(msg.topic(), msg.partition(), msg.offset() + 1)
+                            self.consumer.commit(offsets=[tp], asynchronous=False)
+                        except Exception as e:
+                            logger.error("Kafka commit failed: %s", e)
+                        """
                 except Exception as e:
                     logger.error("Queue put failed: %s", e)
+                try:
+                    forwarder_metrics.QUEUE_SIZE_HISTOGRAM.labels(forwarder=self.forwarder_id).observe(self.queue.qsize())
+                except Exception:
+                    logger.exception("Failed to update queue size metric")
 
             try:
                 consumer.commit(asynchronous=False)
@@ -326,20 +346,17 @@ class AssetForwarder:
                 self.queue.task_done()
                 break
 
+            wait_time = time.perf_counter() - envelope['enqueue_ts']
+            forwarder_metrics.QUEUE_TIME_SECONDS.labels(forwarder=self.forwarder_id).observe(wait_time)
+
             start_time = time.perf_counter()
-            topic = envelope.get("topic")
-            partition = envelope.get("partition")
-            offset = envelope.get("offset")
             key = envelope.get("key")
             value = envelope.get("value")
 
-            logger.debug(
-                "Worker[%d] processing message %s:%s:%s",
-                worker_id, topic, partition, offset
-            )
+            logger.debug(f"Worker[{worker_id}] processing msg offset={envelope.get("msg_offset")} ID={value.get("ID")}")
 
             if not key:
-                logger.warning("Message without key at %s:%s:%s", topic, partition, offset)
+                logger.warning(f"Message {value} without key")
                 self.queue.task_done()
                 continue
 
@@ -348,41 +365,28 @@ class AssetForwarder:
             cluster_name = self.hash_ring.get(asset_uuid)
             cluster = self.nats_clusters[cluster_name]
 
-            # Parse payload once
-            try:
-                payload_json = value if isinstance(value, (dict, list)) else json.loads(value.decode())
-                message_id = payload_json.pop("ID", "unknown")  # remove ID for payload
-            except Exception as e:
-                logger.warning("Failed to parse message payload: %s", e)
-                payload_json = {}
-                message_id = "unknown"
+            # Extract and remove ID safely
+            message_id = value.pop("ID", None)
+            if not message_id:
+                logger.warning(f"[{worker_id}] ID missing in {value}")
+                self.queue.task_done()
+                continue
 
             # Build subject
             subject = f"{asset_uuid.decode(errors='ignore')}.{message_id}"
 
             # Ensure payload is bytes
-            payload_bytes = (
-                json.dumps(payload_json).encode()
-                if not isinstance(payload_json, (bytes, bytearray))
-                else payload_json
-            )
+            payload_bytes = json.dumps(value).encode()
 
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
-
-            duration = time.perf_counter() - start_time
-            forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(cluster=cluster_name).set(duration)
-
-            # Commit Kafka offset if publish succeeded
             if ok and self.consumer:
-                try:
-                    tp = TopicPartition(topic, partition, offset + 1)
-                    self.consumer.commit(offsets=[tp], asynchronous=False)
-                    forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
-                except Exception as e:
-                    logger.error("Commit failed: %s", e)
+                forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
             else:
                 forwarder_metrics.NATS_PUBLISH_FAILURES.labels(cluster=cluster_name).inc()
+
+            duration = time.perf_counter() - start_time
+            forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(forwarder=self.forwarder_id).observe(duration)
 
             self.queue.task_done()
 
@@ -402,10 +406,6 @@ class AssetForwarder:
             except Exception as e:
                 logger.warning("NATS connect failed: %s", e)
 
-        # start queue monitor
-        logger.info("Starting metrics monitoring task.")
-        queue_monitor_task = asyncio.create_task(self._queue_monitor())
-
         workers = []
         for i in range(self.concurrency):
             t = asyncio.create_task(self._worker(i))
@@ -416,22 +416,14 @@ class AssetForwarder:
         while not self._stop_event.is_set():
             await asyncio.sleep(0.5)
 
-        # Graceful shutdown
-        logger.info("Shuting down metrics monitoring task.")
-        queue_monitor_task.cancel()
-        try:
-            await queue_monitor_task
-        except asyncio.CancelledError:
-            pass
-
-        logger.info("Shuting down worker tasks.")
+        logger.info("Shutting down worker tasks.")
         for _ in workers:
             await self.queue.put(None)
         await self.queue.join()
         for w in workers:
             w.cancel()
 
-        logger.info("Shuting down NATS clusters connections.")
+        logger.info("Shutting down NATS clusters connections.")
         for cluster in self.nats_clusters.values():
             try:
                 await cluster.close()

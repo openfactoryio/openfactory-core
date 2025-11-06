@@ -38,7 +38,9 @@ LABEL organisation="Concordia University"
 LABEL description="Docker image for OpenFactory Asset Forwarder"
 LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main/openfactory/fanoutlayer"
 
-ARG VERSION=latest
+ARG VERSION=dev
+ARG APPLICATION_MANUFACTURER=OpenFactoryIO
+ARG OPENFACTORY_VERSION=main
 
 # Install build-time dependencies
 RUN apt-get update && \
@@ -69,7 +71,7 @@ FROM python:3.13-slim
 ARG UNAME=ofa_forwarder
 ARG UID=1200
 ARG GID=1200
-ARG VERSION=latest
+ARG VERSION=dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

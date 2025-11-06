@@ -32,6 +32,7 @@ import asyncio
 import os
 import signal
 import sys
+import uvloop
 from typing import Optional
 from prometheus_client import start_http_server
 from .logger import logger
@@ -137,7 +138,7 @@ def main():
 
     service = AssetForwarderService()
     try:
-        asyncio.run(service.run())
+        uvloop.run(service.run())
     except Exception as e:
         logger.error("Service crashed: %s", e)
         sys.exit(1)

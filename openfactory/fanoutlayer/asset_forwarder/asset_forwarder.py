@@ -104,6 +104,36 @@ def log_task_exceptions(task: asyncio.Task, name: Optional[str] = None) -> None:
         logger.info("Task %s completed cleanly", name)
 
 
+class Batch:
+    """
+    Represents a batch of Kafka messages pending processing.
+
+    Attributes:
+        last_offset (int): The highest Kafka offset in this batch.
+        total (int): Total number of messages in the batch.
+        topic (str): Kafka topic for this batch.
+        partition (int): Kafka partition for this batch.
+    """
+    def __init__(self, last_offset: int, total: int, topic: str, partition: int):
+        self.last_offset = last_offset
+        self.total = total
+        self.topic = topic
+        self.partition = partition
+        self.completed = 0
+        self._lock = threading.Lock()
+
+    def mark_done(self) -> bool:
+        """
+        Marks one message in the batch as processed.
+
+        Returns:
+            bool: True if all messages in the batch have been processed.
+        """
+        with self._lock:
+            self.completed += 1
+            return self.completed == self.total
+
+
 class AssetForwarder:
     """
     Forward asset data from Kafka to NATS clusters.
@@ -209,80 +239,94 @@ class AssetForwarder:
             consumer.subscribe([self.kafka_topic], on_assign=self._on_assign, on_revoke=self._on_revoke)
 
             while not self._stop_event.is_set():
-                msg = consumer.poll(timeout=1.0)
-                if msg is None:
+                msgs = consumer.consume(num_messages=100, timeout=0.001)
+
+                if not msgs:
                     continue
-                if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
+
+                envelopes = []
+                batch_last_offset = None
+                batch_topic = None
+                batch_partition = None
+
+                for msg in msgs:
+                    if msg.error():
+                        if msg.error().code() == KafkaError._PARTITION_EOF:
+                            continue
+                        logger.error("Kafka error: %s", msg.error())
                         continue
-                    logger.error("Kafka error: %s", msg.error())
+
+                    batch_last_offset = msg.offset()
+                    batch_topic = msg.topic()
+                    batch_partition = msg.partition()
+
+                    # Parse message value
+                    raw_value = msg.value()
+                    try:
+                        if isinstance(raw_value, (bytes, bytearray)):
+                            value = json.loads(raw_value.decode("utf-8"))
+                        elif isinstance(raw_value, str):
+                            value = json.loads(raw_value)
+                    except Exception:
+                        logger.warning("Failed to parse msg.value() as JSON; leaving raw value", exc_info=True)
+                        continue
+
+                    # Add timestamps
+                    ts_type, ts = msg.timestamp()
+                    attrs = value.setdefault("attributes", {})
+                    attrs["asset_forwarder_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                    if ts is not None:
+                        dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+                        attrs["kafka_timestamp"] = dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                        if ts_type == 1:
+                            attrs["kafka_timestamp_type"] = "producer"
+                        elif ts_type == 2:
+                            attrs["kafka_timestamp_type"] = "broker"
+                        else:
+                            attrs["kafka_timestamp_type"] = "unknown"
+
+                    envelopes.append({
+                        "key": msg.key(),
+                        "topic": msg.topic(),
+                        "partition": msg.partition(),
+                        "msg_offset": msg.offset(),
+                        "value": value,
+                        "enqueue_ts": time.perf_counter(),
+                    })
+
+                if not envelopes:
                     continue
 
-                try:
-                    tp = TopicPartition(msg.topic(), msg.partition(), msg.offset() + 1)
-                    self.consumer.commit(offsets=[tp], asynchronous=False)
-                except Exception as e:
-                    logger.error("Kafka commit failed: %s", e)
+                # Create batch object
+                batch_obj = Batch(
+                    last_offset=batch_last_offset,
+                    total=len(envelopes),
+                    topic=batch_topic,
+                    partition=batch_partition,
+                )
 
-                logger.debug("POLLED msg offset=%s partition=%s", msg.offset(), msg.partition())
+                # Attach batch to each envelope
+                for env in envelopes:
+                    env["batch"] = batch_obj
 
-                # Parse value (handle bytes/str/dict)
-                raw_value = msg.value()
-                try:
-                    if isinstance(raw_value, (bytes, bytearray)):
-                        value = json.loads(raw_value.decode("utf-8"))
-                    elif isinstance(raw_value, str):
-                        value = json.loads(raw_value)
-                except Exception:
-                    logger.warning("Failed to parse msg.value() as JSON; leaving raw value", exc_info=True)
-                    continue
-
-                # Add timestamps to 'attributes'
-                ts_type, ts = msg.timestamp()
-                attrs = value.setdefault("attributes", {})
-                attrs["asset_forwarder_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-                if ts is not None:
-                    dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-                    attrs["kafka_timestamp"] = dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-                    if ts_type == 1:
-                        attrs["kafka_timestamp_type"] = "producer"
-                    elif ts_type == 2:
-                        attrs["kafka_timestamp_type"] = "broker"
-                    else:
-                        attrs["kafka_timestamp_type"] = "unknown"
-
-                envelope = {
-                    "key": msg.key(),
-                    "msg_offset": msg.offset(),
-                    "value": value,
-                    "enqueue_ts": time.perf_counter(),
-                }
-                forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(forwarder=self.forwarder_id).inc()
-
-                try:
-                    loop = self._loop
-                    if loop and loop.is_running():
-                        def _put():
+                # Push batch into queue
+                loop = self._loop
+                if loop and loop.is_running():
+                    def _enqueue_all():
+                        for e in envelopes:
                             try:
-                                logger.debug(f"[ENQUEUE] msg offset={msg.offset()} object_id={id(value)}")
-                                self.queue.put_nowait(deepcopy(envelope))
+                                e_copy = dict(e)
+                                e_copy["value"] = deepcopy(e["value"])
+                                self.queue.put_nowait(e_copy)
                             except asyncio.QueueFull:
                                 logger.warning("Queue full, dropping message")
-                        loop.call_soon_threadsafe(_put)
-                        """
-                        try:
-                            tp = TopicPartition(msg.topic(), msg.partition(), msg.offset() + 1)
-                            self.consumer.commit(offsets=[tp], asynchronous=False)
-                        except Exception as e:
-                            logger.error("Kafka commit failed: %s", e)
-                        """
-                except Exception as e:
-                    logger.error("Queue put failed: %s", e)
+                    loop.call_soon_threadsafe(_enqueue_all)
+
                 try:
+                    forwarder_metrics.KAFKA_MESSAGES_CONSUMED.labels(forwarder=self.forwarder_id).inc(len(envelopes))
                     forwarder_metrics.QUEUE_SIZE_HISTOGRAM.labels(forwarder=self.forwarder_id).observe(self.queue.qsize())
                 except Exception:
-                    logger.exception("Failed to update queue size metric")
+                    logger.exception("Failed to update metrics")
 
             try:
                 consumer.commit(asynchronous=False)
@@ -353,7 +397,7 @@ class AssetForwarder:
             key = envelope.get("key")
             value = envelope.get("value")
 
-            logger.debug(f"Worker[{worker_id}] processing msg offset={envelope.get("msg_offset")} ID={value.get("ID")}")
+            logger.debug(f'Worker[{worker_id}] processing msg {envelope}')
 
             if not key:
                 logger.warning(f"Message {value} without key")
@@ -380,8 +424,14 @@ class AssetForwarder:
 
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
-            if ok and self.consumer:
+            batch = envelope.get("batch")
+
+            if ok:
                 forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
+                # Commit batch if fully processed
+                if batch and self.consumer and batch.mark_done():
+                    tp = TopicPartition(batch.topic, batch.partition, batch.last_offset + 1)
+                    self.consumer.commit(offsets=[tp], asynchronous=False)
             else:
                 forwarder_metrics.NATS_PUBLISH_FAILURES.labels(cluster=cluster_name).inc()
 
@@ -406,6 +456,7 @@ class AssetForwarder:
             except Exception as e:
                 logger.warning("NATS connect failed: %s", e)
 
+        # Launch workers
         workers = []
         for i in range(self.concurrency):
             t = asyncio.create_task(self._worker(i))
@@ -423,7 +474,7 @@ class AssetForwarder:
         for w in workers:
             w.cancel()
 
-        logger.info("Shutting down NATS clusters connections.")
+        logger.info("Shutting down NATS cluster connections.")
         for cluster in self.nats_clusters.values():
             try:
                 await cluster.close()

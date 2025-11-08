@@ -144,7 +144,6 @@ class NatsCluster:
         if not self.nc:
             raise RuntimeError(f"NATS[{self.name}] not connected")
         await self.nc.publish(subject, payload)
-        logger.debug(f"Published {payload} to {self.name} in subject {subject}")
 
     async def close(self) -> None:
         """

@@ -316,8 +316,11 @@ class AssetForwarder:
                         for e in envelopes:
                             try:
                                 e_copy = dict(e)
+                                e_copy["partition"] = deepcopy(e["partition"])
+                                e_copy["msg_offset"] = deepcopy(e["msg_offset"])
                                 e_copy["value"] = deepcopy(e["value"])
                                 self.queue.put_nowait(e_copy)
+                                logger.debug(f"Sending msg (partition={e_copy['partition']}, offset={e_copy['msg_offset']}) to queue")
                             except asyncio.QueueFull:
                                 logger.warning("Queue full, dropping message")
                     loop.call_soon_threadsafe(_enqueue_all)
@@ -384,6 +387,7 @@ class AssetForwarder:
         Args:
             worker_id (int): Unique worker identifier (for debugging/logging).
         """
+        logger.info(f"Starting worker {worker_id}.")
         while True:
             envelope = await self.queue.get()
             if envelope is None:
@@ -396,8 +400,6 @@ class AssetForwarder:
             start_time = time.perf_counter()
             key = envelope.get("key")
             value = envelope.get("value")
-
-            logger.debug(f'Worker[{worker_id}] processing msg {envelope}')
 
             if not key:
                 logger.warning(f"Message {value} without key")
@@ -424,6 +426,7 @@ class AssetForwarder:
 
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
+            logger.debug(f"Worker[{worker_id}] Published msg (partition={envelope['partition']}, offset={envelope['msg_offset']}) to {cluster_name} in subject {subject}")
             batch = envelope.get("batch")
 
             if ok:

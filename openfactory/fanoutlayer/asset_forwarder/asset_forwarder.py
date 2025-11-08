@@ -187,7 +187,9 @@ class AssetForwarder:
         self.kafka_topic = kafka_topic
         self.kafka_config = dict(kafka_config)
         self.kafka_config["group.id"] = group_id
-        self.kafka_config["enable.auto.commit"] = False
+        self.kafka_config["enable.auto.commit"] = True
+        self.kafka_config["auto.commit.interval.ms"] = 100
+        self.kafka_config["enable.auto.offset.store"] = False
         self.kafka_config["auto.offset.reset"] = os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest")
 
         self.consumer: Optional[Consumer] = None
@@ -427,14 +429,12 @@ class AssetForwarder:
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
             logger.debug(f"Worker[{worker_id}] Published msg (partition={envelope['partition']}, offset={envelope['msg_offset']}) to {cluster_name} in subject {subject}")
-            batch = envelope.get("batch")
 
             if ok:
                 forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
-                # Commit batch if fully processed
-                if batch and self.consumer and batch.mark_done():
-                    tp = TopicPartition(batch.topic, batch.partition, batch.last_offset + 1)
-                    self.consumer.commit(offsets=[tp], asynchronous=False)
+                # mark message as processed
+                tp = TopicPartition(envelope["topic"], envelope["partition"], envelope["msg_offset"] + 1)
+                self.consumer.store_offsets(offsets=[tp])
             else:
                 forwarder_metrics.NATS_PUBLISH_FAILURES.labels(cluster=cluster_name).inc()
 

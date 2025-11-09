@@ -104,36 +104,6 @@ def log_task_exceptions(task: asyncio.Task, name: Optional[str] = None) -> None:
         logger.info("Task %s completed cleanly", name)
 
 
-class Batch:
-    """
-    Represents a batch of Kafka messages pending processing.
-
-    Attributes:
-        last_offset (int): The highest Kafka offset in this batch.
-        total (int): Total number of messages in the batch.
-        topic (str): Kafka topic for this batch.
-        partition (int): Kafka partition for this batch.
-    """
-    def __init__(self, last_offset: int, total: int, topic: str, partition: int):
-        self.last_offset = last_offset
-        self.total = total
-        self.topic = topic
-        self.partition = partition
-        self.completed = 0
-        self._lock = threading.Lock()
-
-    def mark_done(self) -> bool:
-        """
-        Marks one message in the batch as processed.
-
-        Returns:
-            bool: True if all messages in the batch have been processed.
-        """
-        with self._lock:
-            self.completed += 1
-            return self.completed == self.total
-
-
 class AssetForwarder:
     """
     Forward asset data from Kafka to NATS clusters.
@@ -247,9 +217,6 @@ class AssetForwarder:
                     continue
 
                 envelopes = []
-                batch_last_offset = None
-                batch_topic = None
-                batch_partition = None
 
                 for msg in msgs:
                     if msg.error():
@@ -257,10 +224,6 @@ class AssetForwarder:
                             continue
                         logger.error("Kafka error: %s", msg.error())
                         continue
-
-                    batch_last_offset = msg.offset()
-                    batch_topic = msg.topic()
-                    batch_partition = msg.partition()
 
                     # Parse message value
                     raw_value = msg.value()
@@ -298,18 +261,6 @@ class AssetForwarder:
 
                 if not envelopes:
                     continue
-
-                # Create batch object
-                batch_obj = Batch(
-                    last_offset=batch_last_offset,
-                    total=len(envelopes),
-                    topic=batch_topic,
-                    partition=batch_partition,
-                )
-
-                # Attach batch to each envelope
-                for env in envelopes:
-                    env["batch"] = batch_obj
 
                 # Push batch into queue
                 loop = self._loop

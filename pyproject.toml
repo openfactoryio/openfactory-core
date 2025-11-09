@@ -12,6 +12,7 @@ dependencies = [
     "pydantic",
     "pyyaml",
     "python-dotenv",
+    "uvloop",
 
     # Networking and protocols
     "asyncua",

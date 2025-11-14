@@ -34,33 +34,43 @@ class TestConnectorUnion(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "namespace_uri": "http://examples.openfactory.local/opcua"
-            },
-            "device": {
-                "path": "Sensors/TemperatureSensor",
-                "variables": {"temp": "Temperature", "hum": "Humidity"},
-                "methods": {"calibrate": "Calibrate"}
+                # subscription omitted → defaults applied
+                "variables": {
+                    "temp": {
+                        "node_id": "ns=3;i=1050",
+                        "tag": "Temperature"
+                    },
+                    "hum": {
+                        "node_id": "ns=2;i=10",
+                        "tag": "Humidity"
+                    }
+                }
             }
         }
-        connector = TypeAdapter(Connector).validate_python(data)
+
+        connector = OPCUAConnectorSchema(**data)
 
         # Type checks
         self.assertIsInstance(connector, OPCUAConnectorSchema)
         self.assertEqual(connector.type, "opcua")
         self.assertEqual(connector.server.uri, "opc.tcp://127.0.0.1:4840/freeopcua/server/")
-        self.assertEqual(connector.device.path, "Sensors/TemperatureSensor")
 
         # Variables should be normalized into OPCUAVariableConfig
-        self.assertIn("temp", connector.device.variables)
-        self.assertIsInstance(connector.device.variables["temp"], OPCUAVariableConfig)
-        self.assertEqual(connector.device.variables["temp"].browse_name, "Temperature")
+        self.assertIn("temp", connector.server.variables)
+        temp_var = connector.server.variables["temp"]
+        self.assertIsInstance(temp_var, OPCUAVariableConfig)
+        self.assertEqual(temp_var.tag, "Temperature")
+        # Defaults applied
+        self.assertEqual(temp_var.queue_size, 1)
+        self.assertEqual(temp_var.sampling_interval, 0)
 
-        self.assertIn("hum", connector.device.variables)
-        self.assertIsInstance(connector.device.variables["hum"], OPCUAVariableConfig)
-        self.assertEqual(connector.device.variables["hum"].browse_name, "Humidity")
-
-        # Methods should remain untouched
-        self.assertEqual(connector.device.methods, {"calibrate": "Calibrate"})
+        self.assertIn("hum", connector.server.variables)
+        hum_var = connector.server.variables["hum"]
+        self.assertIsInstance(hum_var, OPCUAVariableConfig)
+        self.assertEqual(hum_var.tag, "Humidity")
+        # Defaults applied
+        self.assertEqual(hum_var.queue_size, 1)
+        self.assertEqual(hum_var.sampling_interval, 0)
 
     def test_unknown_type_discriminator(self):
         """ Test validation error when unknown connector type is used. """

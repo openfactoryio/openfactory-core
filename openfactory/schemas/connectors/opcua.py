@@ -82,6 +82,10 @@ YAML Example:
             tag: Humidity
             queue_size: 5          # overrides server subscription
             sampling_interval: 50  # overrides server subscription
+
+.. seealso::
+
+   The runtime class of the OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
 """
 
 import re

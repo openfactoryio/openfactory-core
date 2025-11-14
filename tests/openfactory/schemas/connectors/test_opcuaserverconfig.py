@@ -3,7 +3,6 @@ from pydantic import ValidationError
 from openfactory.schemas.connectors.opcua import (
     OPCUAConnectorSchema,
     OPCUAServerConfig,
-    OPCUAVariableConfig,
     OPCUASubscriptionConfig
 )
 
@@ -17,31 +16,18 @@ class TestOPCUAServerConfig(unittest.TestCase):
         """ Test valid server configuration. """
         data = {
             "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-            "namespace_uri": "http://examples.openfactory.local/opcua"
         }
         server = OPCUAServerConfig(**data)
         self.assertEqual(server.uri, data["uri"])
-        self.assertEqual(server.namespace_uri, data["namespace_uri"])
 
     def test_missing_uri_raises_validation_error(self):
         """ Missing 'uri' should raise ValidationError. """
         data = {
-            "namespace_uri": "http://examples.openfactory.local/opcua"
         }
         with self.assertRaises(ValidationError) as cm:
             OPCUAServerConfig(**data)
         err_str = str(cm.exception)
         self.assertIn("uri", err_str)
-
-    def test_missing_namespace_uri_raises_validation_error(self):
-        """ Missing 'namespace_uri' should raise ValidationError. """
-        data = {
-            "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/"
-        }
-        with self.assertRaises(ValidationError) as cm:
-            OPCUAServerConfig(**data)
-        err_str = str(cm.exception)
-        self.assertIn("namespace_uri", err_str)
 
     def test_extra_fields_forbid_raises_validation_error(self):
         """ Providing unknown fields should raise ValidationError. """
@@ -60,7 +46,6 @@ class TestOPCUAServerConfig(unittest.TestCase):
         """ Server with subscription object should be valid """
         data = {
             "uri": "opc.tcp://127.0.0.1:4840",
-            "namespace_uri": "http://example.com",
             "subscription": {
                 "publishing_interval": 100,
                 "queue_size": 10,
@@ -77,7 +62,6 @@ class TestOPCUAServerConfig(unittest.TestCase):
         """ Server without subscription is valid and defaults to None """
         data = {
             "uri": "opc.tcp://127.0.0.1:4840",
-            "namespace_uri": "http://example.com"
         }
         server = OPCUAServerConfig(**data)
 
@@ -103,51 +87,35 @@ class TestOPCUAServerConfig(unittest.TestCase):
         schema_data = {
             "type": "opcua",
             "server": {
-                "uri": "opc.tcp://127.0.0.1:4840",
-                "namespace_uri": "http://example.com"
-                # subscription omitted
-            },
-            "device": {
-                "path": "Sensors/TemperatureSensor_1",
+                "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+                # subscription omitted → defaults: publishing_interval=100, queue_size=1, sampling_interval=0
                 "variables": {
-                    "temp": "Temperature",  # simple string → should inherit server defaults
-                    "hum": {                # full config → overrides queue_size and sampling_interval
-                        "browse_name": "Humidity",
+                    "temp": {                  # simple variable → should inherit server defaults
+                        "node_id": "ns=3;i=1050",
+                        "tag": "Temperature"
+                    },
+                    "hum": {                   # full config → overrides queue_size and sampling_interval
+                        "node_id": "ns=2;i=10",
+                        "tag": "Humidity",
                         "queue_size": 5,
                         "sampling_interval": 50
                     }
-                },
-                "methods": {"calibrate": "Calibrate"}
+                }
             }
         }
 
         schema = OPCUAConnectorSchema(**schema_data)
+        temp_var = schema.server.variables["temp"]
+        hum_var = schema.server.variables["hum"]
 
-        # Check server subscription defaults
-        self.assertIsInstance(schema.server.subscription, OPCUASubscriptionConfig)
-        self.assertEqual(schema.server.subscription.publishing_interval, 100.0)
-        self.assertEqual(schema.server.subscription.queue_size, 1)
-        self.assertEqual(schema.server.subscription.sampling_interval, 0.0)
+        # Server defaults applied to temp
+        self.assertEqual(temp_var.queue_size, 1)
+        self.assertEqual(temp_var.sampling_interval, 0)
 
-        # Check variable normalization
-        temp_var = schema.device.variables["temp"]
-        self.assertIsInstance(temp_var, OPCUAVariableConfig)
-        self.assertEqual(temp_var.browse_name, "Temperature")
-        self.assertEqual(temp_var.queue_size, 1)  # inherited from server
-        self.assertEqual(temp_var.sampling_interval, 0.0)  # inherited from server
+        # Overrides preserved for hum
+        self.assertEqual(hum_var.queue_size, 5)
+        self.assertEqual(hum_var.sampling_interval, 50)
 
-        hum_var = schema.device.variables["hum"]
-        self.assertIsInstance(hum_var, OPCUAVariableConfig)
-        self.assertEqual(hum_var.browse_name, "Humidity")
-        self.assertEqual(hum_var.queue_size, 5)  # overridden
-        self.assertEqual(hum_var.sampling_interval, 50)  # overridden
-
-    def test_device_without_variables(self):
-        """ Device can have no variables and schema still initializes. """
-        schema_data = {
-            "type": "opcua",
-            "server": {"uri": "opc.tcp://127.0.0.1:4840", "namespace_uri": "http://example.com"},
-            "device": {"path": "Sensors/EmptyDevice"}
-        }
-        schema = OPCUAConnectorSchema(**schema_data)
-        self.assertIsNone(schema.device.variables)
+        # Tag values must be present
+        self.assertEqual(temp_var.tag, "Temperature")
+        self.assertEqual(hum_var.tag, "Humidity")

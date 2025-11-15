@@ -6,6 +6,10 @@ schemas for OPC UA devices within OpenFactory.
 
 Key Models:
 -----------
+- OPCUAServerConfig:
+  Configuration for the OPC UA server, including the endpoint URI and
+  optional default subscription parameters.
+
 - OPCUASubscriptionConfig:
   Optional subscription parameters (publishing interval, queue size,
   sampling interval). Can be defined at the server level or overridden
@@ -16,11 +20,6 @@ Key Models:
   Configuration for a single variable. Contains `node_id` to identify the
   OPC UA node and a `tag` used by OpenFactory to label data. Optional
   overrides for queue size and sampling interval can be provided.
-
-- OPCUAServerConfig:
-  Configuration for the OPC UA server, including the endpoint URI and
-  optional default subscription parameters. Variables are defined
-  directly under the server.
 
 - OPCUAConnectorSchema:
   Wrapper schema that encapsulates the server configuration. During
@@ -162,34 +161,8 @@ class OPCUAServerConfig(BaseModel):
         default_factory=OPCUASubscriptionConfig,
         description="Server-level default subscription parameters."
     )
-    variables: Optional[Dict[str, OPCUAVariableConfig]] = Field(
-        default=None,
-        description="Mapping of local variable names to their configurations."
-    )
 
     model_config = ConfigDict(extra="forbid")
-
-    def model_post_init(self, __context: Any) -> None:
-        """ Normalize all server variables with subscription defaults and enforce unique node_ids. """
-        if not self.variables:
-            return
-
-        server_sub = self.subscription or OPCUASubscriptionConfig()
-        normalized_vars = {}
-        seen_node_ids = set()
-
-        for local_name, var_cfg in self.variables.items():
-            if var_cfg.node_id in seen_node_ids:
-                raise ValueError(f"Duplicate node_id detected: {var_cfg.node_id}")
-            seen_node_ids.add(var_cfg.node_id)
-
-            normalized_vars[local_name] = OPCUAVariableConfig(
-                node_id=var_cfg.node_id,
-                tag=var_cfg.tag,
-                queue_size=var_cfg.queue_size if var_cfg.queue_size is not None else server_sub.queue_size,
-                sampling_interval=var_cfg.sampling_interval if var_cfg.sampling_interval is not None else server_sub.sampling_interval,
-            )
-        self.variables = normalized_vars
 
 
 class OPCUAConnectorSchema(BaseModel):
@@ -210,5 +183,31 @@ class OPCUAConnectorSchema(BaseModel):
         description="Discriminator field to identify OPC UA connector type."
     )
     server: OPCUAServerConfig = Field(..., description="OPC UA server configuration.")
+    variables: Optional[Dict[str, OPCUAVariableConfig]] = Field(
+        default=None,
+        description="Mapping of local variable names to their configurations."
+    )
 
     model_config = ConfigDict(extra="forbid")
+
+    def model_post_init(self, __context: Any) -> None:
+        """ Normalize all server variables with subscription defaults and enforce unique node_ids. """
+        if not self.variables:
+            return
+
+        server_sub = self.server.subscription or OPCUASubscriptionConfig()
+        normalized_vars = {}
+        seen_node_ids = set()
+
+        for local_name, var_cfg in self.variables.items():
+            if var_cfg.node_id in seen_node_ids:
+                raise ValueError(f"Duplicate node_id detected: {var_cfg.node_id}")
+            seen_node_ids.add(var_cfg.node_id)
+
+            normalized_vars[local_name] = OPCUAVariableConfig(
+                node_id=var_cfg.node_id,
+                tag=var_cfg.tag,
+                queue_size=var_cfg.queue_size if var_cfg.queue_size is not None else server_sub.queue_size,
+                sampling_interval=var_cfg.sampling_interval if var_cfg.sampling_interval is not None else server_sub.sampling_interval,
+            )
+        self.variables = normalized_vars

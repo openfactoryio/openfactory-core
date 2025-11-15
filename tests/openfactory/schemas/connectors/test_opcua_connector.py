@@ -12,15 +12,15 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
-                }
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
             }
         }
         schema = OPCUAConnectorSchema(**data)
         self.assertEqual(schema.type, "opcua")
         self.assertEqual(schema.server.uri, "opc.tcp://127.0.0.1:4840/freeopcua/server/")
-        temp_var = schema.server.variables["temp"]
+        temp_var = schema.variables["temp"]
         self.assertIsInstance(temp_var, OPCUAVariableConfig)
         self.assertEqual(temp_var.node_id, "ns=3;i=1050")
         self.assertEqual(temp_var.tag, "Temperature")
@@ -33,9 +33,9 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"node_id": "invalid", "tag": "Temperature"}
-                }
+            },
+            "variables": {
+                "temp": {"node_id": "invalid", "tag": "Temperature"}
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -47,9 +47,9 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         data = {
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
-                }
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
             }
         }
         with self.assertRaises(ValidationError):
@@ -61,9 +61,9 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
-                }
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
             },
             "foo": "bar"
         }
@@ -77,9 +77,9 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"node_id": "ns=3;i=1050"}  # tag missing
-                }
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050"}  # tag missing
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -92,9 +92,9 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp": {"tag": "Temperature"}  # node_id missing
-                }
+            },
+            "variables": {
+                "temp": {"tag": "Temperature"}  # node_id missing
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -107,10 +107,10 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                "variables": {
-                    "temp1": {"node_id": "ns=3;i=1050", "tag": "Temperature1"},
-                    "temp2": {"node_id": "ns=3;i=1050", "tag": "Temperature2"}  # duplicate
-                }
+            },
+            "variables": {
+                "temp1": {"node_id": "ns=3;i=1050", "tag": "Temperature1"},
+                "temp2": {"node_id": "ns=3;i=1050", "tag": "Temperature2"}  # duplicate
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -124,21 +124,21 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
                 "subscription": {"queue_size": 10, "sampling_interval": 100},
-                "variables": {
-                    "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"},
-                    "hum": {
-                        "node_id": "ns=2;i=10",
-                        "tag": "Humidity",
-                        "queue_size": 5,
-                        "sampling_interval": 50
-                    }
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"},
+                "hum": {
+                    "node_id": "ns=2;i=10",
+                    "tag": "Humidity",
+                    "queue_size": 5,
+                    "sampling_interval": 50
                 }
             }
         }
         schema = OPCUAConnectorSchema(**data)
 
-        temp_var = schema.server.variables["temp"]
-        hum_var = schema.server.variables["hum"]
+        temp_var = schema.variables["temp"]
+        hum_var = schema.variables["hum"]
 
         # All variables normalized
         self.assertIsInstance(temp_var, OPCUAVariableConfig)
@@ -159,21 +159,21 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
                 "subscription": {"queue_size": 10, "sampling_interval": 20},
-                "variables": {
-                    "sensor_model": {"node_id": "ns=1;i=1", "tag": "Model"},  # uses defaults
-                    "temperature": {
-                        "node_id": "ns=2;i=2",
-                        "tag": "Temp",
-                        "queue_size": 5,  # overrides
-                        "sampling_interval": 50
-                    }
+            },
+            "variables": {
+                "sensor_model": {"node_id": "ns=1;i=1", "tag": "Model"},  # uses defaults
+                "temperature": {
+                    "node_id": "ns=2;i=2",
+                    "tag": "Temp",
+                    "queue_size": 5,  # overrides
+                    "sampling_interval": 50
                 }
             }
         }
         schema = OPCUAConnectorSchema(**data)
 
-        sensor_model = schema.server.variables["sensor_model"]
-        temperature = schema.server.variables["temperature"]
+        sensor_model = schema.variables["sensor_model"]
+        temperature = schema.variables["temperature"]
 
         # Defaults applied
         self.assertEqual(sensor_model.queue_size, 10)

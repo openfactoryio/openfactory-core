@@ -89,24 +89,24 @@ class TestOPCUAServerConfig(unittest.TestCase):
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
                 # subscription omitted → defaults: publishing_interval=100, queue_size=1, sampling_interval=0
-                "variables": {
-                    "temp": {                  # simple variable → should inherit server defaults
-                        "node_id": "ns=3;i=1050",
-                        "tag": "Temperature"
-                    },
-                    "hum": {                   # full config → overrides queue_size and sampling_interval
-                        "node_id": "ns=2;i=10",
-                        "tag": "Humidity",
-                        "queue_size": 5,
-                        "sampling_interval": 50
-                    }
+            },
+            "variables": {
+                "temp": {                  # simple variable → should inherit server defaults
+                    "node_id": "ns=3;i=1050",
+                    "tag": "Temperature"
+                },
+                "hum": {                   # full config → overrides queue_size and sampling_interval
+                    "node_id": "ns=2;i=10",
+                    "tag": "Humidity",
+                    "queue_size": 5,
+                    "sampling_interval": 50
                 }
             }
         }
 
         schema = OPCUAConnectorSchema(**schema_data)
-        temp_var = schema.server.variables["temp"]
-        hum_var = schema.server.variables["hum"]
+        temp_var = schema.variables["temp"]
+        hum_var = schema.variables["hum"]
 
         # Server defaults applied to temp
         self.assertEqual(temp_var.queue_size, 1)

@@ -34,16 +34,15 @@ class TestConnectorUnion(unittest.TestCase):
             "type": "opcua",
             "server": {
                 "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
-                # subscription omitted → defaults applied
-                "variables": {
-                    "temp": {
-                        "node_id": "ns=3;i=1050",
-                        "tag": "Temperature"
-                    },
-                    "hum": {
-                        "node_id": "ns=2;i=10",
-                        "tag": "Humidity"
-                    }
+            },
+            "variables": {
+                "temp": {
+                    "node_id": "ns=3;i=1050",
+                    "tag": "Temperature"
+                },
+                "hum": {
+                    "node_id": "ns=2;i=10",
+                    "tag": "Humidity"
                 }
             }
         }
@@ -56,16 +55,16 @@ class TestConnectorUnion(unittest.TestCase):
         self.assertEqual(connector.server.uri, "opc.tcp://127.0.0.1:4840/freeopcua/server/")
 
         # Variables should be normalized into OPCUAVariableConfig
-        self.assertIn("temp", connector.server.variables)
-        temp_var = connector.server.variables["temp"]
+        self.assertIn("temp", connector.variables)
+        temp_var = connector.variables["temp"]
         self.assertIsInstance(temp_var, OPCUAVariableConfig)
         self.assertEqual(temp_var.tag, "Temperature")
         # Defaults applied
         self.assertEqual(temp_var.queue_size, 1)
         self.assertEqual(temp_var.sampling_interval, 0)
 
-        self.assertIn("hum", connector.server.variables)
-        hum_var = connector.server.variables["hum"]
+        self.assertIn("hum", connector.variables)
+        hum_var = connector.variables["hum"]
         self.assertIsInstance(hum_var, OPCUAVariableConfig)
         self.assertEqual(hum_var.tag, "Humidity")
         # Defaults applied

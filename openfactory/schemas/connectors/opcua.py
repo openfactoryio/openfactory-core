@@ -54,6 +54,7 @@ YAML Example:
         temp:
             node_id: ns=3;i=1050
             tag: Temperature
+            deadband: 0.1
         hum:
             node_id: ns=2;i=10
             tag: Humidity
@@ -125,6 +126,10 @@ class OPCUAVariableConfig(BaseModel):
     sampling_interval: Optional[float] = Field(
         default=None,
         description="Override server-level sampling interval for this variable."
+    )
+    deadband: float = Field(
+        default=0.0,
+        description="Deadband for the variable; values changes smaller than this are ignored."
     )
 
     # Parsed fields (not in input YAML)
@@ -209,5 +214,6 @@ class OPCUAConnectorSchema(BaseModel):
                 tag=var_cfg.tag,
                 queue_size=var_cfg.queue_size if var_cfg.queue_size is not None else server_sub.queue_size,
                 sampling_interval=var_cfg.sampling_interval if var_cfg.sampling_interval is not None else server_sub.sampling_interval,
+                deadband=var_cfg.deadband if getattr(var_cfg, "deadband", None) is not None else 0.0,
             )
         self.variables = normalized_vars

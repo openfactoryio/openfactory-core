@@ -64,3 +64,7 @@ class TestOPCUAVariableConfig(unittest.TestCase):
         self.assertNotIn("namespace_index", dumped)
         self.assertNotIn("identifier_type", dumped)
         self.assertNotIn("identifier", dumped)
+
+        # Deadband must exist and default to 0.0
+        self.assertIn("deadband", dumped)
+        self.assertEqual(dumped["deadband"], 0.0)

@@ -182,3 +182,54 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         # Overrides applied
         self.assertEqual(temperature.queue_size, 5)
         self.assertEqual(temperature.sampling_interval, 50)
+
+    def test_variable_deadband_defaults_to_zero(self):
+        """ If deadband not provided, it should default to 0.0 """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        temp_var = schema.variables["temp"]
+        self.assertEqual(temp_var.deadband, 0.0)
+
+    def test_variable_deadband_explicit_value(self):
+        """ Explicit deadband value is preserved """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature", "deadband": 0.1}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        temp_var = schema.variables["temp"]
+        self.assertEqual(temp_var.deadband, 0.1)
+
+    def test_multiple_variables_with_mixed_deadband(self):
+        """ Some variables have explicit deadband, others default """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840/freeopcua/server/",
+            },
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"},
+                "hum": {"node_id": "ns=2;i=10", "tag": "Humidity", "deadband": 0.05}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        temp_var = schema.variables["temp"]
+        hum_var = schema.variables["hum"]
+
+        # Default deadband
+        self.assertEqual(temp_var.deadband, 0.0)
+        # Explicit deadband
+        self.assertEqual(hum_var.deadband, 0.05)

@@ -269,7 +269,7 @@ class OPCUAConnectorSchema(BaseModel):
                         if var_cfg.sampling_interval is not None else
                         server_sub.sampling_interval
                     ),
-                deadband=var_cfg.deadband if getattr(var_cfg, "deadband", None) is not None else 0.0,
+                    deadband=var_cfg.deadband if getattr(var_cfg, "deadband", None) is not None else 0.0
                 )
             self.variables = normalized_vars
 

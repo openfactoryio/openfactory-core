@@ -115,7 +115,7 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         }
         with self.assertRaises(ValidationError) as cm:
             OPCUAConnectorSchema(**data)
-        self.assertIn("Duplicate node_id detected", str(cm.exception))
+        self.assertIn("Duplicate node_id within variables", str(cm.exception))
 
     def test_variables_normalization_with_server_defaults(self):
         """ Variables are normalized to OPCUAVariableConfig and inherit server defaults """
@@ -233,3 +233,71 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         self.assertEqual(temp_var.deadband, 0.0)
         # Explicit deadband
         self.assertEqual(hum_var.deadband, 0.05)
+
+    def test_events_parsing(self):
+        """ Test proper event parsing """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
+            },
+            "events": {
+                "iolink_master": {"node_id": "ns=6;i=10"},
+                "sensor": {"node_id": "ns=3;i=45"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        # node_ids should be parsed correctly
+        self.assertEqual(schema.events["iolink_master"].namespace_index, 6)
+        self.assertEqual(schema.events["iolink_master"].identifier, "10")
+        self.assertEqual(schema.events["sensor"].namespace_index, 3)
+        self.assertEqual(schema.events["sensor"].identifier, "45")
+
+    def test_duplicate_node_id_within_events(self):
+        """ Duplicate node_id within events should raise """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "events": {
+                "evt1": {"node_id": "ns=3;i=100"},
+                "evt2": {"node_id": "ns=3;i=100"}  # duplicate
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+        self.assertIn("Duplicate node_id within events", str(cm.exception))
+
+    def test_key_conflict_between_variables_and_events(self):
+        """ Keys cannot exist in both variables and events """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
+            },
+            "events": {
+                "temp": {"node_id": "ns=6;i=10"}  # conflict with variable
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+        self.assertIn("Local name conflict", str(cm.exception))
+
+    def test_node_id_overlap_between_variables_and_events_allowed(self):
+        """ A same node_id can exist both in variables and events"""
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
+            },
+            "events": {
+                "sensor_temp": {"node_id": "ns=3;i=1050"}  # same node_id, different local name
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        self.assertIn("temp", schema.variables)
+        self.assertIn("sensor_temp", schema.events)
+        self.assertEqual(schema.events["sensor_temp"].node_id, "ns=3;i=1050")

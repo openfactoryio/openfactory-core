@@ -59,6 +59,9 @@ YAML Example:
             node_id: ns=2;i=10
             tag: Humidity
 
+    events:
+        iolinkmaster: ns=6;i=43
+
     # ---------------------------------------------------------
     # Example 2: Server subscription explicitly provided
     # ---------------------------------------------------------
@@ -159,6 +162,42 @@ class OPCUAVariableConfig(BaseModel):
         return values
 
 
+class OPCUAEventConfig(BaseModel):
+    """ Configuration for an OPC UA event source. """
+    node_id: str = Field(
+        ...,
+        description="NodeId of the event source, e.g., 'ns=6;i=10'.",
+        pattern=r'^ns=\d+;(i|s)=.+$'
+    )
+
+    # Parsed fields (not in input YAML)
+    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def validate_and_parse_node_id(cls, values: dict) -> dict:
+        node_id = values.get("node_id")
+        if not node_id:
+            raise ValueError("node_id must be provided for each event")
+
+        pattern = r"^ns=\d+;(i|s)=.+$"
+        if not re.match(pattern, node_id):
+            raise ValueError(f"Invalid node_id format: {node_id}")
+
+        ns_part, id_part = node_id.split(";")
+        ns_index = int(ns_part.replace("ns=", ""))
+        id_type, identifier = id_part.split("=", 1)
+
+        values["namespace_index"] = ns_index
+        values["identifier_type"] = id_type
+        values["identifier"] = identifier
+
+        return values
+
+
 class OPCUAServerConfig(BaseModel):
     """ OPC UA Server configuration with variables. """
     uri: str = Field(..., description="OPC UA server endpoint URI.")
@@ -192,28 +231,65 @@ class OPCUAConnectorSchema(BaseModel):
         default=None,
         description="Mapping of local variable names to their configurations."
     )
+    events: Optional[Dict[str, OPCUAEventConfig]] = Field(
+        default=None,
+        description="Mapping of named event sources."
+    )
 
     model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context: Any) -> None:
-        """ Normalize all server variables with subscription defaults and enforce unique node_ids. """
-        if not self.variables:
-            return
+        """ Normalize all server variables with subscription defaults and enforce unique keys. """
 
-        server_sub = self.server.subscription or OPCUASubscriptionConfig()
-        normalized_vars = {}
-        seen_node_ids = set()
+        if self.variables:
+            server_sub = self.server.subscription or OPCUASubscriptionConfig()
+            normalized_vars = {}
+            seen_node_ids_vars = set()
 
-        for local_name, var_cfg in self.variables.items():
-            if var_cfg.node_id in seen_node_ids:
-                raise ValueError(f"Duplicate node_id detected: {var_cfg.node_id}")
-            seen_node_ids.add(var_cfg.node_id)
+            for local_name, var_cfg in self.variables.items():
+                # Local name uniqueness
+                if local_name in normalized_vars:
+                    raise ValueError(f"Duplicate variable local name: {local_name}")
 
-            normalized_vars[local_name] = OPCUAVariableConfig(
-                node_id=var_cfg.node_id,
-                tag=var_cfg.tag,
-                queue_size=var_cfg.queue_size if var_cfg.queue_size is not None else server_sub.queue_size,
-                sampling_interval=var_cfg.sampling_interval if var_cfg.sampling_interval is not None else server_sub.sampling_interval,
+                # Node_id uniqueness within variables
+                if var_cfg.node_id in seen_node_ids_vars:
+                    raise ValueError(f"Duplicate node_id within variables: {var_cfg.node_id}")
+                seen_node_ids_vars.add(var_cfg.node_id)
+
+                normalized_vars[local_name] = OPCUAVariableConfig(
+                    node_id=var_cfg.node_id,
+                    tag=var_cfg.tag,
+                    queue_size=(
+                        var_cfg.queue_size
+                        if var_cfg.queue_size is not None else
+                        server_sub.queue_size
+                    ),
+                    sampling_interval=(
+                        var_cfg.sampling_interval
+                        if var_cfg.sampling_interval is not None else
+                        server_sub.sampling_interval
+                    ),
                 deadband=var_cfg.deadband if getattr(var_cfg, "deadband", None) is not None else 0.0,
-            )
-        self.variables = normalized_vars
+                )
+            self.variables = normalized_vars
+
+        if self.events:
+            normalized_events = {}
+            seen_node_ids_events = set()
+
+            for local_name, evt_cfg in self.events.items():
+                # Local name uniqueness
+                if local_name in normalized_events:
+                    raise ValueError(f"Duplicate event local name: {local_name}")
+                # Local name conflict with variables
+                if self.variables and local_name in self.variables:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both variables and events"
+                    )
+                # Node_id uniqueness within events
+                if evt_cfg.node_id in seen_node_ids_events:
+                    raise ValueError(f"Duplicate node_id within events: {evt_cfg.node_id}")
+                seen_node_ids_events.add(evt_cfg.node_id)
+
+                normalized_events[local_name] = evt_cfg
+            self.events = normalized_events

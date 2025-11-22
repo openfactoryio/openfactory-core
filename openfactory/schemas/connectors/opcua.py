@@ -60,7 +60,8 @@ YAML Example:
             tag: Humidity
 
     events:
-        iolinkmaster: ns=6;i=43
+        iolinkmaster: 
+            node_id: ns=6;i=43
 
     # ---------------------------------------------------------
     # Example 2: Server subscription explicitly provided

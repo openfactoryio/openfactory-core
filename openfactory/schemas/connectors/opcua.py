@@ -56,11 +56,11 @@ YAML Example:
             tag: Temperature
             deadband: 0.1
         hum:
-            node_id: ns=2;i=10
+            path: 0:Root,0:Objects,2:Sensors,2:Humidity
             tag: Humidity
 
     events:
-        iolinkmaster: 
+        iolinkmaster:
             node_id: ns=6;i=43
 
     # ---------------------------------------------------------
@@ -115,13 +115,92 @@ class OPCUASubscriptionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class OPCUAVariableConfig(BaseModel):
-    """ Configuration for a single OPC UA variable. """
-    node_id: str = Field(
-        ...,
-        description="NodeId of the variable, e.g., 'ns=3;i=1050'. Must be unique.",
+class OPCUANodeConfig(BaseModel):
+    """ Base class for configs that can have node_id or path to identofy an OPC UA node. """
+    node_id: Optional[str] = Field(
+        default=None,
+        description="NodeId of the object, e.g., 'ns=3;i=1050'.",
         pattern=r'^ns=\d+;(i|s)=.+$'
     )
+    path: Optional[str] = Field(
+        default=None,
+        description="Optional hierarchical path instead of node_id."
+    )
+
+    # Parsed fields (not in input YAML)
+    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def validate_path_format(cls, values: dict) -> dict:
+        path = values.get("path")
+        if path:
+            segments = path.split(',')
+            for seg in segments:
+                if ':' not in seg:
+                    raise ValueError(
+                        f"Invalid path segment '{seg}' in path '{path}'. Expected format: ns_index:Identifier"
+                    )
+                ns_index, identifier = seg.split(':', 1)
+
+                # Reject leading/trailing spaces on the segment itself
+                if seg != seg.strip():
+                    raise ValueError(
+                        f"Segment '{seg}' has leading/trailing spaces in path '{path}'"
+                    )
+
+                # Reject leading/trailing spaces around the colon
+                if ns_index != ns_index.strip() or identifier != identifier.strip():
+                    raise ValueError(
+                        f"Spaces around colon not allowed in segment '{seg}' of path '{path}'"
+                    )
+
+                # Namespace index must be numeric
+                if not ns_index.isdigit():
+                    raise ValueError(
+                        f"Namespace index must be numeric in segment '{seg}' of path '{path}'"
+                    )
+
+                # Identifier must be non-empty
+                if not identifier:
+                    raise ValueError(
+                        f"Identifier must be non-empty in segment '{seg}' of path '{path}'"
+                    )
+        return values
+
+    @model_validator(mode="before")
+    def validate_node_id_or_path(cls, values: dict) -> dict:
+        node_id, path = values.get("node_id"), values.get("path")
+        if not (node_id or path):
+            raise ValueError("Either 'node_id' or 'path' must be provided.")
+        if node_id and path:
+            raise ValueError("Provide only one of 'node_id' or 'path', not both.")
+        return values
+
+    @model_validator(mode="before")
+    def validate_and_parse_node_id(cls, values: dict) -> dict:
+        node_id = values.get("node_id")
+        if not node_id:
+            return values  # skip if using path
+
+        pattern = r"^ns=\d+;(i|s)=.+$"
+        if not re.match(pattern, node_id):
+            raise ValueError(f"Invalid node_id format: {node_id}")
+
+        ns_part, id_part = node_id.split(";")
+        ns_index = int(ns_part.replace("ns=", ""))
+        id_type, identifier = id_part.split("=", 1)
+        values["namespace_index"] = ns_index
+        values["identifier_type"] = id_type
+        values["identifier"] = identifier
+        return values
+
+
+class OPCUAVariableConfig(OPCUANodeConfig):
+    """ Configuration for a single OPC UA variable. """
     tag: str = Field(..., description="Tag used by OpenFactory to label the variable's data.")
     queue_size: Optional[int] = Field(
         default=None,
@@ -136,67 +215,10 @@ class OPCUAVariableConfig(BaseModel):
         description="Deadband for the variable; values changes smaller than this are ignored."
     )
 
-    # Parsed fields (not in input YAML)
-    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
 
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    def validate_and_parse_node_id(cls, values: dict) -> dict:
-        """ Validate node_id format and parse it into namespace_index, identifier_type, and identifier. """
-        node_id = values.get("node_id")
-        if not node_id:
-            raise ValueError("node_id must be provided for each variable")
-
-        pattern = r"^ns=\d+;(i|s)=.+$"
-        if not re.match(pattern, node_id):
-            raise ValueError(f"Invalid node_id format: {node_id}")
-
-        ns_part, id_part = node_id.split(";")
-        ns_index = int(ns_part.replace("ns=", ""))
-        id_type, identifier = id_part.split("=", 1)
-        values["namespace_index"] = ns_index
-        values["identifier_type"] = id_type
-        values["identifier"] = identifier
-        return values
-
-
-class OPCUAEventConfig(BaseModel):
+class OPCUAEventConfig(OPCUANodeConfig):
     """ Configuration for an OPC UA event source. """
-    node_id: str = Field(
-        ...,
-        description="NodeId of the event source, e.g., 'ns=6;i=10'.",
-        pattern=r'^ns=\d+;(i|s)=.+$'
-    )
-
-    # Parsed fields (not in input YAML)
-    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    def validate_and_parse_node_id(cls, values: dict) -> dict:
-        node_id = values.get("node_id")
-        if not node_id:
-            raise ValueError("node_id must be provided for each event")
-
-        pattern = r"^ns=\d+;(i|s)=.+$"
-        if not re.match(pattern, node_id):
-            raise ValueError(f"Invalid node_id format: {node_id}")
-
-        ns_part, id_part = node_id.split(";")
-        ns_index = int(ns_part.replace("ns=", ""))
-        id_type, identifier = id_part.split("=", 1)
-
-        values["namespace_index"] = ns_index
-        values["identifier_type"] = id_type
-        values["identifier"] = identifier
-
-        return values
+    pass
 
 
 class OPCUAServerConfig(BaseModel):
@@ -245,20 +267,25 @@ class OPCUAConnectorSchema(BaseModel):
         if self.variables:
             server_sub = self.server.subscription or OPCUASubscriptionConfig()
             normalized_vars = {}
-            seen_node_ids_vars = set()
+            seen_ids_vars = set()
 
             for local_name, var_cfg in self.variables.items():
                 # Local name uniqueness
                 if local_name in normalized_vars:
                     raise ValueError(f"Duplicate variable local name: {local_name}")
 
-                # Node_id uniqueness within variables
-                if var_cfg.node_id in seen_node_ids_vars:
-                    raise ValueError(f"Duplicate node_id within variables: {var_cfg.node_id}")
-                seen_node_ids_vars.add(var_cfg.node_id)
+                # Determine unique key for uniqueness check
+                unique_key = var_cfg.node_id or var_cfg.path
+                if unique_key in seen_ids_vars:
+                    if var_cfg.node_id:
+                        raise ValueError(f"Duplicate node_id within variables: {var_cfg.node_id}")
+                    else:
+                        raise ValueError(f"Duplicate path within variables: {var_cfg.path}")
+                seen_ids_vars.add(unique_key)
 
                 normalized_vars[local_name] = OPCUAVariableConfig(
                     node_id=var_cfg.node_id,
+                    path=var_cfg.path,
                     tag=var_cfg.tag,
                     queue_size=(
                         var_cfg.queue_size
@@ -270,13 +297,13 @@ class OPCUAConnectorSchema(BaseModel):
                         if var_cfg.sampling_interval is not None else
                         server_sub.sampling_interval
                     ),
-                    deadband=var_cfg.deadband if getattr(var_cfg, "deadband", None) is not None else 0.0
+                    deadband=getattr(var_cfg, "deadband", 0.0)
                 )
             self.variables = normalized_vars
 
         if self.events:
             normalized_events = {}
-            seen_node_ids_events = set()
+            seen_ids_events = set()
 
             for local_name, evt_cfg in self.events.items():
                 # Local name uniqueness
@@ -287,10 +314,15 @@ class OPCUAConnectorSchema(BaseModel):
                     raise ValueError(
                         f"Local name conflict: '{local_name}' exists in both variables and events"
                     )
-                # Node_id uniqueness within events
-                if evt_cfg.node_id in seen_node_ids_events:
-                    raise ValueError(f"Duplicate node_id within events: {evt_cfg.node_id}")
-                seen_node_ids_events.add(evt_cfg.node_id)
+
+                # Determine unique key for uniqueness check
+                unique_key = evt_cfg.node_id or evt_cfg.path
+                if unique_key in seen_ids_events:
+                    if evt_cfg.node_id:
+                        raise ValueError(f"Duplicate node_id within events: {evt_cfg.node_id}")
+                    else:
+                        raise ValueError(f"Duplicate path within events: {evt_cfg.path}")
+                seen_ids_events.add(unique_key)
 
                 normalized_events[local_name] = evt_cfg
             self.events = normalized_events

@@ -138,13 +138,37 @@ class OPCUANodeConfig(BaseModel):
     def validate_path_format(cls, values: dict) -> dict:
         path = values.get("path")
         if path:
-            pattern = r'^(\d+:[^,]+)(,\d+:[^,]+)*$'
-            if not re.match(pattern, path):
-                raise ValueError(
-                    f"Invalid path format: {path}. "
-                    f"Expected format: 'ns_index:Identifier[,ns_index:Identifier,...]', "
-                    f"e.g., '0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer'"
-                )
+            segments = path.split(',')
+            for seg in segments:
+                if ':' not in seg:
+                    raise ValueError(
+                        f"Invalid path segment '{seg}' in path '{path}'. Expected format: ns_index:Identifier"
+                    )
+                ns_index, identifier = seg.split(':', 1)
+
+                # Reject leading/trailing spaces on the segment itself
+                if seg != seg.strip():
+                    raise ValueError(
+                        f"Segment '{seg}' has leading/trailing spaces in path '{path}'"
+                    )
+
+                # Reject leading/trailing spaces around the colon
+                if ns_index != ns_index.strip() or identifier != identifier.strip():
+                    raise ValueError(
+                        f"Spaces around colon not allowed in segment '{seg}' of path '{path}'"
+                    )
+
+                # Namespace index must be numeric
+                if not ns_index.isdigit():
+                    raise ValueError(
+                        f"Namespace index must be numeric in segment '{seg}' of path '{path}'"
+                    )
+
+                # Identifier must be non-empty
+                if not identifier:
+                    raise ValueError(
+                        f"Identifier must be non-empty in segment '{seg}' of path '{path}'"
+                    )
         return values
 
     @model_validator(mode="before")

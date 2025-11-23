@@ -115,17 +115,68 @@ class OPCUASubscriptionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class OPCUAVariableConfig(BaseModel):
-    """ Configuration for a single OPC UA variable. """
+class OPCUANodeConfig(BaseModel):
+    """ Base class for configs that can have node_id or path to identofy an OPC UA node. """
     node_id: Optional[str] = Field(
         default=None,
-        description="NodeId of the variable, e.g., 'ns=3;i=1050'. Must be unique.",
+        description="NodeId of the object, e.g., 'ns=3;i=1050'.",
         pattern=r'^ns=\d+;(i|s)=.+$'
     )
     path: Optional[str] = Field(
         default=None,
-        description="Optional hierarchical path to identify the variable instead of node_id."
+        description="Optional hierarchical path instead of node_id."
     )
+
+    # Parsed fields (not in input YAML)
+    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    def validate_path_format(cls, values: dict) -> dict:
+        path = values.get("path")
+        if path:
+            pattern = r'^(\d+:[^,]+)(,\d+:[^,]+)*$'
+            if not re.match(pattern, path):
+                raise ValueError(
+                    f"Invalid path format: {path}. "
+                    f"Expected format: 'ns_index:Identifier[,ns_index:Identifier,...]', "
+                    f"e.g., '0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer'"
+                )
+        return values
+
+    @model_validator(mode="before")
+    def validate_node_id_or_path(cls, values: dict) -> dict:
+        node_id, path = values.get("node_id"), values.get("path")
+        if not (node_id or path):
+            raise ValueError("Either 'node_id' or 'path' must be provided.")
+        if node_id and path:
+            raise ValueError("Provide only one of 'node_id' or 'path', not both.")
+        return values
+
+    @model_validator(mode="before")
+    def validate_and_parse_node_id(cls, values: dict) -> dict:
+        node_id = values.get("node_id")
+        if not node_id:
+            return values  # skip if using path
+
+        pattern = r"^ns=\d+;(i|s)=.+$"
+        if not re.match(pattern, node_id):
+            raise ValueError(f"Invalid node_id format: {node_id}")
+
+        ns_part, id_part = node_id.split(";")
+        ns_index = int(ns_part.replace("ns=", ""))
+        id_type, identifier = id_part.split("=", 1)
+        values["namespace_index"] = ns_index
+        values["identifier_type"] = id_type
+        values["identifier"] = identifier
+        return values
+
+
+class OPCUAVariableConfig(OPCUANodeConfig):
+    """ Configuration for a single OPC UA variable. """
     tag: str = Field(..., description="Tag used by OpenFactory to label the variable's data.")
     queue_size: Optional[int] = Field(
         default=None,
@@ -140,120 +191,10 @@ class OPCUAVariableConfig(BaseModel):
         description="Deadband for the variable; values changes smaller than this are ignored."
     )
 
-    # Parsed fields (not in input YAML)
-    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
 
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    def validate_path_format(cls, values: dict) -> dict:
-        path = values.get("path")
-        if path:
-            pattern = r'^(\d+:[^,]+)(,\d+:[^,]+)*$'
-            if not re.match(pattern, path):
-                raise ValueError(
-                    f"Invalid path format: {path}. "
-                    f"Expected format: 'ns_index:Identifier[,ns_index:Identifier,...]', "
-                    f"e.g., '0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer'"
-                )
-        return values
-
-    @model_validator(mode="before")
-    def validate_node_id_or_path(cls, values: dict) -> dict:
-        node_id, path = values.get("node_id"), values.get("path")
-        if not (node_id or path):
-            raise ValueError("Either 'node_id' or 'path' must be provided for a variable.")
-        if node_id and path:
-            raise ValueError("Provide only one of 'node_id' or 'path', not both.")
-        return values
-
-    @model_validator(mode="before")
-    def validate_and_parse_node_id(cls, values: dict) -> dict:
-        """ Validate node_id format and parse it into namespace_index, identifier_type, and identifier. """
-        node_id = values.get("node_id")
-
-        # If path is provided, skip node_id parsing
-        if not node_id:
-            return values
-
-        pattern = r"^ns=\d+;(i|s)=.+$"
-        if not re.match(pattern, node_id):
-            raise ValueError(f"Invalid node_id format: {node_id}")
-
-        ns_part, id_part = node_id.split(";")
-        ns_index = int(ns_part.replace("ns=", ""))
-        id_type, identifier = id_part.split("=", 1)
-        values["namespace_index"] = ns_index
-        values["identifier_type"] = id_type
-        values["identifier"] = identifier
-        return values
-
-
-class OPCUAEventConfig(BaseModel):
+class OPCUAEventConfig(OPCUANodeConfig):
     """ Configuration for an OPC UA event source. """
-    node_id: Optional[str] = Field(
-        default=None,
-        description="NodeId of the event source, e.g., 'ns=6;i=10'.",
-        pattern=r'^ns=\d+;(i|s)=.+$'
-    )
-    path: Optional[str] = Field(
-        default=None,
-        description="Optional hierarchical path to identify the variable instead of node_id."
-    )
-
-    # Parsed fields (not in input YAML)
-    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-
-    model_config = ConfigDict(extra="forbid")
-
-    @model_validator(mode="before")
-    def validate_path_format(cls, values: dict) -> dict:
-        path = values.get("path")
-        if path:
-            pattern = r'^(\d+:[^,]+)(,\d+:[^,]+)*$'
-            if not re.match(pattern, path):
-                raise ValueError(
-                    f"Invalid path format: {path}. "
-                    f"Expected format: 'ns_index:Identifier[,ns_index:Identifier,...]', "
-                    f"e.g., '0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer'"
-                )
-        return values
-
-    @model_validator(mode="before")
-    def validate_node_id_or_path(cls, values: dict) -> dict:
-        node_id, path = values.get("node_id"), values.get("path")
-        if not (node_id or path):
-            raise ValueError("Either 'node_id' or 'path' must be provided for an event.")
-        if node_id and path:
-            raise ValueError("Provide only one of 'node_id' or 'path', not both.")
-        return values
-
-    @model_validator(mode="before")
-    def validate_and_parse_node_id(cls, values: dict) -> dict:
-        """ Validate node_id format and parse it into namespace_index, identifier_type, and identifier. """
-        node_id = values.get("node_id")
-
-        # If path is provided, skip node_id parsing
-        if not node_id:
-            return values
-
-        pattern = r"^ns=\d+;(i|s)=.+$"
-        if not re.match(pattern, node_id):
-            raise ValueError(f"Invalid node_id format: {node_id}")
-
-        ns_part, id_part = node_id.split(";")
-        ns_index = int(ns_part.replace("ns=", ""))
-        id_type, identifier = id_part.split("=", 1)
-
-        values["namespace_index"] = ns_index
-        values["identifier_type"] = id_type
-        values["identifier"] = identifier
-
-        return values
+    pass
 
 
 class OPCUAServerConfig(BaseModel):

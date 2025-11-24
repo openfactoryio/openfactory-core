@@ -309,14 +309,14 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "variables": {
                 "manufacturer": {
-                    "path": "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer",
+                    "browse_path": "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Manufacturer",
                     "tag": "Manufacturer"
                 }
             }
         }
         schema = OPCUAConnectorSchema(**data)
         var = schema.variables["manufacturer"]
-        self.assertEqual(var.path, "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer")
+        self.assertEqual(var.browse_path, "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Manufacturer")
         self.assertIsNone(var.node_id)
         self.assertEqual(var.tag, "Manufacturer")
 
@@ -328,14 +328,14 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "variables": {
                 "temp": {
                     "node_id": "ns=3;i=1050",
-                    "path": "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100",
+                    "browse_path": "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100",
                     "tag": "Temperature"
                 }
             }
         }
         with self.assertRaises(ValidationError) as cm:
             OPCUAConnectorSchema(**data)
-        self.assertIn("Provide only one of 'node_id' or 'path'", str(cm.exception))
+        self.assertIn("Provide only one of 'node_id' or 'browse_path'", str(cm.exception))
 
     def test_variable_missing_node_id_and_path_raises(self):
         """ Variable must have either node_id or path """
@@ -348,17 +348,17 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         }
         with self.assertRaises(ValidationError) as cm:
             OPCUAConnectorSchema(**data)
-        self.assertIn("Either 'node_id' or 'path' must be provided", str(cm.exception))
+        self.assertIn("Either 'node_id' or 'browse_path' must be provided", str(cm.exception))
 
     def test_duplicate_path_within_variables_raises(self):
         """ Duplicate path across variables should raise ValidationError """
-        path_str = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer"
+        path_str = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Manufacturer"
         data = {
             "type": "opcua",
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "variables": {
-                "var1": {"path": path_str, "tag": "Var1"},
-                "var2": {"path": path_str, "tag": "Var2"}  # duplicate
+                "var1": {"browse_path": path_str, "tag": "Var1"},
+                "var2": {"browse_path": path_str, "tag": "Var2"}  # duplicate
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -372,24 +372,24 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "events": {
                 "device_event": {
-                    "path": "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Status"
+                    "browse_path": "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Status"
                 }
             }
         }
         schema = OPCUAConnectorSchema(**data)
         evt = schema.events["device_event"]
-        self.assertEqual(evt.path, "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Status")
+        self.assertEqual(evt.browse_path, "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Status")
         self.assertIsNone(evt.node_id)
 
     def test_duplicate_path_within_events_raises(self):
         """ Duplicate path across events should raise ValidationError """
-        path_str = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Status"
+        path_str = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Status"
         data = {
             "type": "opcua",
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "events": {
-                "evt1": {"path": path_str},
-                "evt2": {"path": path_str}  # duplicate
+                "evt1": {"browse_path": path_str},
+                "evt2": {"browse_path": path_str}  # duplicate
             }
         }
         with self.assertRaises(ValidationError) as cm:
@@ -398,34 +398,34 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
 
     def test_variable_and_event_same_path_allowed(self):
         """ A variable and an event can have the same path as long as local names differ """
-        path_str = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Status"
+        path_str = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Status"
         data = {
             "type": "opcua",
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "variables": {
-                "status_var": {"path": path_str, "tag": "StatusVar"}
+                "status_var": {"browse_path": path_str, "tag": "StatusVar"}
             },
             "events": {
-                "status_evt": {"path": path_str}
+                "status_evt": {"browse_path": path_str}
             }
         }
         schema = OPCUAConnectorSchema(**data)
         self.assertIn("status_var", schema.variables)
         self.assertIn("status_evt", schema.events)
-        self.assertEqual(schema.variables["status_var"].path, path_str)
-        self.assertEqual(schema.events["status_evt"].path, path_str)
+        self.assertEqual(schema.variables["status_var"].browse_path, path_str)
+        self.assertEqual(schema.events["status_evt"].browse_path, path_str)
 
     def test_variable_and_event_same_path_allowed_explicit(self):
         """ An event can use the same path as a variable (representing the same source) """
-        path_str = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Status"
+        path_str = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Status"
         data = {
             "type": "opcua",
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
             "variables": {
-                "status_var": {"path": path_str, "tag": "StatusVar"}
+                "status_var": {"browse_path": path_str, "tag": "StatusVar"}
             },
             "events": {
-                "status_evt": {"path": path_str}  # same path as variable
+                "status_evt": {"browse_path": path_str}  # same path as variable
             }
         }
         schema = OPCUAConnectorSchema(**data)
@@ -434,8 +434,8 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         var = schema.variables["status_var"]
         evt = schema.events["status_evt"]
 
-        self.assertEqual(var.path, path_str)
-        self.assertEqual(evt.path, path_str)
+        self.assertEqual(var.browse_path, path_str)
+        self.assertEqual(evt.browse_path, path_str)
 
         # local names are different, so no conflict
-        self.assertNotEqual(var.tag, evt.path)
+        self.assertNotEqual(var.tag, evt.browse_path)

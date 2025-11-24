@@ -60,13 +60,13 @@ class TestOPCUANodeConfig(unittest.TestCase):
     # ---------------- Path Tests ----------------
 
     def test_valid_single_segment_path(self):
-        node = OPCUANodeConfig(path="0:Root")
-        self.assertEqual(node.path, "0:Root")
+        node = OPCUANodeConfig(browse_path="0:Root")
+        self.assertEqual(node.browse_path, "0:Root")
 
     def test_valid_multi_segment_path(self):
-        path = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer"
-        node = OPCUANodeConfig(path=path)
-        self.assertEqual(node.path, path)
+        path = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Manufacturer"
+        node = OPCUANodeConfig(browse_path=path)
+        self.assertEqual(node.browse_path, path)
 
     def test_path_with_non_numeric_ns_index(self):
         with self.assertRaises(ValidationError):
@@ -89,30 +89,44 @@ class TestOPCUANodeConfig(unittest.TestCase):
             OPCUANodeConfig()
 
     def test_path_with_unicode_identifier(self):
-        path = "0:Root,1:Objects,2:Device_µSensor"
-        node = OPCUANodeConfig(path=path)
-        self.assertEqual(node.path, path)
+        path = "0:Root/1:Objects/2:Device_µSensor"
+        node = OPCUANodeConfig(browse_path=path)
+        self.assertEqual(node.browse_path, path)
 
     def test_path_with_special_characters(self):
-        path = "0:Root,1:Objects,2:Device-001"
-        node = OPCUANodeConfig(path=path)
-        self.assertEqual(node.path, path)
+        path = "0:Root/1:Objects/2:Device-001"
+        node = OPCUANodeConfig(browse_path=path)
+        self.assertEqual(node.browse_path, path)
 
     def test_path_with_spaces_inside_identifier(self):
-        path = "0:Root Node,1:Objects,2:Device Set,4:SIG350 0005AP100,2:Manufacturer"
-        node = OPCUANodeConfig(path=path)
-        self.assertEqual(node.path, path)
+        path = "0:Root/1:Objects/2:Device Set/4:SIG350 0005AP100/2:Manufacturer"
+        node = OPCUANodeConfig(browse_path=path)
+        self.assertEqual(node.browse_path, path)
 
     def test_path_with_leading_trailing_spaces_rejected(self):
         # Leading/trailing spaces in ns_index or overall path should fail
         with self.assertRaises(ValidationError):
-            OPCUANodeConfig(path=" 0:Root,1:Objects")
+            OPCUANodeConfig(browse_path="0:Root/ 1:Objects")
         with self.assertRaises(ValidationError):
-            OPCUANodeConfig(path="0:Root,1:Objects ")
+            OPCUANodeConfig(browse_path="0:Root/1:Objects ")
 
     def test_path_with_spaces_around_colon_rejected(self):
         # Spaces around the colon separating ns_index and identifier should fail
         with self.assertRaises(ValidationError):
-            OPCUANodeConfig(path="0 :Root,1:Objects")
+            OPCUANodeConfig(path="0:Root/1 :Objects")
         with self.assertRaises(ValidationError):
-            OPCUANodeConfig(path="0: Root,1:Objects")
+            OPCUANodeConfig(path="0:Root/1: Objects")
+
+    def test_path_must_start_with_root(self):
+        # valid
+        node = OPCUANodeConfig(browse_path="0:Root/0:Objects")
+        self.assertEqual(node.browse_path, "0:Root/0:Objects")
+
+        # invalid: does not start with 0:Root
+        with self.assertRaises(ValidationError) as cm:
+            OPCUANodeConfig(browse_path="1:Root/0:Objects")
+        self.assertIn("BrowsePath must start with '0:Root'", str(cm.exception))
+
+        with self.assertRaises(ValidationError) as cm:
+            OPCUANodeConfig(browse_path="0:Objects/0:Root")
+        self.assertIn("BrowsePath must start with '0:Root'", str(cm.exception))

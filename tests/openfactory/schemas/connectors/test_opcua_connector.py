@@ -352,7 +352,7 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
 
     def test_duplicate_path_within_variables_raises(self):
         """ Duplicate path across variables should raise ValidationError """
-        path_str = "0:Root,0:Objects,2:DeviceSet,4:SIG350-0005AP100,2:Manufacturer"
+        path_str = "0:Root/0:Objects/2:DeviceSet/4:SIG350-0005AP100/2:Manufacturer"
         data = {
             "type": "opcua",
             "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},

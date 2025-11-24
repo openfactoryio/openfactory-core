@@ -116,3 +116,17 @@ class TestOPCUANodeConfig(unittest.TestCase):
             OPCUANodeConfig(path="0:Root/1 :Objects")
         with self.assertRaises(ValidationError):
             OPCUANodeConfig(path="0:Root/1: Objects")
+
+    def test_path_must_start_with_root(self):
+        # valid
+        node = OPCUANodeConfig(browse_path="0:Root/0:Objects")
+        self.assertEqual(node.browse_path, "0:Root/0:Objects")
+
+        # invalid: does not start with 0:Root
+        with self.assertRaises(ValidationError) as cm:
+            OPCUANodeConfig(browse_path="1:Root/0:Objects")
+        self.assertIn("BrowsePath must start with '0:Root'", str(cm.exception))
+
+        with self.assertRaises(ValidationError) as cm:
+            OPCUANodeConfig(browse_path="0:Objects/0:Root")
+        self.assertIn("BrowsePath must start with '0:Root'", str(cm.exception))

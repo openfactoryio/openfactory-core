@@ -139,6 +139,13 @@ class OPCUANodeConfig(BaseModel):
         path = values.get("browse_path")
         if path:
             segments = path.split('/')
+
+            # Enforce that the path starts with the root node
+            if segments[0] != "0:Root":
+                raise ValueError(
+                    f"BrowsePath must start with '0:Root', but got '{segments[0]}'"
+                )
+
             for seg in segments:
                 if ':' not in seg:
                     raise ValueError(

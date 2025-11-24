@@ -56,7 +56,7 @@ YAML Example:
             tag: Temperature
             deadband: 0.1
         hum:
-            path: 0:Root,0:Objects,2:Sensors,2:Humidity
+            browse_path: 0:Root/0:Objects/2:Sensors/2:Humidity
             tag: Humidity
 
     events:
@@ -122,9 +122,9 @@ class OPCUANodeConfig(BaseModel):
         description="NodeId of the object, e.g., 'ns=3;i=1050'.",
         pattern=r'^ns=\d+;(i|s)=.+$'
     )
-    path: Optional[str] = Field(
+    browse_path: Optional[str] = Field(
         default=None,
-        description="Optional hierarchical path instead of node_id."
+        description="Optional hierarchical BrowsePath instead of node_id. Format: 0:Root/nsIndex:Identifier/nsIndex:Identifier/…"
     )
 
     # Parsed fields (not in input YAML)
@@ -135,10 +135,10 @@ class OPCUANodeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def validate_path_format(cls, values: dict) -> dict:
-        path = values.get("path")
+    def validate_browse_path_format(cls, values: dict) -> dict:
+        path = values.get("browse_path")
         if path:
-            segments = path.split(',')
+            segments = path.split('/')
             for seg in segments:
                 if ':' not in seg:
                     raise ValueError(
@@ -172,12 +172,12 @@ class OPCUANodeConfig(BaseModel):
         return values
 
     @model_validator(mode="before")
-    def validate_node_id_or_path(cls, values: dict) -> dict:
-        node_id, path = values.get("node_id"), values.get("path")
-        if not (node_id or path):
-            raise ValueError("Either 'node_id' or 'path' must be provided.")
-        if node_id and path:
-            raise ValueError("Provide only one of 'node_id' or 'path', not both.")
+    def validate_node_id_or_browse_path(cls, values: dict) -> dict:
+        node_id, browse_path = values.get("node_id"), values.get("browse_path")
+        if not (node_id or browse_path):
+            raise ValueError("Either 'node_id' or 'browse_path' must be provided.")
+        if node_id and browse_path:
+            raise ValueError("Provide only one of 'node_id' or 'browse_path', not both.")
         return values
 
     @model_validator(mode="before")
@@ -275,17 +275,17 @@ class OPCUAConnectorSchema(BaseModel):
                     raise ValueError(f"Duplicate variable local name: {local_name}")
 
                 # Determine unique key for uniqueness check
-                unique_key = var_cfg.node_id or var_cfg.path
+                unique_key = var_cfg.node_id or var_cfg.browse_path
                 if unique_key in seen_ids_vars:
                     if var_cfg.node_id:
                         raise ValueError(f"Duplicate node_id within variables: {var_cfg.node_id}")
                     else:
-                        raise ValueError(f"Duplicate path within variables: {var_cfg.path}")
+                        raise ValueError(f"Duplicate path within variables: {var_cfg.browse_path}")
                 seen_ids_vars.add(unique_key)
 
                 normalized_vars[local_name] = OPCUAVariableConfig(
                     node_id=var_cfg.node_id,
-                    path=var_cfg.path,
+                    browse_path=var_cfg.browse_path,
                     tag=var_cfg.tag,
                     queue_size=(
                         var_cfg.queue_size
@@ -316,12 +316,12 @@ class OPCUAConnectorSchema(BaseModel):
                     )
 
                 # Determine unique key for uniqueness check
-                unique_key = evt_cfg.node_id or evt_cfg.path
+                unique_key = evt_cfg.node_id or evt_cfg.browse_path
                 if unique_key in seen_ids_events:
                     if evt_cfg.node_id:
                         raise ValueError(f"Duplicate node_id within events: {evt_cfg.node_id}")
                     else:
-                        raise ValueError(f"Duplicate path within events: {evt_cfg.path}")
+                        raise ValueError(f"Duplicate path within events: {evt_cfg.browse_path}")
                 seen_ids_events.add(unique_key)
 
                 normalized_events[local_name] = evt_cfg

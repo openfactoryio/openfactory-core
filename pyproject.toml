@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openfactory"
-version = "0.4.5.1"
+version = "0.4.6"
 dependencies = [
     # Core utilities
     "click",

@@ -806,6 +806,27 @@ class TestBaseAsset(TestCase):
         # Should not raise and self.subscribers remains empty
         assert asset.subscribers == {}
 
+    def test_subscribe_to_attribute_starts_nats_consumer(self, MockAssetProducer):
+        """ Test that `subscribe_to_attribute` starts a NATS consumer correctly """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
+            asset.subscribe_to_attribute('mock_id', callback)
+            mock_start.assert_called_once_with(
+                f"{asset.asset_uuid.upper()}.mock_id",
+                callback,
+                sub_key="subscribe_to_attribute_mock_id"
+            )
+
+    def test_stop_attribute_subscription_stops_nats_consumer(self, MockAssetProducer):
+        """ Test that `stop_attribute_subscription` stops the NATS consumer correctly """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
+            asset.stop_attribute_subscription('mock_id')
+            mock_stop.assert_called_once_with("subscribe_to_attribute_mock_id")
+
     def test_subscribe_to_messages_starts_nats_consumer(self, MockAssetProducer):
         """ Test that `subscribe_to_messages` starts a NATS consumer correctly """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())

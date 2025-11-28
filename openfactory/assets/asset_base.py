@@ -542,6 +542,18 @@ class BaseAsset:
         if sub:
             sub.stop()
 
+    def subscribe_to_attribute(self, attribute_id: str, on_message: AssetNATSCallback) -> None:
+        """
+        Subscribes to changes of an asset attribute using a NATS consumer.
+
+        Args:
+            attribute_id (str): The attribute ID to monitor.
+            on_message (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict) and handles messages.
+        """
+        subject = f"{self.asset_uuid.upper()}.{attribute_id}"
+        sub_key = f"subscribe_to_attribute_{attribute_id}"
+        self.__start_nats_consumer(subject, on_message, sub_key=sub_key)
+
     def subscribe_to_messages(self, on_message: AssetNATSCallback) -> None:
         """
         Subscribes to asset messages using a NATS consumer.
@@ -551,6 +563,15 @@ class BaseAsset:
         """
         subject = f"{self.asset_uuid.upper()}.*"
         self.__start_nats_consumer(subject, on_message, sub_key="messages")
+
+    def stop_attribute_subscription(self, attribute_id: str) -> None:
+        """
+        Stops the NATS consumer and gracefully shuts down the subscription.
+
+        Args:
+            attribute_id (str): The attribute ID to for which to stop the subscription.
+        """
+        self.__stop_subscription(f"subscribe_to_attribute_{attribute_id}")
 
     def stop_messages_subscription(self) -> None:
         """ Stops the NATS consumer and gracefully shuts down the subscription. """

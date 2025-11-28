@@ -161,6 +161,7 @@ class OpenFactoryManager(OpenFactory):
         env = [f"APP_UUID={application.uuid}",
                f"KAFKA_BROKER={self.bootstrap_servers}",
                f"KSQLDB_URL={self.ksql.ksqldb_url}",
+               f"ASSET_ROUTER_URL={config.ASSET_ROUTER_URL}",
                f"DOCKER_SERVICE={application.uuid.lower()}"]
 
         # Add STORAGE only if not None

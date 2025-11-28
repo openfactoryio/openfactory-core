@@ -102,7 +102,6 @@ class OpenFactoryApp(Asset):
 
         # attributes of the application
         self.add_attribute(
-            attribute_id='application_version',
             asset_attribute=AssetAttribute(
                 id='application_version',
                 value=self.APPLICATION_VERSION,
@@ -111,7 +110,6 @@ class OpenFactoryApp(Asset):
             )
         )
         self.add_attribute(
-            attribute_id='application_manufacturer',
             asset_attribute=AssetAttribute(
                 id='application_manufacturer',
                 value=self.APPLICATION_MANUFACTURER,
@@ -120,7 +118,6 @@ class OpenFactoryApp(Asset):
             )
         )
         self.add_attribute(
-            attribute_id='application_license',
             asset_attribute=AssetAttribute(
                 id='application_license',
                 value=self.APPLICATION_LICENSE,

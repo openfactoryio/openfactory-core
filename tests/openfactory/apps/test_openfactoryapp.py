@@ -22,11 +22,6 @@ class TestOpenFactoryApp(unittest.TestCase):
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
-        # Patch add_attribute
-        self.add_attribute_patcher = patch.object(OpenFactoryApp, 'add_attribute')
-        self.mock_add_attribute = self.add_attribute_patcher.start()
-        self.addCleanup(self.add_attribute_patcher.stop)
-
         # Patch deregister_asset
         self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
         self.mock_deregister = self.deregister_patcher.start()
@@ -61,7 +56,7 @@ class TestOpenFactoryApp(unittest.TestCase):
             importlib.reload(openfactoryapp)
             OpenFactoryApp = openfactoryapp.OpenFactoryApp
 
-            with patch.object(OpenFactoryApp, 'add_attribute'), patch('openfactory.utils.assets.deregister_asset'):
+            with patch('openfactory.utils.assets.deregister_asset'):
 
                 app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock)
 
@@ -109,37 +104,39 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_attributes_added(self):
         """ Test if attributes are added correctly to the app """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        # Instead of patching globally, we wrap add_attribute to spy calls while calling real method
+        original_add_attribute = OpenFactoryApp.add_attribute
 
-        # Get the list of add_attribute calls.
-        calls = app.add_attribute.call_args_list
+        call_args_list = []
 
-        # Check that the expected attribute_ids are present.
+        def spy_add_attribute(self_obj, *args, **kwargs):
+            call_args_list.append((args, kwargs))
+            return original_add_attribute(self_obj, *args, **kwargs)
+
+        with patch.object(OpenFactoryApp, 'add_attribute', new=spy_add_attribute):
+            OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+
+        # Check that the expected attribute_ids were added
         expected_ids = ['application_version', 'application_manufacturer', 'application_license']
-        actual_ids = [call_obj.kwargs['attribute_id'] for call_obj in calls]
-        for attr in expected_ids:
-            self.assertIn(attr, actual_ids, f"{attr} not found in add_attribute calls.")
+        actual_ids = [kwargs['asset_attribute'].id for args, kwargs in call_args_list]
+        for attr_id in expected_ids:
+            self.assertIn(attr_id, actual_ids, f"{attr_id} not added via add_attribute")
 
-        # For each attribute, check that the asset_attribute was built with the correct parameters
-        for call_obj in calls:
-            attr_id = call_obj.kwargs['attribute_id']
-            asset_attr = call_obj.kwargs['asset_attribute']
-
-            # Check values and tags based on attribute_id.
-            if attr_id == 'application_version':
-                self.assertEqual(asset_attr.value, 'latest', "Value mismatch for application_version")
-                self.assertEqual(asset_attr.type, 'Events', f"Type mismatch for {attr_id}")
-                self.assertEqual(asset_attr.tag, 'Application.Version', "Tag mismatch for application_version")
-            elif attr_id == 'application_manufacturer':
-                self.assertEqual(asset_attr.value, 'OpenFactory', "Value mismatch for application_manufacturer")
-                self.assertEqual(asset_attr.type, 'Events', f"Type mismatch for {attr_id}")
-                self.assertEqual(asset_attr.tag, 'Application.Manufacturer', "Tag mismatch for application_manufacturer")
-            elif attr_id == 'application_license':
-                self.assertEqual(asset_attr.value, 'BSD-3-Clause license', "Value mismatch for application_license")
-                self.assertEqual(asset_attr.type, 'Events', f"Type mismatch for {attr_id}")
-                self.assertEqual(asset_attr.tag, 'Application.License', "Tag mismatch for application_license")
-            else:
-                self.fail(f"Unexpected attribute_id: {attr_id}")
+        # Check that each attribute was created with correct values, type, and tag
+        for args, kwargs in call_args_list:
+            attr: AssetAttribute = kwargs['asset_attribute']
+            if attr.id == 'application_version':
+                self.assertEqual(attr.value, 'latest', "Value mismatch for application_version")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for application_version")
+                self.assertEqual(attr.tag, 'Application.Version', "Tag mismatch for application_version")
+            elif attr.id == 'application_manufacturer':
+                self.assertEqual(attr.value, 'OpenFactory', "Value mismatch for application_manufacturer")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for application_manufacturer")
+                self.assertEqual(attr.tag, 'Application.Manufacturer', "Tag mismatch for application_manufacturer")
+            elif attr.id == 'application_license':
+                self.assertEqual(attr.value, 'BSD-3-Clause license', "Value mismatch for application_license")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for application_license")
+                self.assertEqual(attr.tag, 'Application.License', "Tag mismatch for application_license")
 
     @patch('openfactory.apps.ofaapp.configure_prefixed_logger')
     def test_logger_is_configured_correctly(self, mock_configure_logger):

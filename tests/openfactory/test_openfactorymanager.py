@@ -206,6 +206,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Setup config constants
         mock_config.KSQLDB_LOG_LEVEL = "INFO"
         mock_config.OPENFACTORY_NETWORK = "openfactory_net"
+        mock_config.ASSET_ROUTER_URL = "mocker_asset_router_url"
 
         # Application dict without explicit KSQLDB_LOG_LEVEL in environment
         app = OpenFactoryAppSchema(
@@ -221,6 +222,7 @@ class TestOpenFactoryManager(unittest.TestCase):
             "APP_UUID=APP123",
             f"KAFKA_BROKER={self.manager.bootstrap_servers}",
             f"KSQLDB_URL={self.manager.ksql.ksqldb_url}",
+            f"ASSET_ROUTER_URL={mock_config.ASSET_ROUTER_URL}",
             "DOCKER_SERVICE=app123",
             "FOO=bar",
             "BAZ=qux",

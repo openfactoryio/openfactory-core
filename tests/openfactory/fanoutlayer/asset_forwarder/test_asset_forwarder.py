@@ -2,7 +2,7 @@ import unittest
 import asyncio
 import time
 import json
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from contextlib import suppress
 from openfactory.fanoutlayer.asset_forwarder.asset_forwarder import AssetForwarder
 
@@ -36,7 +36,7 @@ class TestAssetForwarder(unittest.IsolatedAsyncioTestCase):
         )
 
         self.forwarder.consumer = AsyncMock()
-        self.forwarder.consumer.store_offsets = AsyncMock()
+        self.forwarder.consumer.store_offsets = MagicMock()
 
     async def test_worker_routes_by_hash_ring(self):
         """ Test that the worker routes messages to the correct NATS cluster. """

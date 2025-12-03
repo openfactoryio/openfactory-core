@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
+from concurrent.futures import Future
 from openfactory.apps.supervisor import OPCUASupervisor
 
 
@@ -11,7 +12,21 @@ class OPCUASupervisorTestCase(unittest.TestCase):
     def setUp(self):
         self.ksql_mock = MagicMock()
 
-        # Patch AssetProducer
+        self.connect_patcher = patch(
+            "openfactory.apps.supervisor.opcuasupervisor.OPCUASupervisor._connect_to_adapter",
+            new_callable=MagicMock
+        )
+        self.mock_connect = self.connect_patcher.start()
+        self.addCleanup(self.connect_patcher.stop)
+
+        self.monitor_patcher = patch(
+            "openfactory.apps.supervisor.opcuasupervisor.OPCUASupervisor._monitor_adapter",
+            new_callable=MagicMock
+        )
+        self.mock_monitor = self.monitor_patcher.start()
+        self.addCleanup(self.monitor_patcher.stop)
+
+        # Patch other dependencies
         self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
@@ -21,18 +36,35 @@ class OPCUASupervisorTestCase(unittest.TestCase):
         self.mock_add_attribute = patcher.start()
         self.addCleanup(patcher.stop)
 
-        # Patch out async loop creation so we don’t actually start threads
-        patch_loop = patch("openfactory.apps.supervisor.opcuasupervisor.asyncio.new_event_loop", return_value=MagicMock())
+        # Patch asyncio event loop creation so it doesn't start real loops
+        patch_loop = patch(
+            "openfactory.apps.supervisor.opcuasupervisor.asyncio.new_event_loop",
+            return_value=MagicMock()
+        )
         self.mock_loop = patch_loop.start()
         self.addCleanup(patch_loop.stop)
 
+        # Patch threading.Thread to avoid creating real threads
         patch_thread = patch("openfactory.apps.supervisor.opcuasupervisor.threading.Thread")
         self.mock_thread = patch_thread.start()
         self.addCleanup(patch_thread.stop)
 
-        patch_run = patch("openfactory.apps.supervisor.opcuasupervisor.asyncio.run_coroutine_threadsafe")
+        # Patch asyncio.run_coroutine_threadsafe to return a completed Future to prevent warnings
+        patch_run = patch(
+            "openfactory.apps.supervisor.opcuasupervisor.asyncio.run_coroutine_threadsafe",
+            side_effect=self._fake_run_coroutine_threadsafe
+        )
         self.mock_run = patch_run.start()
         self.addCleanup(patch_run.stop)
+
+    def _fake_run_coroutine_threadsafe(self, coro, loop):
+        """
+        Return a completed future to prevent RuntimeWarning from un-awaited coroutines.
+        This fakes the behavior of asyncio.run_coroutine_threadsafe.
+        """
+        fut = Future()
+        fut.set_result(None)
+        return fut
 
     def test_constructor_adds_opcua_attributes(self):
         """ Test if OPCUASupervisor sets its OPC UA attributes correctly """

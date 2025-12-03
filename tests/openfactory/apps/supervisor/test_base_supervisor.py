@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from openfactory.apps.supervisor import BaseSupervisor
 
 
-class TestSupervisor(BaseSupervisor):
+class SupervisorTestImpl(BaseSupervisor):
     """ A testable subclass of BaseSupervisor with mocked abstract methods """
 
     def available_commands(self):
@@ -48,7 +48,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         MockAssetAttribute.return_value = mock_asset_attr
 
         device_uuid = "dev-456"
-        TestSupervisor("sup-123", device_uuid, self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        SupervisorTestImpl("sup-123", device_uuid, self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Verify that add_attribute was called with only asset_attribute
         self.mock_add_attribute.assert_any_call(asset_attribute=mock_asset_attr)
@@ -66,7 +66,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         """ Test _send_available_commands method """
         # Setup
         mock_asset_instance = MockAsset.return_value
-        supervisor = TestSupervisor("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        supervisor = SupervisorTestImpl("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Execute
         supervisor._send_available_commands()
@@ -92,12 +92,12 @@ class BaseSupervisorTestCase(unittest.TestCase):
             self.assertEqual(asset_attr.id, asset_attr.id)
 
     @patch('openfactory.apps.supervisor.base_supervisor.KafkaCommandsConsumer')
-    @patch.object(TestSupervisor, '_send_available_commands')
+    @patch.object(SupervisorTestImpl, '_send_available_commands')
     def test_main_loop_calls_consume(self, mock_send_commands, MockKafkaConsumer):
         """ Test command consumer in main loop """
         # Setup
         mock_consumer_instance = MockKafkaConsumer.return_value
-        supervisor = TestSupervisor("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        supervisor = SupervisorTestImpl("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Execute
         supervisor.main_loop()

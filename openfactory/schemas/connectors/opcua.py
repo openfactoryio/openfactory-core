@@ -116,7 +116,7 @@ class OPCUASubscriptionConfig(BaseModel):
 
 
 class OPCUANodeConfig(BaseModel):
-    """ Base class for configs that can have node_id or path to identofy an OPC UA node. """
+    """ Base class for configs that can have node_id or path to identify an OPC UA node. """
     node_id: Optional[str] = Field(
         default=None,
         description="NodeId of the object, e.g., 'ns=3;i=1050'.",
@@ -128,11 +128,11 @@ class OPCUANodeConfig(BaseModel):
     )
 
     # Parsed fields (not in input YAML)
-    namespace_index: Optional[int] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier_type: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
-    identifier: Optional[str] = Field(default=None, exclude=True, allow_mutation=False)
+    namespace_index: Optional[int] = Field(default=None, exclude=True)
+    identifier_type: Optional[str] = Field(default=None, exclude=True)
+    identifier: Optional[str] = Field(default=None, exclude=True)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     @model_validator(mode="before")
     def validate_browse_path_format(cls, values: dict) -> dict:

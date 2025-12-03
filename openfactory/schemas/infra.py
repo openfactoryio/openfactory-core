@@ -95,7 +95,7 @@ class Nodes(BaseModel):
     workers: Optional[Dict[str, Node]] = None
 
     @model_validator(mode='after')
-    def check_unique_ips(cls, values: Dict) -> Dict:
+    def check_unique_ips(values: Dict) -> Dict:
         """
         Validates that IP addresses are unique across managers and workers.
 

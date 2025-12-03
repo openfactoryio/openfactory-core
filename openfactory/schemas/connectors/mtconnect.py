@@ -99,7 +99,7 @@ class Adapter(BaseModel):
         return values
 
     @model_validator(mode='after')
-    def set_deploy_defaults(cls, values: "Adapter") -> "Adapter":
+    def set_deploy_defaults(values: "Adapter") -> "Adapter":
         """
         Ensures deploy is set and deploy.replicas has default value 1 if missing.
 
@@ -142,7 +142,7 @@ class Agent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode='after')
-    def set_deploy_defaults(cls, values: "Agent") -> "Agent":
+    def set_deploy_defaults(values: "Agent") -> "Agent":
         """
         Sets default deployment configuration values after model initialization.
 

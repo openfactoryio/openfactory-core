@@ -425,6 +425,50 @@ class TestOpenFactoryManager(unittest.TestCase):
             mock_get_apps_from_config_file.return_value['App1']
         )
 
+    @patch('openfactory.openfactory_manager.get_apps_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_deploy_apps_from_config_file_uns_schema_value_error(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_apps_from_config_file
+    ):
+        """ Test that a ValueError during UNSSchema initialization triggers user_notify.fail and aborts """
+
+        # Cause constructor to raise ValueError
+        mock_uns_schema_class.side_effect = ValueError("schema invalid")
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers='mocked')
+        manager.deploy_apps_from_config_file("dummy.yaml")
+
+        # Expected: user_notify.fail called with the error
+        assert mock_user_notify.fail.call_count == 1
+        assert "schema invalid" in mock_user_notify.fail.call_args[0][0]
+
+        # Ensure we aborted early: no calls to get_apps_from_config_file
+        mock_get_apps_from_config_file.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.get_apps_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_deploy_apps_from_config_file_uns_schema_file_not_found(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_apps_from_config_file
+    ):
+        """ Test that a FileNotFoundError during UNSSchema initialization triggers user_notify.fail and aborts """
+
+        # Cause constructor to raise FileNotFoundError
+        mock_uns_schema_class.side_effect = FileNotFoundError()
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers='mocked')
+
+        manager.deploy_apps_from_config_file("dummy.yaml")
+
+        # Expected: user_notify.fail is called with correct message
+        assert mock_user_notify.fail.call_count == 1
+        msg = mock_user_notify.fail.call_args[0][0]
+        assert "could not be found" in msg
+
+        # Should *not* load apps
+        mock_get_apps_from_config_file.assert_not_called()
+
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
@@ -525,6 +569,50 @@ class TestOpenFactoryManager(unittest.TestCase):
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_deploy_devices_from_config_file_uns_schema_value_error(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file
+    ):
+        """ Test that a ValueError during UNSSchema initialization triggers user_notify.fail and aborts early. """
+
+        # Cause constructor to throw ValueError
+        mock_uns_schema_class.side_effect = ValueError("broken schema")
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.deploy_devices_from_config_file("dummy_devices.yaml")
+
+        # user_notify.fail should be called exactly once, containing the error message
+        assert mock_user_notify.fail.call_count == 1
+        msg = mock_user_notify.fail.call_args[0][0]
+        assert "broken schema" in msg
+
+        # Should NOT attempt to load or deploy devices
+        mock_get_devices_from_config_file.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_deploy_devices_from_config_file_uns_schema_file_not_found(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file
+    ):
+        """ Test that a FileNotFoundError during UNSSchema initialization triggers user_notify.fail and aborts early. """
+
+        # Simulate missing schema file
+        mock_uns_schema_class.side_effect = FileNotFoundError()
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.deploy_devices_from_config_file("dummy_devices.yaml")
+
+        # Should call user_notify.fail once with the 'could not be found' message
+        assert mock_user_notify.fail.call_count == 1
+        msg = mock_user_notify.fail.call_args[0][0]
+        assert "could not be found" in msg
+
+        # No further processing should occur
+        mock_get_devices_from_config_file.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
     def test_deploy_devices_from_config_file_no_devices(self, mock_uns_schema_class, mock_user_notify, mock_get_devices):
         """ Test deploy_devices_from_config_file when no devices are found in the config file """
         # Mock dependencies
@@ -557,25 +645,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Assertions
         mock_get_devices.assert_called_once_with("mock_config.yaml", mock_uns_instance)
         mock_user_notify.info.assert_any_call("Device device-uuid-1 exists already and was not deployed")
-
-    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
-    @patch('openfactory.openfactory_manager.user_notify')
-    @patch('openfactory.openfactory_manager.UNSSchema')
-    def test_deploy_devices_from_config_file_invalid_uns_schema(self, mock_uns_schema_class, mock_user_notify, mock_get_devices):
-        """ Test deploy_devices_from_config_file aborts when UNSSchema raises ValueError """
-
-        # Setup the UNSSchema constructor to raise ValueError (simulate invalid schema)
-        mock_uns_schema_class.side_effect = ValueError("Mocked error")
-
-        # Call the method under test
-        self.manager.deploy_devices_from_config_file("mock_config.yaml")
-
-        # Assertions
-        mock_uns_schema_class.assert_called_once_with(schema_yaml_file=unittest.mock.ANY)
-        mock_user_notify.fail.assert_called_once()
-        fail_msg = mock_user_notify.fail.call_args[0][0]
-        assert "Mocked error" in fail_msg
-        mock_get_devices.assert_not_called()
 
     @patch('openfactory.openfactory_manager.register_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
@@ -644,25 +713,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Assertions
         mock_get_apps_from_config_file.assert_called_once_with('dummy_config.yaml', mock_uns_instance)
         mock_user_notify.info.assert_not_called()
-
-    @patch('openfactory.openfactory_manager.get_apps_from_config_file')
-    @patch('openfactory.openfactory_manager.user_notify')
-    @patch('openfactory.openfactory_manager.UNSSchema')
-    def test_deploy_apps_from_config_file_invalid_uns_schema(self, mock_uns_schema_class, mock_user_notify, mock_get_apps):
-        """ Test deploy_apps_from_config_file aborts when UNSSchema raises ValueError """
-
-        # Simulate UNSSchema constructor raising ValueError due to invalid schema
-        mock_uns_schema_class.side_effect = ValueError("Mocked error")
-
-        # Call the method under test
-        self.manager.deploy_apps_from_config_file("mock_apps_config.yaml")
-
-        # Assertions
-        mock_uns_schema_class.assert_called_once_with(schema_yaml_file=unittest.mock.ANY)
-        mock_user_notify.fail.assert_called_once()
-        fail_msg = mock_user_notify.fail.call_args[0][0]
-        assert "Mocked error" in fail_msg
-        mock_get_apps.assert_not_called()
 
     @patch('openfactory.openfactory_manager.deregister_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
@@ -739,6 +789,50 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Success messages
         mock_user_notify.success.assert_any_call("Supervisor for device device-uuid-1 shut down successfully")
         mock_user_notify.success.assert_any_call("Device device-uuid-1 shut down successfully")
+
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_shut_down_devices_from_config_file_uns_schema_value_error(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file
+    ):
+        """ Test that a ValueError during UNSSchema initialization triggers user_notify.fail and aborts. """
+
+        # Force UNSSchema constructor to fail
+        mock_uns_schema_class.side_effect = ValueError("invalid schema")
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.shut_down_devices_from_config_file("dummy.yaml")
+
+        # Check that failure notification was sent
+        assert mock_user_notify.fail.call_count == 1
+        msg = mock_user_notify.fail.call_args[0][0]
+        assert "invalid schema" in msg
+
+        # Ensure shutdown is aborted immediately
+        mock_get_devices_from_config_file.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.get_devices_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_shut_down_devices_from_config_file_uns_schema_file_not_found(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_devices_from_config_file
+    ):
+        """ Test that a FileNotFoundError during UNSSchema initialization is reported and aborts shutdown. """
+
+        # Simulate missing schema file
+        mock_uns_schema_class.side_effect = FileNotFoundError()
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.shut_down_devices_from_config_file("dummy.yaml")
+
+        # Check proper error notification
+        assert mock_user_notify.fail.call_count == 1
+        msg = mock_user_notify.fail.call_args[0][0]
+        assert "could not be found" in msg
+
+        # Should not attempt to load devices
+        mock_get_devices_from_config_file.assert_not_called()
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.UNSSchema')
@@ -828,6 +922,51 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_deregister_asset.assert_any_call(app_uuid,
                                               ksqlClient=self.manager.ksql,
                                               bootstrap_servers=self.manager.bootstrap_servers)
+
+    @patch('openfactory.openfactory_manager.get_apps_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_shut_down_apps_from_config_file_uns_schema_value_error(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_apps_from_config_file
+    ):
+        """ Test that a ValueError during UNSSchema initialization triggers user_notify.fail and aborts. """
+
+        # Cause UNSSchema constructor to raise ValueError
+        mock_uns_schema_class.side_effect = ValueError("bad schema")
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.shut_down_apps_from_config_file("dummy_apps.yaml")
+
+        # Expect failure notification
+        assert mock_user_notify.fail.call_count == 1
+        message = mock_user_notify.fail.call_args[0][0]
+        assert "bad schema" in message
+
+        # Should stop immediately, no app loading
+        mock_get_apps_from_config_file.assert_not_called()
+
+    @patch('openfactory.openfactory_manager.get_apps_from_config_file')
+    @patch('openfactory.openfactory_manager.user_notify')
+    @patch('openfactory.openfactory_manager.UNSSchema')
+    def test_shut_down_apps_from_config_file_uns_schema_file_not_found(
+        self, mock_uns_schema_class, mock_user_notify, mock_get_apps_from_config_file
+    ):
+        """ Test that a FileNotFoundError during UNSSchema initialization triggers user_notify.fail and aborts. """
+
+        # Simulate missing schema file
+        mock_uns_schema_class.side_effect = FileNotFoundError()
+
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+
+        manager.shut_down_apps_from_config_file("dummy_apps.yaml")
+
+        # Expect the correct failure message
+        assert mock_user_notify.fail.call_count == 1
+        message = mock_user_notify.fail.call_args[0][0]
+        assert "could not be found" in message
+
+        # Should not continue to loading apps
+        mock_get_apps_from_config_file.assert_not_called()
 
     @patch("openfactory.openfactory_manager.Asset")
     @patch("openfactory.openfactory_manager.user_notify")

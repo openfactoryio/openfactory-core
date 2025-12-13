@@ -1,6 +1,7 @@
 """ OpenFactory AssetUNS class. """
 
-from typing import Union, List
+from __future__ import annotations
+from typing import List
 import openfactory.config as config
 from openfactory.assets.asset_base import BaseAsset
 from openfactory.kafka import KafkaAssetUNSConsumer, KSQLDBClient
@@ -109,7 +110,7 @@ class AssetUNS(BaseAsset):
             return None
         return result[0]['ASSET_UUID']
 
-    def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[Union[str, 'AssetUNS']]:
+    def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[str | AssetUNS]:
         """
         Retrieves a list of asset references (UUIDs or AssetUNS objects) in the given direction.
 

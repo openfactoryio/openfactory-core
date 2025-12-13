@@ -1,12 +1,13 @@
 """ OpenFactory Assets Base class. """
 
+from __future__ import annotations
 import json
 import re
 import time
 import uuid
 import threading
 import asyncio
-from typing import Literal, List, Dict, Any, Union, Callable, Self
+from typing import Literal, List, Dict, Any, Callable, Self
 import openfactory.config as config
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict
@@ -255,7 +256,7 @@ class BaseAsset:
                               value=json.dumps(msg))
         self.producer.flush()
 
-    def __getattr__(self, attribute_id: str) -> Union[AssetAttribute, Callable[..., Any]]:
+    def __getattr__(self, attribute_id: str) -> AssetAttribute | Callable[..., Any]:
         """
         Allows access to samples, events, conditions, and methods as attributes.
 
@@ -365,7 +366,7 @@ class BaseAsset:
         """
         self.producer.send_asset_attribute(self.asset_uuid, asset_attribute)
 
-    def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[Union[str, Self]]:
+    def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[str | Self]:
         """
         Retrieves a list of asset-references (identifiers or asset objects) in the given direction.
 

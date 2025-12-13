@@ -40,7 +40,7 @@ class AssetProducer(Producer):
         Args:
             asset_uuid (str): UUID of the asset this producer is associated with.
             assetAttribute (AssetAttribute): The asset attribute object containing value, type, tag, and timestamp.
-            attributes (dict, optional): Additional attributes to include under the "attributes" field in the message.
+            attributes (dict | None): Additional attributes to include under the "attributes" field in the message.
         """
         # Base attributes with timestamp
         attr_payload = {"timestamp": assetAttribute.timestamp}

@@ -1,4 +1,4 @@
 AssetProducer
 =============
 
-.. autoclass:: openfactory.kafka.AssetProducer
+.. automodule:: openfactory.kafka.asset_producer

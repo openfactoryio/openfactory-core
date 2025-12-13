@@ -45,9 +45,10 @@ Typical Usage:
     >>>     uns: Optional[Dict[str, Any]]
 """
 
+from __future__ import annotations
 import yaml
 import re
-from typing import List, Dict, Any, Union, Literal
+from typing import List, Dict, Any, Literal
 from pydantic import BaseModel, RootModel, model_validator
 from openfactory.utils.open_uris import open_ofa
 import openfactory.config as config
@@ -57,7 +58,7 @@ import openfactory.config as config
 
 #: Represents allowed constraints for UNS schema fields.
 #: Can be "ANY", a specific string, or a list of allowed strings.
-ConstraintType = Union[Literal["ANY"], str, List[str]]
+ConstraintType = Literal["ANY"] | str | list[str]
 
 
 class NamespaceItem(RootModel[Dict[str, ConstraintType]]):

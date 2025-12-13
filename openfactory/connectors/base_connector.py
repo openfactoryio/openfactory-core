@@ -16,7 +16,7 @@ To add a new connector type to OpenFactory, follow these steps:
      resource limits, or other connector-specific parameters.
    - Make sure to include a ``type`` field that matches your connector type string.
      This field is used as a discriminator when parsing device configurations.
-   - Register your schema in the :class:`openfactory.schemas.connectors.types.Connector` Union to enable type-based parsing:
+   - Register your schema in the :class:`openfactory.schemas.connectors.types.Connector` type alias to enable type-based parsing:
 
 2. Implement the Connector Class
 

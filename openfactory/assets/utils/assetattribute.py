@@ -1,7 +1,7 @@
 """ AssetAttribute """
 
 from dataclasses import dataclass, field
-from typing import Union, Literal
+from typing import Literal
 from .time_methods import current_timestamp
 
 
@@ -12,7 +12,7 @@ class AssetAttribute:
 
     Attributes:
         id (str): the ID of the AssetAttribute
-        value (typing.Union[str, float]): The actual value of the attribute. Can be a string or float.
+        value (str | float): The actual value of the attribute. Can be a string or float.
         type (typing.Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']):
             The category/type of the attribute, must be one of the allowed literal strings.
         tag (str): The tag or identifier associated with this attribute.
@@ -21,7 +21,7 @@ class AssetAttribute:
     """
 
     id: str
-    value: Union[str, float]
+    value: str | float
     type: Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']
     tag: str
     timestamp: str = field(default_factory=current_timestamp)

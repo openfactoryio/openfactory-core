@@ -48,7 +48,7 @@ Typical Usage:
 from __future__ import annotations
 import yaml
 import re
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any
 from pydantic import BaseModel, RootModel, model_validator
 from openfactory.utils.open_uris import open_ofa
 import openfactory.config as config
@@ -56,9 +56,10 @@ import openfactory.config as config
 
 # --- Internal models for validation ---
 
-#: Represents allowed constraints for UNS schema fields.
-#: Can be "ANY", a specific string, or a list of allowed strings.
-ConstraintType = Literal["ANY"] | str | list[str]
+#: Represents allowed values for UNS schema fields.
+#: Can be a string, or a list of allowed strings for the UNS field.
+#: The special string "ANY" is interpreted as any value is allowed.
+ConstraintType = str | list[str]
 
 
 class NamespaceItem(RootModel[Dict[str, ConstraintType]]):

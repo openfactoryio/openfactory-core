@@ -40,6 +40,7 @@ nitpick_ignore = [
     ('py:class', 'pydantic.root_model.RootModel[Dict[str, Optional[Volume]]]'),
     ('py:class', "pydantic.root_model.RootModel[Dict[str, Union[Literal['ANY'], str, List[str]]]]"),
     ('py:exc', 'pydantic.ValidationError'), 
+    ('py:class', '_asyncio.Future'),
 ]
 
 templates_path = ['_templates']

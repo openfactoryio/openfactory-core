@@ -33,11 +33,50 @@ import os
 import signal
 import sys
 import uvloop
-from typing import Optional
+from typing import Optional, Any, Dict
 from prometheus_client import start_http_server
 from .logger import logger
 from .asset_forwarder import AssetForwarder
 from openfactory.fanoutlayer.utils.parse_nats_clusters import parse_nats_clusters
+
+
+def loop_exception_handler(loop: asyncio.AbstractEventLoop, context: Dict[str, Any]) -> None:
+    """
+    Handle uncaught exceptions from the asyncio event loop.
+
+    This handler is invoked for exceptions that occur outside the main
+    awaited coroutine, such as:
+      - Background tasks created with ``asyncio.create_task()``
+      - Signal handlers
+      - Callbacks scheduled on the event loop
+      - Futures whose results were never retrieved
+
+    The handler logs the full traceback and then terminates the process
+    immediately. This fail-fast behavior is intentional and ensures that
+    the service does not continue running in a corrupted or partially
+    failed state. Container orchestrators (e.g., Docker) are expected to
+    restart the process.
+
+    Args:
+        loop: The currently running asyncio event loop.
+        context: A dictionary containing details about the exception.
+            Common keys include:
+              - ``"exception"``: The raised exception instance, if any.
+              - ``"message"``: A human-readable error message.
+    """
+    exc = context.get("exception")
+    msg = context.get("message")
+
+    if exc:
+        logger.exception("Unhandled asyncio exception", exc_info=exc)
+    else:
+        logger.error("Asyncio error: %s", msg)
+
+    # 1. Stop the event loop
+    loop.stop()
+
+    # 2. Force process exit (Docker-safe)
+    os._exit(1)
 
 
 class AssetForwarderService:
@@ -137,10 +176,16 @@ def main():
     logger.info(f"Prometheus metrics available at :{metrics_port}/metrics")
 
     service = AssetForwarderService()
+
+    uvloop.install()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.set_exception_handler(loop_exception_handler)
+
     try:
-        uvloop.run(service.run())
+        loop.run_until_complete(service.run())
     except Exception as e:
-        logger.error("Service crashed: %s", e)
+        logger.error("Service crashed: %s", e, exc_info=True)
         sys.exit(1)
 
 

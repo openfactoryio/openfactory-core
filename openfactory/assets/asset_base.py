@@ -584,7 +584,7 @@ class BaseAsset:
         Only messages with TYPE == 'Samples' are forwarded to the callback.
 
         Args:
-            on_meon_samplessage (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
+            on_sample: (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
         subject = f"{self.asset_uuid.upper()}.*"
 

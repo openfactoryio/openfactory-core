@@ -32,4 +32,5 @@ API Reference
    :hidden:
 
    about
+   architecture
    api/index

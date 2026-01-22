@@ -45,6 +45,7 @@ docs = [
     "pydata-sphinx-theme",
     "sphinx-autodoc-typehints",
     "sphinx-design",
+    "sphinxcontrib.mermaid",
 ]
 
 [tool.setuptools]

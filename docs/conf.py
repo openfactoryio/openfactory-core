@@ -15,6 +15,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'pydata_sphinx_theme',
     'sphinx_design',
+    'sphinxcontrib.mermaid',
 ]
 
 napoleon_google_docstring = True

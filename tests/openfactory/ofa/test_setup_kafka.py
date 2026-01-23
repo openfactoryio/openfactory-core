@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch, MagicMock
 from requests.exceptions import HTTPError
@@ -102,3 +103,68 @@ class TestSetupKafka(unittest.TestCase):
         setup_kafka("http://fake-ksqldb:8088")
 
         mock_notify.fail.assert_any_call("Unexpected error with mtcdevices.sql: File not found")
+
+    @patch("openfactory.ofa.ksql_setup.time.sleep", return_value=None)
+    @patch("openfactory.ofa.ksql_setup.resources.path")
+    @patch("openfactory.ofa.ksql_setup.requests.post")
+    @patch("openfactory.ofa.ksql_setup.sql_files", new=["001-env.sql"])
+    def test_env_var_expansion_in_sql(
+        self, mock_requests_post, mock_resources_path, mock_sleep, mock_thread
+    ):
+        """ Test that environment variables in SQL scripts are expanded before submission. """
+
+        # --- Isolate environment ---
+        original_env = os.environ.copy()
+        os.environ.clear()
+
+        try:
+            os.environ["TOPIC_NAME"] = "assets_topic"
+            os.environ["PARTITIONS"] = ""
+
+            # --- Mock spinner thread ---
+            mock_thread.return_value.start.return_value = None
+            mock_thread.return_value.join.return_value = None
+
+            # --- SQL with env vars (compose-style) ---
+            raw_sql = """
+            CREATE STREAM test_stream (
+                id VARCHAR
+            ) WITH (
+                KAFKA_TOPIC = '${TOPIC_NAME:-default_topic}',
+                PARTITIONS = ${PARTITIONS:-3}
+            );
+            """
+
+            expected_sql = """
+            CREATE STREAM test_stream (
+                id VARCHAR
+            ) WITH (
+                KAFKA_TOPIC = 'assets_topic',
+                PARTITIONS = 3
+            );
+            """
+
+            mock_file = MagicMock()
+            mock_file.read_text.return_value = raw_sql
+            mock_resources_path.return_value.__enter__.return_value = mock_file
+
+            # --- Mock successful request ---
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_requests_post.return_value = mock_response
+
+            # --- Run ---
+            setup_kafka("http://fake-ksqldb:8088")
+
+            # --- Assert SQL was expanded ---
+            sent_sql = mock_requests_post.call_args.kwargs["json"]["ksql"]
+
+            self.assertEqual(
+                sent_sql.strip(),
+                expected_sql.strip()
+            )
+
+        finally:
+            # --- Restore environment ---
+            os.environ.clear()
+            os.environ.update(original_env)

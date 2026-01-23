@@ -6,6 +6,7 @@ import itertools
 import sys
 import threading
 from importlib import resources
+from openfactory.config import expandvars_with_defaults
 from openfactory.models.user_notifications import user_notify
 
 ksql_package = "openfactory.resources.ksql"
@@ -84,7 +85,10 @@ def setup_kafka(ksqldb_server: str) -> None:
         t.start()
         try:
             with resources.path(ksql_package, filename) as path:
-                statements = path.read_text()
+                raw_statements = path.read_text()
+
+            # Expand environment variables
+            statements = expandvars_with_defaults(raw_statements)
 
             response = requests.post(
                 f"{ksqldb_server}/ksql",

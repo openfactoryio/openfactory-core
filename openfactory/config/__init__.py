@@ -10,25 +10,35 @@ from typing import Any
 
 def expandvars_with_defaults(s: str) -> str:
     """
-    Expands environment variables in the input string.
+    Expands environment variables in the input string using Docker Compose style semantics.
 
-    Replaces all occurrences of environment variables in the format `${VAR}` or `${VAR:-default}`
-    within the input string `s`. If the environment variable `VAR` is set, its value is used.
-    If it is not set and a default value is provided (`:-default`), the default is used.
-    If no default is provided and the variable is not set, it is replaced with an empty string.
+    Replaces all occurrences of environment variable expressions in the formats:
+
+      - ${VAR}
+      - ${VAR:-default}
+
+    Expansion rules:
+      - If VAR is set to a non-empty value, that value is used.
+      - If VAR is unset or set to an empty string:
+          - If a default is provided using ':-', the default value is used.
+          - Otherwise, the variable is replaced with an empty string.
 
     Args:
         s (str): The input string potentially containing environment variable expressions.
 
     Returns:
-        str: The input string with environment variables expanded to their values or defaults.
+        str: The input string with environment variables expanded according to the rules above.
     """
     pattern = re.compile(r'\$\{([^}:\s]+)(:-([^}]*))?\}')
 
     def replacer(match):
         var_name = match.group(1)
         default_val = match.group(3) or ''
-        return os.environ.get(var_name, default_val)
+        value = os.environ.get(var_name)
+        if value:
+            return value
+
+        return default_val
 
     return pattern.sub(replacer, s)
 

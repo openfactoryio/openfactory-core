@@ -4,8 +4,7 @@ CREATE STREAM cmds_stream (
         cmd VARCHAR,
         args VARCHAR
     ) WITH (
-        KAFKA_TOPIC = 'ofa_cmds',
-        PARTITIONS = 1,
+        KAFKA_TOPIC = 'ofa_cmds'
         REPLICAS = 1,
         VALUE_FORMAT = 'JSON'
     );

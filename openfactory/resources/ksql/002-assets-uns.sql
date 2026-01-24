@@ -10,8 +10,7 @@ CREATE TABLE asset_to_uns_map_raw (
 ) WITH (
     KAFKA_TOPIC = 'asset_to_uns_map_topic',
     KEY_FORMAT = 'KAFKA',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 );
 
 -- Materialized table for querying and joining
@@ -33,8 +32,7 @@ CREATE STREAM assets_stream_uns (
     attributes MAP<VARCHAR, VARCHAR>
 ) WITH (
     KAFKA_TOPIC = 'ofa_assets_uns',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 );
 
 -- Populate assets_stream_uns with data keyed by UNS_ID

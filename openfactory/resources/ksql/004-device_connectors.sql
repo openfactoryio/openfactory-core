@@ -7,8 +7,7 @@ CREATE TABLE DEVICE_CONNECTOR_SOURCE (
     CONNECTOR_CONFIG STRING
 ) WITH (
     KAFKA_TOPIC='device_connector_topic',
-    VALUE_FORMAT='JSON',
-    PARTITIONS=1
+    VALUE_FORMAT='JSON'
 );
 
 -- Materialized version (queryable)

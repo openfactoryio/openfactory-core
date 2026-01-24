@@ -13,7 +13,6 @@ CREATE STREAM assets_stream (
         attributes MAP<VARCHAR, VARCHAR>
     ) WITH (
         KAFKA_TOPIC = 'ofa_assets',
-        PARTITIONS = 1,
         VALUE_FORMAT = 'JSON'
     );
 
@@ -28,7 +27,6 @@ CREATE STREAM enriched_assets_stream (
     timestamp VARCHAR
 ) WITH (
     KAFKA_TOPIC = 'enriched_assets_stream_topic',
-    PARTITIONS = 1,
     VALUE_FORMAT = 'JSON'
 );
 
@@ -81,8 +79,7 @@ CREATE TABLE assets AS
 -- Stream for Docker services of OpenFactory Assets
 CREATE STREAM docker_services_stream WITH (
     KAFKA_TOPIC = 'docker_services_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 ) AS 
 SELECT asset_uuid, VALUE AS docker_service
 FROM assets_stream 
@@ -94,8 +91,7 @@ CREATE SOURCE TABLE docker_services (
     docker_service VARCHAR
 ) WITH (
     KAFKA_TOPIC = 'docker_services_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 );
 
 -- ---------------------------------------------------------------------
@@ -104,8 +100,7 @@ CREATE SOURCE TABLE docker_services (
 -- Stream for OpenFactory Assets tombstones
 CREATE STREAM assets_type_tombstones WITH (
     KAFKA_TOPIC = 'assets_types_topic',
-    VALUE_FORMAT = 'KAFKA',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'KAFKA'
 ) AS 
 SELECT asset_uuid, CAST(NULL AS VARCHAR) AS type
 FROM assets_stream
@@ -114,8 +109,7 @@ WHERE ID = 'AssetType' AND TYPE = 'OpenFactory' AND VALUE = 'delete';
 -- Stream for OpenFactory Assets types
 CREATE STREAM assets_type_stream WITH (
     KAFKA_TOPIC = 'assets_types_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 ) AS 
 SELECT asset_uuid, value AS type
 FROM assets_stream 
@@ -127,8 +121,7 @@ CREATE SOURCE TABLE assets_type (
     type VARCHAR
 ) WITH (
     KAFKA_TOPIC = 'assets_types_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 );
 
 -- ---------------------------------------------------------------------
@@ -137,8 +130,7 @@ CREATE SOURCE TABLE assets_type (
 -- Stream for assets availability tombstones
 CREATE STREAM assets_avail_tombstones WITH (
     KAFKA_TOPIC = 'assets_avail_topic',
-    VALUE_FORMAT = 'KAFKA',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'KAFKA'
 ) AS 
 SELECT asset_uuid, CAST(NULL AS VARCHAR) AS value
 FROM assets_stream
@@ -147,8 +139,7 @@ WHERE (id IN ('avail', 'agent_avail') AND value = 'delete');
 -- Stream for assets availability
 CREATE STREAM assets_avail_stream WITH (
     KAFKA_TOPIC = 'assets_avail_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 ) AS 
 SELECT asset_uuid, value AS availability
 FROM assets_stream 
@@ -160,6 +151,5 @@ CREATE SOURCE TABLE assets_avail (
     availability VARCHAR
 ) WITH (
     KAFKA_TOPIC = 'assets_avail_topic',
-    VALUE_FORMAT = 'JSON',
-    PARTITIONS = 1
+    VALUE_FORMAT = 'JSON'
 );

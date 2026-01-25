@@ -1,0 +1,60 @@
+name: Create OFA-CLI Docker image on GitHub Container Registry
+
+on:
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE: ghcr.io/openfactoryio/ofa-cli
+
+jobs:
+  push_to_registry:
+    name: Build and Push Docker Image to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Validate release tag version
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: ./scripts/validate_version.sh ${{ github.ref_name }}
+
+      - name: Set tags dynamically
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TAGS=${{ env.DOCKER_IMAGE }}:manual-${{ github.sha }}" >> $GITHUB_ENV
+            echo "TAGS_LATEST=${{ env.DOCKER_IMAGE }}:latest" >> $GITHUB_ENV
+            echo "VERSION=dev" >> $GITHUB_ENV
+            echo "OPENFACTORY_VERSION=main" >> $GITHUB_ENV
+          else
+            echo "TAGS=${{ env.DOCKER_IMAGE }}:${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "TAGS_LATEST=${{ env.DOCKER_IMAGE }}:latest" >> $GITHUB_ENV
+            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "OPENFACTORY_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          fi
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.TAGS }}
+            ${{ env.TAGS_LATEST }}
+          build-args: |
+              UID=${{ vars.FACTORY_USER_UID }}
+              GID=${{ vars.FACTORY_USER_GID }}
+              VERSION=${{ env.VERSION }}
+              OPENFACTORY_VERSION=${{ env.OPENFACTORY_VERSION }}

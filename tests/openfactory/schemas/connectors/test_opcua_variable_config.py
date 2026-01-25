@@ -15,3 +15,7 @@ class TestOPCUAVariableConfig(unittest.TestCase):
         # Deadband must exist and default to 0.0
         self.assertIn("deadband", dumped)
         self.assertEqual(dumped["deadband"], 0.0)
+
+        # Access level must exist and default to 'ro'
+        self.assertIn("access_level", dumped)
+        self.assertEqual(dumped["access_level"], "ro")

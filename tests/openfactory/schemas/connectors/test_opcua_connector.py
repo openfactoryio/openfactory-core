@@ -234,6 +234,100 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
         # Explicit deadband
         self.assertEqual(hum_var.deadband, 0.05)
 
+    def test_variable_access_level_defaults_to_ro(self):
+        """ Variable access_level defaults to 'ro' """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        temp_var = schema.variables["temp"]
+
+        self.assertEqual(temp_var.access_level, "ro")
+
+    def test_variable_access_level_rw_preserved(self):
+        """ Explicit access_level 'rw' is preserved """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "setpoint": {
+                    "node_id": "ns=3;i=2001",
+                    "tag": "Setpoint",
+                    "access_level": "rw"
+                }
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        var = schema.variables["setpoint"]
+
+        self.assertEqual(var.access_level, "rw")
+
+    def test_multiple_variables_with_mixed_access_levels(self):
+        """ Variables can have mixed access levels """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {
+                    "node_id": "ns=3;i=1050",
+                    "tag": "Temperature"
+                },
+                "setpoint": {
+                    "node_id": "ns=3;i=2001",
+                    "tag": "Setpoint",
+                    "access_level": "rw"
+                }
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        self.assertEqual(schema.variables["temp"].access_level, "ro")
+        self.assertEqual(schema.variables["setpoint"].access_level, "rw")
+
+    def test_invalid_access_level_raises(self):
+        """ Invalid access_level value should raise ValidationError """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "temp": {
+                    "node_id": "ns=3;i=1050",
+                    "tag": "Temperature",
+                    "access_level": "read"  # invalid
+                }
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("access_level", str(cm.exception))
+
+    def test_access_level_survives_normalization(self):
+        """ access_level is preserved during normalization """
+        data = {
+            "type": "opcua",
+            "server": {
+                "uri": "opc.tcp://127.0.0.1:4840/server/",
+                "subscription": {"queue_size": 10}
+            },
+            "variables": {
+                "cmd": {
+                    "node_id": "ns=3;i=3000",
+                    "tag": "Command",
+                    "access_level": "rw"
+                }
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        var = schema.variables["cmd"]
+
+        self.assertEqual(var.access_level, "rw")
+        self.assertEqual(var.queue_size, 10)
+
     def test_events_parsing(self):
         """ Test proper event parsing """
         data = {

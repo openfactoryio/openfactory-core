@@ -17,9 +17,11 @@ Key Models:
   applied (publishing_interval=100 ms, queue_size=1, sampling_interval=0 ms).
 
 - OPCUAVariableConfig:
-  Configuration for a single variable. Contains `node_id` to identify the
-  OPC UA node and a `tag` used by OpenFactory to label data. Optional
-  overrides for queue size and sampling interval can be provided.
+  Configuration for a single variable. Contains `node_id` or `browse_path`
+  to identify the OPC UA node and a `tag` used by OpenFactory to label data.
+  Variables may also declare an `access_level` (`ro` or `rw`) describing
+  how OpenFactory is allowed to interact with the node.
+  Optional overrides for queue size and sampling interval can be provided.
 
 - OPCUAConnectorSchema:
   Wrapper schema that encapsulates the server configuration. During
@@ -29,6 +31,7 @@ Key Models:
 Validation Features:
 --------------------
 - Validates `node_id` format and parses it into namespace_index, identifier_type, and identifier fields.
+- Enforces that exactly one of `node_id` or `browse_path` is provided.
 - Normalizes all variables into OPCUAVariableConfig, applying server-level subscription defaults when not overridden. If the server subscription is omitted, default values are applied.
 - Forbids unknown fields to ensure strict schema conformance.
 
@@ -81,11 +84,12 @@ YAML Example:
         temp:
             node_id: ns=3;i=1050
             tag: Temperature
-        hum:
-            node_id: ns=2;i=10
-            tag: Humidity
             queue_size: 5          # overrides server subscription
             sampling_interval: 50  # overrides server subscription
+        setpoint:
+            node_id: ns=2;i=10
+            tag: Setpoint
+            access_level: rw       # read-write variable
 
 .. seealso::
 
@@ -206,9 +210,16 @@ class OPCUANodeConfig(BaseModel):
         return values
 
 
+AccessLevel = Literal["ro", "rw"]
+
+
 class OPCUAVariableConfig(OPCUANodeConfig):
     """ Configuration for a single OPC UA variable. """
     tag: str = Field(..., description="Tag used by OpenFactory to label the variable's data.")
+    access_level: AccessLevel = Field(
+        default="ro",
+        description="Access level declared by the connector: 'ro' = read-only, 'rw' = read-write."
+    )
     queue_size: Optional[int] = Field(
         default=None,
         description="Override server-level queue size for this variable."
@@ -294,6 +305,7 @@ class OPCUAConnectorSchema(BaseModel):
                     node_id=var_cfg.node_id,
                     browse_path=var_cfg.browse_path,
                     tag=var_cfg.tag,
+                    access_level=var_cfg.access_level,
                     queue_size=(
                         var_cfg.queue_size
                         if var_cfg.queue_size is not None else

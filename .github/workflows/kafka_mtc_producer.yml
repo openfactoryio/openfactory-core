@@ -17,7 +17,7 @@ jobs:
     steps:
 
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate release tag version
         if: github.event_name == 'release' && github.event.action == 'created'
@@ -43,7 +43,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./connectors/MTConnect
           file: ./connectors/MTConnect/Dockerfile

@@ -158,9 +158,12 @@ class AssetForwarder:
         self.kafka_config = dict(kafka_config)
         self.kafka_config["group.id"] = group_id
         self.kafka_config["enable.auto.commit"] = True
-        self.kafka_config["auto.commit.interval.ms"] = 100
+        self.kafka_config["auto.commit.interval.ms"] = float(os.getenv("KAFKA_CONSUMER_COMMIT_INTERVAL_MS", "100"))
         self.kafka_config["enable.auto.offset.store"] = False
         self.kafka_config["auto.offset.reset"] = os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest")
+
+        self.KAFKA_CONSUMER_BATCH_SIZE = int(os.getenv("KAFKA_CONSUMER_BATCH_SIZE", "100"))
+        self.KAFKA_CONSUMER_TIME_OUT_MS = float(os.getenv("KAFKA_CONSUMER_TIME_OUT_MS", "1"))
 
         self.consumer: Optional[Consumer] = None
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
@@ -211,7 +214,7 @@ class AssetForwarder:
             consumer.subscribe([self.kafka_topic], on_assign=self._on_assign, on_revoke=self._on_revoke)
 
             while not self._stop_event.is_set():
-                msgs = consumer.consume(num_messages=100, timeout=0.001)
+                msgs = consumer.consume(num_messages=self.KAFKA_CONSUMER_BATCH_SIZE, timeout=self.KAFKA_CONSUMER_TIME_OUT_MS/1000.0)
 
                 if not msgs:
                     continue

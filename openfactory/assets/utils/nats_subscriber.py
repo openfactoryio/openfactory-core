@@ -11,9 +11,32 @@ class AssetNATSCallback(Protocol):
     Interface for callback used to handle NATS asset messages.
 
     Args:
-        msg_subject (str): The NATS subject of the message (e.g., 'OPCUA-SENSOR-001.*').
+        msg_subject (str): The NATS subject of the message (e.g., ``OPCUA-SENSOR-001.*``).
         msg_value (dict): The JSON-decoded payload of the message.
+
+    Note:
+        The ``msg_value`` dictionary has the following structure:
+
+        .. code-block:: python
+
+            {
+                "VALUE": 24.3,
+                "TAG": "Temperature",
+                "TYPE": "Samples",
+                "attributes": {
+                    "timestamp": "2026-01-27T15:37:03.871Z",
+                    "ingestion_timestamp": "2026-01-27T15:37:03.882Z",
+                    "asset_forwarder_timestamp": "2026-01-27T15:37:03.886Z",
+                    "kafka_timestamp": "2026-01-27T15:37:03.882Z",
+                    "kafka_timestamp_type": "producer"
+                }
+            }
+
+        The ``VALUE``, ``TAG``, ``TYPE``, and ``attributes`` fields are always present.
+        The ``attributes`` dictionary may contain additional keys depending on the
+        monitored asset.
     """
+
     def __call__(self, msg_subject: str, msg_value: dict) -> None:
         """ Method to handle incoming NATS asset messages. """
         ...

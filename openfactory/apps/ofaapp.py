@@ -143,9 +143,13 @@ class OpenFactoryApp(Asset):
 
         Can be redefined by children
         """
+        print("==============================================================")
+        print(f"OpenFactory App {self.asset_uuid}")
         print("--------------------------------------------------------------")
-        print(f"Starting OpenFactory App {self.asset_uuid}")
-        print("--------------------------------------------------------------")
+        print(f"Application version:         {self.APPLICATION_VERSION}")
+        print(f"Application manufacturer:    {self.APPLICATION_MANUFACTURER}")
+        print(f"Application license:         {self.APPLICATION_LICENSE}")
+        print("==============================================================")
 
     def app_event_loop_stopped(self) -> None:
         """ Called when main loop is stopped. """

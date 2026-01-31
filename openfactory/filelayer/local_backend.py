@@ -36,7 +36,7 @@ class LocalBackend(FileBackend):
         Args:
             config (LocalBackendConfig): Configuration object for the local backend.
         """
-        self.config = config
+        super().__init__(config)
         self.root = Path(config.local_path)
 
     def _full_path(self, path: str) -> Path:

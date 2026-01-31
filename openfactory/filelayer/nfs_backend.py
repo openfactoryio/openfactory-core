@@ -34,7 +34,7 @@ class NFSBackend(FileBackend):
         Args:
             config (NFSBackendConfig): Configuration object for the NFS backend.
         """
-        self.config = config
+        super().__init__(config)
         self.root = Path(config.mount_point)
 
     def _full_path(self, path: str) -> Path:

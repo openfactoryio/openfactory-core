@@ -15,12 +15,27 @@ Warning:
 
 from abc import ABC, abstractmethod
 from typing import IO, List
+from openfactory.schemas.filelayer.base_backend import BaseBackendConfig
 
 
 class FileBackend(ABC):
     """
     Abstract base class defining the interface for all file storage backends.
     """
+
+    @abstractmethod
+    def __init__(self, config: BaseBackendConfig):
+        """
+        Initialize the file backend.
+
+        Args:
+            config (BaseBackendConfig): Configuration object containing all settings of the backend.
+
+        Note:
+            Subclasses must call ``super().__init__(config)`` to ensure the
+            base configuration is stored correctly.
+        """
+        self.config = config
 
     def compatible_with_swarm(self) -> bool:
         """

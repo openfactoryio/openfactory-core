@@ -93,12 +93,21 @@ class OpenFactoryApp(Asset):
         app_uuid = os.getenv('APP_UUID', app_uuid)
         super().__init__(app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
 
+        # Set up logging
+        self.logger = configure_prefixed_logger(
+            app_uuid,
+            prefix=app_uuid.upper(),
+            level=loglevel)
+        self.logger.debug(f"Setup OpenFactory App {app_uuid}")
+
         # attach storage
         storage_env = os.environ.get("STORAGE")
         self.storage: FileBackend | None = None
         if storage_env:
             schema = StorageBackendSchema(storage=json.loads(storage_env))
             self.storage = schema.storage.create_backend_instance()
+            self.logger.debug(f"[{app_uuid}] Adding storage of type {self.storage.config.type}")
+            self.logger.debug(f"[{app_uuid}] {json.dumps(self.storage.get_mount_spec(), indent=2)}")
 
         # attributes of the application
         self.add_attribute(
@@ -125,13 +134,6 @@ class OpenFactoryApp(Asset):
                 tag='Application.License'
             )
         )
-
-        # Set up logging
-        self.logger = configure_prefixed_logger(
-            app_uuid,
-            prefix=app_uuid.upper(),
-            level=loglevel)
-        self.logger.info(f"Setup OpenFactory App {app_uuid}")
 
         # Setup signal handlers
         signal.signal(signal.SIGINT, self.signal_handler)

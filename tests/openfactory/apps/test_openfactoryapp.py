@@ -81,6 +81,8 @@ class TestOpenFactoryApp(unittest.TestCase):
         # Mock the StorageBackendSchema instance
         mock_schema_instance = MockStorageSchema.return_value
         mock_backend_instance = MagicMock(spec=FileBackend)
+        mock_backend_instance.config = MagicMock()
+        mock_backend_instance.config.type = "nfs"
         mock_schema_instance.storage.create_backend_instance.return_value = mock_backend_instance
 
         # Example storage JSON
@@ -157,7 +159,7 @@ class TestOpenFactoryApp(unittest.TestCase):
             level='DEBUG'
         )
         self.assertIs(app.logger, mock_logger)
-        mock_logger.info.assert_called_with("Setup OpenFactory App test-uuid")
+        mock_logger.debug.assert_called_with("Setup OpenFactory App test-uuid")
 
     def test_signal_sigint(self):
         """ Test signal SIGINT """

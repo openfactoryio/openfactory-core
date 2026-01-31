@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import os
+from unittest.mock import patch
 from openfactory.schemas.filelayer.nfs_backend import NFSBackendConfig
 from openfactory.filelayer.backend import FileBackend
 from openfactory.filelayer.nfs_backend import NFSBackend
@@ -27,10 +28,15 @@ class TestNFSBackend(unittest.TestCase):
         """ Clean up temporary directory. """
         self.temp_dir.cleanup()
 
-    def test_inheritance_and_initialization(self):
-        """ Test that NFSBackend inherits from FileBackend and initializes correctly. """
-
+    def test_inheritance(self):
+        """ Test that NFSBackend inherits from FileBackend. """
         self.assertIsInstance(self.backend, FileBackend)
+
+    def test_calls_base_init(self):
+        """ Test that NFSBackend calls FileBackend.__init__ with the config. """
+        with patch.object(FileBackend, "__init__", autospec=True, return_value=None) as mock_base_init:
+            backend = NFSBackend(config=self.config)
+            mock_base_init.assert_called_once_with(backend, self.config)
 
     def test_file_creation_and_reading(self):
         """ Test that a file can be created, written, and read correctly. """

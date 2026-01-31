@@ -1,8 +1,10 @@
 import unittest
 import tempfile
 import shutil
+from unittest.mock import patch
 from pathlib import Path
 from openfactory.schemas.filelayer.local_backend import LocalBackendConfig
+from openfactory.filelayer.backend import FileBackend
 from openfactory.filelayer.local_backend import LocalBackend
 
 
@@ -24,6 +26,16 @@ class TestLocalBackend(unittest.TestCase):
     def tearDown(self):
         """ Remove the temporary directory after tests. """
         shutil.rmtree(self.temp_dir)
+
+    def test_inheritance(self):
+        """ Test that NFSBackend inherits from FileBackend. """
+        self.assertIsInstance(self.backend, FileBackend)
+
+    def test_calls_base_init(self):
+        """ Test that LocalBackend calls FileBackend.__init__ with the config. """
+        with patch.object(FileBackend, "__init__", autospec=True, return_value=None) as mock_base_init:
+            backend = LocalBackend(self.config)
+            mock_base_init.assert_called_once_with(backend, self.config)
 
     def test_full_path_relative(self):
         """ Test that _full_path correctly computes relative paths. """

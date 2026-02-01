@@ -167,17 +167,17 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         Convert a Docker Swarm-style mount dictionary to a local Docker Mount object.
 
         Args:
-            mount_dict (dict): Mount dictionary in Swarm format, as returned by NFSBackend.get_mount_spec().
+            mount_dict (dict): Mount dictionary in Swarm format, as returned by :meth:`openfactory.filelayer.nfs_backend.NFSBackend.get_mount_spec`.
 
         Returns:
             docker.types.Mount: A Mount object suitable for use with docker.containers.run().
 
-        Notes:
-            - Supports 'volume' mounts only; bind mounts should be handled separately.
+        Note:
+            - Supports ``volume`` mounts only; ``bind`` mounts should be handled separately.
             - The returned Mount preserves the target path, source name, read-only flag,
-            and driver configuration specified in the input dictionary.
-            - NFS-specific options (e.g., nfsvers=4) are already included in the
-            mount dictionary by NFSBackend.get_mount_spec().
+              and driver configuration specified in the input dictionary.
+            - NFS-specific options (e.g., ``nfsvers=4``) are already included in the
+              mount dictionary by :meth:`~openfactory.filelayer.nfs_backend.NFSBackend.get_mount_spec`.
         """
         driver_cfg_dict = mount_dict.get("VolumeOptions", {}).get("DriverConfig")
         driver_config = None

@@ -85,6 +85,9 @@ class TestOpenFactoryApp(unittest.TestCase):
         mock_backend_instance.config.type = "nfs"
         mock_schema_instance.storage.create_backend_instance.return_value = mock_backend_instance
 
+        # Make get_mount_spec return a dict so json.dumps() works in code under test
+        mock_backend_instance.get_mount_spec.return_value = {}
+
         # Example storage JSON
         storage_json = json.dumps({
             "type": "nfs",

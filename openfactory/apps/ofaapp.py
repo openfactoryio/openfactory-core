@@ -106,8 +106,8 @@ class OpenFactoryApp(Asset):
         if storage_env:
             schema = StorageBackendSchema(storage=json.loads(storage_env))
             self.storage = schema.storage.create_backend_instance()
-            self.logger.debug(f"[{app_uuid}] Adding storage of type {self.storage.config.type}")
-            self.logger.debug(f"[{app_uuid}] {json.dumps(self.storage.get_mount_spec(), indent=2)}")
+            self.logger.debug(f"Adding storage of type {self.storage.config.type}")
+            self.logger.debug(json.dumps(self.storage.get_mount_spec(), indent=2))
 
         # attributes of the application
         self.add_attribute(

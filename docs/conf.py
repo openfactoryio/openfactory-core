@@ -32,6 +32,7 @@ intersphinx_mapping = {
 nitpick_ignore = [
     ('py:exc', 'docker.errors.APIError'),
     ('py:exc', 'docker.errors.NotFound'),
+    ('py:class', 'docker.types.services.Mount'),
     ('py:exc', 'KafkaError'),
     ('py:class', 'asyncua.Client'),
     ('py:class', 'cimpl.Producer'),

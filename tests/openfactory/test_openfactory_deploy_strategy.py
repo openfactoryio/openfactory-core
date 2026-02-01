@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
+from docker.types import DriverConfig
 from openfactory.openfactory_deploy_strategy import SwarmDeploymentStrategy, LocalDockerDeploymentStrategy
 
 
@@ -180,3 +181,46 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertIn("mounts", kwargs)
         self.assertEqual(len(kwargs["mounts"]), 1)
         self.assertEqual(kwargs["mounts"][0], mock_mount_class.return_value)
+
+    @patch("openfactory.openfactory_deploy_strategy.Mount")
+    def test_swarm_mount_to_container_mount_volume(self, mock_mount_class):
+        """ Test that swarm_mount_to_container_mount converts a volume dict to Mount correctly. """
+        strategy = LocalDockerDeploymentStrategy()
+
+        mount_dict = {
+            "Type": "volume",
+            "Source": "my_volume",
+            "Target": "/mnt",
+            "ReadOnly": True,
+            "VolumeOptions": {
+                "DriverConfig": {
+                    "Name": "local",
+                    "Options": {
+                        "type": "nfs",
+                        "o": "addr=10.0.0.1,rw,nfsvers=4",
+                        "device": ":/data"
+                    }
+                }
+            }
+        }
+
+        mount_obj = strategy.swarm_mount_to_container_mount(mount_dict)
+
+        # Assert Mount constructor was called with correct arguments
+        mock_mount_class.assert_called_once_with(
+            target="/mnt",
+            source="my_volume",
+            type="volume",
+            read_only=True,
+            driver_config=DriverConfig(
+                name="local",
+                options={
+                    "type": "nfs",
+                    "o": "addr=10.0.0.1,rw,nfsvers=4",
+                    "device": ":/data"
+                }
+            )
+        )
+
+        # The returned object is the mocked Mount
+        self.assertEqual(mount_obj, mock_mount_class.return_value)

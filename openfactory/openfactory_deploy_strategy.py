@@ -63,7 +63,7 @@ to standardize service deployment across local development and production enviro
 """
 
 import docker
-from docker.types import Mount
+from docker.types import Mount, DriverConfig
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any
 from openfactory.docker.docker_access_layer import dal
@@ -162,6 +162,40 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
     """ Deployment strategy for local Docker containers (non-Swarm). """
 
+    def swarm_mount_to_container_mount(self, mount_dict: dict) -> Mount:
+        """
+        Convert a Docker Swarm-style mount dictionary to a local Docker Mount object.
+
+        Args:
+            mount_dict (dict): Mount dictionary in Swarm format, as returned by :meth:`openfactory.filelayer.nfs_backend.NFSBackend.get_mount_spec`.
+
+        Returns:
+            docker.types.Mount: A Mount object suitable for use with docker.containers.run().
+
+        Note:
+            - Supports ``volume`` mounts only; ``bind`` mounts should be handled separately.
+            - The returned Mount preserves the target path, source name, read-only flag,
+              and driver configuration specified in the input dictionary.
+            - NFS-specific options (e.g., ``nfsvers=4``) are already included in the
+              mount dictionary by :meth:`~openfactory.filelayer.nfs_backend.NFSBackend.get_mount_spec`.
+        """
+        driver_cfg_dict = mount_dict.get("VolumeOptions", {}).get("DriverConfig")
+        driver_config = None
+
+        if driver_cfg_dict:
+            driver_config = DriverConfig(
+                name=driver_cfg_dict.get("Name"),
+                options=driver_cfg_dict.get("Options", {})
+            )
+
+        return Mount(
+            target=mount_dict["Target"],
+            source=mount_dict.get("Source"),
+            type=mount_dict.get("Type", "volume"),
+            read_only=mount_dict.get("ReadOnly", False),
+            driver_config=driver_config
+        )
+
     def deploy(self, *,
                image: str,
                name: str,
@@ -195,10 +229,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                                                type="bind",
                                                read_only=m.get("ReadOnly", False)))
                 elif m["Type"].lower() == "volume":
-                    docker_mounts.append(Mount(target=m["Target"],
-                                               source=m["Source"],
-                                               type="volume",
-                                               read_only=m.get("ReadOnly", False)))
+                    docker_mounts.append(self.swarm_mount_to_container_mount(m))
                 else:
                     raise ValueError(f"Unsupported mount type: {m['Type']}")
 

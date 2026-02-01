@@ -209,3 +209,37 @@ class TestNFSBackend(unittest.TestCase):
         self.assertIn("ro", o_string)
         self.assertIn("noatime", o_string)
         self.assertIn(f"addr={backend_with_opts.config.server}", o_string)
+
+    def test_get_mount_spec_always_adds_nfsvers_4(self):
+        """ Test that get_mount_spec() always includes nfsvers=4 in the 'o' string. """
+
+        # Case 1: mount_options without nfsvers
+        backend_no_nfsvers = NFSBackend(
+            config=NFSBackendConfig(
+                type="nfs",
+                server="10.0.0.1",
+                remote_path="/data",
+                mount_point=self.temp_dir.name,
+                mount_options=["rw", "noatime"]
+            )
+        )
+        mount_spec = backend_no_nfsvers.get_mount_spec()
+        o_string = mount_spec["VolumeOptions"]["DriverConfig"]["Options"]["o"]
+
+        self.assertIn("nfsvers=4", o_string, "nfsvers=4 should be appended if missing")
+
+        # Case 2: mount_options already contains nfsvers
+        backend_with_nfsvers = NFSBackend(
+            config=NFSBackendConfig(
+                type="nfs",
+                server="10.0.0.1",
+                remote_path="/data",
+                mount_point=self.temp_dir.name,
+                mount_options=["rw", "nfsvers=3"]
+            )
+        )
+        mount_spec2 = backend_with_nfsvers.get_mount_spec()
+        o_string2 = mount_spec2["VolumeOptions"]["DriverConfig"]["Options"]["o"]
+
+        # Should not overwrite existing nfsvers
+        self.assertIn("nfsvers=3", o_string2, "Existing nfsvers should not be overwritten")

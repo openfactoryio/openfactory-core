@@ -186,9 +186,14 @@ class NFSBackend(FileBackend):
         if self.config.mount_options:
             mount_opts.extend(self.config.mount_options)
 
+        # Ensure nfsvers=4 is always present if not already
+        o_str = ",".join(mount_opts)
+        if "nfsvers=" not in o_str:
+            o_str = f"{o_str},nfsvers=4" if o_str else "nfsvers=4"
+
         opts = {
             "type": "nfs",
-            "o": ",".join(mount_opts),
+            "o": o_str,
             "device": f":{self.config.remote_path}",
         }
 

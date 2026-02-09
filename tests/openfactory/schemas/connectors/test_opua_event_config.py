@@ -11,3 +11,10 @@ class TestOPCUAConnectorSchemaEvents(unittest.TestCase):
         self.assertNotIn("namespace_index", dumped)
         self.assertNotIn("identifier_type", dumped)
         self.assertNotIn("identifier", dumped)
+
+        # browse_path should not be present when not set
+        self.assertNotIn("browse_path", dumped)
+
+        # node_id must remain
+        self.assertIn("node_id", dumped)
+        self.assertEqual(dumped["node_id"], "ns=6;i=10")

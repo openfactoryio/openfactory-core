@@ -23,16 +23,31 @@ Key Models:
   how OpenFactory is allowed to interact with the node.
   Optional overrides for queue size and sampling interval can be provided.
 
+- OPCUAEventConfig:
+  Configuration for an event source. Contains `node_id` or `browse_path`
+  identifying the OPC UA node that emits events. Events do not use tags
+  or subscription overrides.
+
+- OPCUAMethodConfig:
+  Configuration for a method source. Each entry references an OPC UA node
+  (`node_id` or `browse_path`) from which all available OPC UA methods
+  will be discovered at runtime. Methods are not individually declared in
+  the schema; instead, the node acts as a method container.
+
 - OPCUAConnectorSchema:
-  Wrapper schema that encapsulates the server configuration. During
-  initialization, all variables are normalized into OPCUAVariableConfig
-  instances, with server-level subscription defaults applied where necessary.
+  Wrapper schema that encapsulates the server configuration along with
+  variables, events, and method sources. During initialization, all
+  variables, events, and methods are normalized into their respective
+  config models. Server-level subscription defaults are applied to
+  variables where necessary.
 
 Validation Features:
 --------------------
 - Validates `node_id` format and parses it into namespace_index, identifier_type, and identifier fields.
-- Enforces that exactly one of `node_id` or `browse_path` is provided.
-- Normalizes all variables into OPCUAVariableConfig, applying server-level subscription defaults when not overridden. If the server subscription is omitted, default values are applied.
+- Enforces that exactly one of `node_id` or `browse_path` is provided for variables, events, and methods.
+- Normalizes variables into OPCUAVariableConfig, applying server-level subscription defaults when not overridden. If the server subscription is omitted, default values are applied.
+- Ensures uniqueness of `node_id` and `browse_path` within variables, within events, and within methods.
+- Prevents local name conflicts between variables, events, and methods.
 - Forbids unknown fields to ensure strict schema conformance.
 
 YAML Example:
@@ -65,6 +80,12 @@ YAML Example:
     events:
         iolinkmaster:
             node_id: ns=6;i=43
+
+    methods:
+        tempSensor:
+            browse_path: 0:Root/0:Objects/2:Sensors/2:TemperatureSensor
+        humiSensor:
+            node_id: ns=5;i=12
 
     # ---------------------------------------------------------
     # Example 2: Server subscription explicitly provided
@@ -137,6 +158,10 @@ class OPCUANodeConfig(BaseModel):
     identifier: Optional[str] = Field(default=None, exclude=True)
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    def model_dump(self, *args, **kwargs):
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(*args, **kwargs)
 
     @model_validator(mode="before")
     def validate_browse_path_format(cls, values: dict) -> dict:
@@ -239,6 +264,11 @@ class OPCUAEventConfig(OPCUANodeConfig):
     pass
 
 
+class OPCUAMethodConfig(OPCUANodeConfig):
+    """ Configuration for an OPC UA method source. """
+    pass
+
+
 class OPCUAServerConfig(BaseModel):
     """ OPC UA Server configuration with variables. """
     uri: str = Field(..., description="OPC UA server endpoint URI.")
@@ -275,6 +305,10 @@ class OPCUAConnectorSchema(BaseModel):
     events: Optional[Dict[str, OPCUAEventConfig]] = Field(
         default=None,
         description="Mapping of named event sources."
+    )
+    methods: Optional[Dict[str, OPCUAMethodConfig]] = Field(
+        default=None,
+        description="Mapping of named OPC UA nodes from which methods will be discovered."
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -345,3 +379,35 @@ class OPCUAConnectorSchema(BaseModel):
 
                 normalized_events[local_name] = evt_cfg
             self.events = normalized_events
+
+        if self.methods:
+            normalized_methods = {}
+            seen_ids_methods = set()
+
+            for local_name, m_cfg in self.methods.items():
+                # Local name uniqueness
+                if local_name in normalized_methods:
+                    raise ValueError(f"Duplicate method source local name: {local_name}")
+
+                # Name conflicts with variables or events
+                if self.variables and local_name in self.variables:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both variables and methods"
+                    )
+                if self.events and local_name in self.events:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both events and methods"
+                    )
+
+                # Unique node check within methods
+                unique_key = m_cfg.node_id or m_cfg.browse_path
+                if unique_key in seen_ids_methods:
+                    if m_cfg.node_id:
+                        raise ValueError(f"Duplicate node_id within methods: {m_cfg.node_id}")
+                    else:
+                        raise ValueError(f"Duplicate path within methods: {m_cfg.browse_path}")
+                seen_ids_methods.add(unique_key)
+
+                normalized_methods[local_name] = m_cfg
+
+            self.methods = normalized_methods

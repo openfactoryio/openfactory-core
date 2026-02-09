@@ -19,3 +19,6 @@ class TestOPCUAVariableConfig(unittest.TestCase):
         # Access level must exist and default to 'ro'
         self.assertIn("access_level", dumped)
         self.assertEqual(dumped["access_level"], "ro")
+
+        # browse_path should not be present when not set
+        self.assertNotIn("browse_path", dumped)

@@ -533,3 +533,151 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
 
         # local names are different, so no conflict
         self.assertNotEqual(var.tag, evt.browse_path)
+
+    def test_methods_parsing(self):
+        """ Test proper method source parsing """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "temp_sensor": {"node_id": "ns=5;i=12"},
+                "hmi_panel": {"browse_path": "0:Root/0:Objects/2:HMI/2:Panel"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        self.assertEqual(schema.methods["temp_sensor"].namespace_index, 5)
+        self.assertEqual(schema.methods["temp_sensor"].identifier, "12")
+        self.assertEqual(
+            schema.methods["hmi_panel"].browse_path,
+            "0:Root/0:Objects/2:HMI/2:Panel"
+        )
+
+    def test_duplicate_node_id_within_methods_raises(self):
+        """ Duplicate node_id within methods should raise """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "m1": {"node_id": "ns=3;i=100"},
+                "m2": {"node_id": "ns=3;i=100"}  # duplicate
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Duplicate node_id within methods", str(cm.exception))
+
+    def test_duplicate_path_within_methods_raises(self):
+        """ Duplicate path across methods should raise """
+        path_str = "0:Root/0:Objects/2:Device/2:Controller"
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "m1": {"browse_path": path_str},
+                "m2": {"browse_path": path_str}  # duplicate
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Duplicate path within methods", str(cm.exception))
+
+    def test_key_conflict_between_variables_and_methods(self):
+        """ Same local name cannot exist in both variables and methods """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "device": {"node_id": "ns=3;i=1", "tag": "Device"}
+            },
+            "methods": {
+                "device": {"node_id": "ns=3;i=2"}  # name conflict
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Local name conflict", str(cm.exception))
+
+    def test_key_conflict_between_events_and_methods(self):
+        """ Same local name cannot exist in both events and methods """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "events": {
+                "alarm": {"node_id": "ns=3;i=1"}
+            },
+            "methods": {
+                "alarm": {"node_id": "ns=3;i=2"}  # conflict
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Local name conflict", str(cm.exception))
+
+    def test_method_and_variable_same_node_allowed(self):
+        """ A method source can reference same node as a variable """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "variables": {
+                "device_var": {"node_id": "ns=3;i=100", "tag": "Device"}
+            },
+            "methods": {
+                "device_methods": {"node_id": "ns=3;i=100"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        self.assertEqual(schema.variables["device_var"].node_id, "ns=3;i=100")
+        self.assertEqual(schema.methods["device_methods"].node_id, "ns=3;i=100")
+
+    def test_method_with_path_only(self):
+        """ Method source defined with browse_path only """
+        path_str = "0:Root/0:Objects/2:Machine/2:Controller"
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "controller_methods": {"browse_path": path_str}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+        method_src = schema.methods["controller_methods"]
+
+        self.assertEqual(method_src.browse_path, path_str)
+        self.assertIsNone(method_src.node_id)
+
+    def test_method_with_node_id_and_path_invalid(self):
+        """ Providing both node_id and browse_path for method source should fail """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "bad_method_src": {
+                    "node_id": "ns=3;i=10",
+                    "browse_path": "0:Root/0:Objects/2:Machine"
+                }
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Provide only one of 'node_id' or 'browse_path'", str(cm.exception))
+
+    def test_method_missing_node_id_and_path_raises(self):
+        """ Method source must have either node_id or browse_path """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "methods": {
+                "invalid": {}
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Either 'node_id' or 'browse_path' must be provided", str(cm.exception))

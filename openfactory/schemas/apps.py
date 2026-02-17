@@ -3,12 +3,13 @@ OpenFactory Application Schemas
 
 This module defines Pydantic models and utility functions to parse, validate,
 and enrich application configuration files in OpenFactory. Application definitions
-include Docker image info, environment variables, and optional UNS metadata.
+include Docker image info, environment variables, optional UNS metadata, storage
+backends, and container networks.
 
 Key Components:
 ---------------
 - **OpenFactoryApp**: Defines a single application including its UUID, Docker image,
-  optional environment variables, and UNS metadata.
+  environment variables, UNS metadata, storage backend, and container networks.
 - **OpenFactoryAppsConfig**: Validates a dictionary of application entries and ensures
   correct schema structure.
 - **get_apps_from_config_file**: Loads, validates, and enriches applications from a
@@ -21,9 +22,18 @@ Features:
 - Supports storage backends, including:
     - **LocalBackend**: Bind-mount a local host directory into containers (for development).
     - **NFSBackend**: Mount an NFS share into containers with configurable mount options.
+- Supports connecting containers to multiple Docker networks.
 - Provides utilities to load application configs from YAML with user-friendly
   error handling and notifications.
 - Ensures validated and enriched applications are returned as plain dictionaries.
+
+Developer Guidance:
+------------------
+- **Networks**: All network names must exist in Docker before deployment.
+- **UNS metadata**: Must match the `UNSSchema` used in the environment for semantic consistency.
+- **Storage backends**: Can be extended to support new types if needed.
+- **Adding new fields**: Requires updating schema and any corresponding validators.
+- Use the `apps_dict` property to access validated apps in runtime code.
 
 YAML Example:
 -------------
@@ -45,6 +55,9 @@ YAML Example:
           mount_point: /mnt
           mount_options:
             - ro
+        networks:
+        - factory-net
+        - monitoring-net
 
 Usage:
 ------
@@ -55,7 +68,7 @@ This module is used by OpenFactory deployment tools and runtime components to
 ensure application configurations are consistent, valid, and semantically enriched.
 """
 
-from pydantic import BaseModel, Field, ValidationError, ConfigDict
+from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator
 from typing import List, Dict, Optional, Any
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
@@ -66,20 +79,38 @@ from openfactory.schemas.filelayer.types import StorageBackend
 class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     """ OpenFactory Application Schema. """
     uuid: str = Field(..., description="Unique identifier for the app")
+
     uns: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Unified Namespace (UNS) configuration for the app"
     )
+
     image: str = Field(..., description="Docker image for the app")
+
     environment: Optional[List[str]] = Field(
         default=None, description="List of environment variables"
     )
+
     storage: Optional[StorageBackend] = Field(
         default=None,
         description="Optional storage backend for the application"
     )
 
+    networks: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of Docker networks the App container should connect to"
+    )
+
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("networks")
+    @classmethod
+    def validate_networks(cls, v):
+        if v:
+            for name in v:
+                if not name.strip():
+                    raise ValueError("Network names must not be empty")
+        return v
 
 
 class OpenFactoryAppsConfig(BaseModel):

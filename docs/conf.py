@@ -63,7 +63,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/Demo-Smart-Factory-Concordia-University/OpenFactory",
+            "url": "https://github.com/openfactoryio/openfactory-core",
             "icon": "fab fa-github",
             "type": "fontawesome",
         },

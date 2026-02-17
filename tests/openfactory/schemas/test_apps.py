@@ -234,3 +234,71 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         ]
 
         self.assertTrue(storage_error, "ValidationError should include 'union_tag_invalid' for 'storage' field")
+
+    def test_optional_networks(self):
+        """ networks field is optional """
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1"
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+        self.assertIsNone(config.apps["demo1"].networks)
+
+    def test_valid_networks_list(self):
+        """ networks can be provided as a list of non-empty strings """
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "networks": ["factory-net", "monitoring-net"]
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+        self.assertEqual(config.apps["demo1"].networks, ["factory-net", "monitoring-net"])
+
+    def test_networks_empty_string_invalid(self):
+        """ networks list with empty strings should raise ValidationError """
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "networks": ["factory-net", ""]
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn("Network names must not be empty", str(cm.exception))
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_networks_integration_with_get_apps_from_config_file(self, mock_load_yaml):
+        """ networks are correctly parsed and attached using get_apps_from_config_file """
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "uns": {"workcenter": "WC2"},
+                    "image": "demofact/demo1",
+                    "networks": ["factory-net", "monitoring-net"]
+                }
+            }
+        }
+
+        result = get_apps_from_config_file("dummy_path.yaml", self.uns_schema)
+        self.assertIsNotNone(result)
+
+        app = result["demo1"]
+        self.assertEqual(app.networks, ["factory-net", "monitoring-net"])
+        # Still has UNS enrichment
+        self.assertEqual(app.uns["uns_id"], "OpenFactory/WC2/DEMO-APP")

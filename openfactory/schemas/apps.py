@@ -9,11 +9,11 @@ ensure application configurations are consistent, valid, and semantically enrich
 
 Key Components
 --------------
-- ``OpenFactoryApp``: Defines a single application including its UUID, Docker image,
+- :class:`OpenFactoryAppSchema`: Defines a single application including its UUID, Docker image,
   environment variables, UNS metadata, storage backend, and container networks.
-- ``OpenFactoryAppsConfig``: Validates a dictionary of application entries and ensures
+- :class:`OpenFactoryAppsConfig`: Validates a dictionary of application entries and ensures
   correct schema structure.
-- ``get_apps_from_config_file``: Loads, validates, and enriches applications from a
+- :meth:`get_apps_from_config_file`: Loads, validates, and enriches applications from a
   YAML file with UNS metadata.
 
 Features
@@ -32,7 +32,7 @@ Features
 
 Usage
 -----
-Use ``get_apps_from_config_file(path, uns_schema)`` to load and validate an application
+Use :meth:`get_apps_from_config_file` to load and validate an application
 configuration YAML file, with automatic UNS enrichment.
 
 .. admonition:: YAML Example
@@ -67,7 +67,7 @@ Note:
     - **Networks**: All network names must exist in Docker before deployment.
     - **UNS metadata**: Must match the `UNSSchema` used in the environment for semantic consistency.
     - **Storage backends**: Can be extended to support new types if needed.
-    - Use the `apps_dict` property to access validated apps in runtime code.
+    - Use the ``apps_dict`` property to access validated apps in runtime code.
 
 .. seealso::
 
@@ -162,10 +162,10 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
         uns_schema (UNSSchema): Schema instance used to extract and validate UNS metadata for each application.
 
     Returns:
-        Optional[Dict[str, OpenFactoryApp]]: A dictionary of validated and enriched application configurations, or `None` if validation fails.
+        Optional[Dict[str, OpenFactoryApp]]: A dictionary of validated and enriched application configurations, or ``None`` if validation fails.
 
     Note:
-        In case of validation errors, user notifications will be triggered and `None` will be returned.
+        In case of validation errors, user notifications will be triggered and ``None`` will be returned.
     """
     # load yaml description file
     cfg = load_yaml(apps_yaml_config_file)

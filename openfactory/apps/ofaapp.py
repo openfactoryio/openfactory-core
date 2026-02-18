@@ -18,7 +18,7 @@ class OpenFactoryApp(Asset):
     """
     Generic OpenFactory application.
 
-    Inherits from ``Asset`` and extends it to represent an OpenFactory application with standard metadata,
+    Inherits from :class:`openfactory.assets.Asset` and extends it to represent an OpenFactory application with standard metadata,
     logging, and lifecycle management.
 
     Attributes:
@@ -167,14 +167,14 @@ class OpenFactoryApp(Asset):
 
     def signal_handler(self, signum: int, frame: Optional[FrameType]) -> None:
         """
-        Handles SIGINT and SIGTERM signals, gracefully stopping the application.
+        Handles ``SIGINT`` and ``SIGTERM`` signals, gracefully stopping the application.
 
         This method listens for termination signals, deregisters the asset from the system,
         and then stops the application’s event loop. It is typically used to handle clean
-        shutdowns when the app receives signals like SIGINT or SIGTERM.
+        shutdowns when the app receives signals like ``SIGINT`` or ``SIGTERM``.
 
         Args:
-            signum (int): The signal number that was received (e.g., SIGINT, SIGTERM).
+            signum (int): The signal number that was received (e.g., ``SIGINT``, ``SIGTERM``).
             frame (Optional): The current stack frame when the signal was received.
         """
         signal_name = signal.Signals(signum).name
@@ -185,15 +185,17 @@ class OpenFactoryApp(Asset):
 
     def main_loop(self) -> None:
         """
-        Main loop of the OpenFactory App.
+        Synchronous main loop of the OpenFactory App.
 
-        This method must be implemented by child classes to define the main
-        application loop behavior. It will be responsible for managing the
-        application's lifecycle, handling events, and maintaining any necessary
-        state while the application is running.
+        This method defines the core execution logic of the application
+        and is typically implemented as a blocking loop.
+
+        Important:
+            Subclasses must implement this method if they intend to use
+            :meth:`run` as the application entry point.
 
         Raises:
-            NotImplementedError: If this method is not implemented by a subclass.
+            NotImplementedError: If :meth:`run` is used without overriding this method in a subclass.
         """
         raise NotImplementedError("Method 'main_loop' must be implemented")
 
@@ -201,16 +203,20 @@ class OpenFactoryApp(Asset):
         """
         Runs the OpenFactory app.
 
+        Important:
+            Subclasses must implement this method if they intend to use
+            :meth:`run` as the application entry point.
+
         This method initializes the app by displaying a welcome banner, adding
         an availability attribute, and then starts the main application loop by
-        calling `main_loop`. If an exception occurs during the execution of the
+        calling :meth:`main_loop`. If an exception occurs during the execution of the
         main loop, the error is caught, and the app is gracefully stopped.
 
         The following steps are performed:
 
         1. Display the welcome banner.
 
-        2. Add the `avail` attribute with 'AVAILABLE' value.
+        2. Add the ``avail`` attribute with 'AVAILABLE' value.
 
         3. Start the main loop.
 
@@ -237,24 +243,41 @@ class OpenFactoryApp(Asset):
 
     async def async_main_loop(self) -> None:
         """
-        Async main loop of the OpenFactory App.
+        Asynchronous main loop of the OpenFactory App.
 
-        This method must be implemented by child classes to define the main
-        application loop behavior. It will be responsible for managing the
-        application's lifecycle, handling events, and maintaining any necessary
-        state while the application is running.
+        This method defines the core asynchronous execution logic of the
+        application and is expected to be awaited by :meth:`async_run`.
+
+        Important:
+            Subclasses must implement this method if they intend to use
+            :meth:`async_run` as the application entry point.
 
         Raises:
-            NotImplementedError: If this method is not implemented by a subclass.
+            NotImplementedError: If :meth:`async_run` is used without overriding this method in a subclass.
         """
         raise NotImplementedError("Method 'async_main_loop' must be implemented")
 
     async def async_run(self) -> None:
         """
-        Run the OpenFactory app asynchronously.
+        Runs the OpenFactory app asynchronously.
 
-        Args:
-            async_main_loop: Async function to use as the main loop
+        Important:
+            Subclasses must implement :meth:`async_main_loop` when using
+            this method as the application entry point.
+
+        This method initializes the app by displaying a welcome banner,
+        adding an availability attribute, and then starts the asynchronous
+        application loop by awaiting :meth:`async_main_loop`.
+
+        The following steps are performed:
+
+        1. Display the welcome banner.
+        2. Add the ``avail`` attribute with value 'AVAILABLE'.
+        3. Start the async main loop.
+        4. Catch any exceptions and stop the app gracefully.
+
+        Raises:
+            Exception: Any exception raised by :meth:`async_main_loop` is caught, logged, and triggers a graceful shutdown.
         """
         self.welcome_banner()
         self.add_attribute(AssetAttribute(

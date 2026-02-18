@@ -41,10 +41,10 @@ class OpenFactoryApp(Asset):
 
                 def main_loop(self):
                     # For actual use case, add here your logic of the app
-                    print("I don't do anything useful in this example.")
+                    self.logger.info("I don't do anything useful in this example.")
                     counter = 1
                     while True:
-                        print(counter)
+                        self.logger.info(f"Counter: {counter}")
                         counter += 1
                         time.sleep(2)
 
@@ -88,15 +88,18 @@ class OpenFactoryApp(Asset):
         termination signal handlers.
 
         Args:
-            app_uuid (str): The UUID of the application (overridden by the environment variable ``APP_UUID`` if available).
+            app_uuid (str): The UUID of the application (overridden by the environment variable ``APP_UUID`` if set).
             ksqlClient (KSQLDBClient): The KSQL client instance.
             bootstrap_servers (str): Kafka bootstrap servers URL.
             loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
 
-        Side effects:
+        Note:
             - Configures logging with the application UUID as prefix.
             - Mounts a storage backend if the ``STORAGE`` environment variable is set.
             - Registers signal handlers for ``SIGINT`` and ``SIGTERM``.
+
+        .. tip::
+           The environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` will be set when deployed on the OpenFactory Cluster.
         """
         # get APP-UUID from environment (set when deployed by ofa deployment tool)
         app_uuid = os.getenv('APP_UUID', app_uuid)
@@ -306,10 +309,10 @@ if __name__ == "__main__":
         def main_loop(self):
             """ Main loop. """
             # For actual use case, add here your logic of the app
-            print("I am the main loop of the app.\nI don't do anything useful in this example.")
+            self.logger.info("I am the main loop of the app.\nI don't do anything useful in this example.")
             counter = 1
             while True:
-                print(counter)
+                self.logger.info(f"Counter: {counter}")
                 counter += 1
                 time.sleep(2)
 

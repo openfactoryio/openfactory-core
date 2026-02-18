@@ -101,7 +101,6 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # Setup config constants
         mock_config.KSQLDB_LOG_LEVEL = "INFO"
-        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
 
         # Create two distinct mocks to be returned on Asset() calls
         mock_dev_asset = MagicMock()
@@ -205,7 +204,6 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # Setup config constants
         mock_config.KSQLDB_LOG_LEVEL = "INFO"
-        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
         mock_config.ASSET_ROUTER_URL = "mocker_asset_router_url"
 
         # Application dict without explicit KSQLDB_LOG_LEVEL in environment
@@ -235,6 +233,7 @@ class TestOpenFactoryManager(unittest.TestCase):
             name="app123",
             mode={"Replicated": {"Replicas": 1}},
             env=expected_env,
+            networks=None,
             mounts=[]
         )
 
@@ -251,14 +250,10 @@ class TestOpenFactoryManager(unittest.TestCase):
         # user_notify.success called
         mock_user_notify.success.assert_called_once_with("Application APP123 deployed successfully")
 
-    @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")
-    def test_deploy_openfactory_application_includes_storage_env(self, mock_register_asset, mock_user_notify, mock_config):
+    def test_deploy_openfactory_application_includes_storage_env(self, mock_register_asset, mock_user_notify):
         """ Test that deploy_openfactory_application includes STORAGE in env when storage is provided """
-
-        mock_config.KSQLDB_LOG_LEVEL = "INFO"
-        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
 
         nfs_config = NFSBackendConfig(
             type="nfs",
@@ -302,14 +297,10 @@ class TestOpenFactoryManager(unittest.TestCase):
             "Application APP_WITH_STORAGE deployed successfully"
         )
 
-    @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")
-    def test_deploy_with_nfs_storage_calls_backend(self, mock_register_asset, mock_user_notify, mock_config):
+    def test_deploy_with_nfs_storage_calls_backend(self, mock_register_asset, mock_user_notify):
         """ Test that deploying an app with NFS storage calls the backend's get_mount_spec """
-
-        mock_config.KSQLDB_LOG_LEVEL = "INFO"
-        mock_config.OPENFACTORY_NETWORK = "openfactory_net"
 
         nfs_config = NFSBackendConfig(
             type="nfs",
@@ -343,6 +334,45 @@ class TestOpenFactoryManager(unittest.TestCase):
             deploy_kwargs = self.manager.deployment_strategy.deploy.call_args.kwargs
             self.assertIn("mounts", deploy_kwargs)
             self.assertIn(mount_spec, deploy_kwargs["mounts"])
+
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.register_asset")
+    def test_deploy_openfactory_application_with_networks(self, mock_register_asset, mock_user_notify):
+        """ Test that deploy_openfactory_application passes networks correctly """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_NET",
+            image="app_image",
+            environment=["FOO=bar"],
+            uns=None,
+            networks=["net1", "net2"]
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        # Extract the call arguments for deploy
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        deploy_kwargs = deploy_call.kwargs
+
+        # Networks should be passed through
+        self.assertIn("networks", deploy_kwargs)
+        self.assertEqual(deploy_kwargs["networks"], ["net1", "net2"])
+
+        # Env still contains mandatory variables
+        env_vars = deploy_kwargs["env"]
+        self.assertIn("APP_UUID=APP_NET", env_vars)
+        self.assertIn("FOO=bar", env_vars)
+
+        # Register_asset and success notify called
+        mock_register_asset.assert_called_once_with(
+            "APP_NET",
+            uns=None,
+            asset_type="OpenFactoryApp",
+            ksqlClient=self.manager.ksql,
+            bootstrap_servers=self.manager.bootstrap_servers,
+            docker_service="app_net"
+        )
+        mock_user_notify.success.assert_called_once_with("Application APP_NET deployed successfully")
 
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.user_notify")

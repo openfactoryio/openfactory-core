@@ -40,7 +40,7 @@ class DockerAccesLayer:
         and a warning is issued. Otherwise, retrieves and stores the Swarm join tokens
         for worker and manager nodes.
 
-        Side Effects:
+        Note:
             Logs a warning if the manager node is not in Swarm mode.
 
         Sets:

@@ -58,7 +58,7 @@ class TestOpenFactoryApp(unittest.TestCase):
 
             with patch('openfactory.utils.assets.deregister_asset'):
 
-                app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock)
+                app = OpenFactoryApp(app_uuid='init-uuid', bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
                 self.assertEqual(app.APPLICATION_VERSION, '1.0.0')
                 self.assertEqual(app.APPLICATION_MANUFACTURER, 'TestFactory')
@@ -98,7 +98,7 @@ class TestOpenFactoryApp(unittest.TestCase):
         })
 
         with patch.dict("os.environ", {"STORAGE": storage_json}):
-            app = OpenFactoryApp(app_uuid="test-app", ksqlClient=self.ksql_mock)
+            app = OpenFactoryApp(app_uuid="test-app", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Assert StorageBackendSchema was called with parsed JSON
         MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json))
@@ -266,13 +266,13 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_main_loop_not_implemented(self):
         """ Verify async_main_loop raises NotImplementedError by default. """
-        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
         with self.assertRaises(NotImplementedError):
             await app.async_main_loop()
 
     async def test_async_run_calls_welcome_and_adds_avail(self):
         """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
-        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Mock async_main_loop
         app.async_main_loop = AsyncMock()
@@ -299,7 +299,7 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_run_handles_exception(self):
         """ Verify async_run handles exceptions from async_main_loop. """
-        app = OpenFactoryApp(app_uuid="test-uuid", ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Patch async_main_loop to raise an exception
         app.async_main_loop = AsyncMock(side_effect=Exception("Boom!"))

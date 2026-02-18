@@ -58,7 +58,7 @@ class TestOpenFactoryApp(unittest.TestCase):
 
             with patch('openfactory.utils.assets.deregister_asset'):
 
-                app = OpenFactoryApp(app_uuid='init-uuid', bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+                app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
                 self.assertEqual(app.APPLICATION_VERSION, '1.0.0')
                 self.assertEqual(app.APPLICATION_MANUFACTURER, 'TestFactory')
@@ -67,12 +67,12 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_initialization_with_defaults(self):
         """ Test initialization with no external environment variables set """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
 
         self.assertEqual(app.APPLICATION_VERSION, 'latest')
         self.assertEqual(app.APPLICATION_MANUFACTURER, 'OpenFactory')
         self.assertEqual(app.APPLICATION_LICENSE, 'BSD-3-Clause license')
-        self.assertEqual(app.asset_uuid, 'init-uuid')
+        self.assertEqual(app.asset_uuid, 'DEV-UUID')
 
     @patch("openfactory.apps.ofaapp.StorageBackendSchema")
     def test_storage_initialization(self, MockStorageSchema):
@@ -98,7 +98,7 @@ class TestOpenFactoryApp(unittest.TestCase):
         })
 
         with patch.dict("os.environ", {"STORAGE": storage_json}):
-            app = OpenFactoryApp(app_uuid="test-app", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+            app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Assert StorageBackendSchema was called with parsed JSON
         MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json))
@@ -119,7 +119,7 @@ class TestOpenFactoryApp(unittest.TestCase):
             return original_add_attribute(self_obj, *args, **kwargs)
 
         with patch.object(OpenFactoryApp, 'add_attribute', new=spy_add_attribute):
-            OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+            OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
 
         # Check that the expected attribute_ids were added
         expected_ids = ['application_version', 'application_manufacturer', 'application_license']
@@ -150,23 +150,22 @@ class TestOpenFactoryApp(unittest.TestCase):
         mock_configure_logger.return_value = mock_logger
 
         app = OpenFactoryApp(
-            app_uuid='test-uuid',
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock-bootstrap',
             loglevel='DEBUG'
         )
 
         mock_configure_logger.assert_called_once_with(
-            'test-uuid',
-            prefix='TEST-UUID',
+            'DEV-UUID',
+            prefix='DEV-UUID',
             level='DEBUG'
         )
         self.assertIs(app.logger, mock_logger)
-        mock_logger.debug.assert_called_with("Setup OpenFactory App test-uuid")
+        mock_logger.debug.assert_called_with("Setup OpenFactory App DEV-UUID")
 
     def test_signal_sigint(self):
         """ Test signal SIGINT """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         app.app_event_loop_stopped = MagicMock()
 
         with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
@@ -177,14 +176,14 @@ class TestOpenFactoryApp(unittest.TestCase):
 
         # Check that deregister_asset was called with the expected arguments
         self.mock_deregister.assert_called_once_with(
-            'init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
+            'DEV-UUID', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
         )
         # Check app_event_loop_stopped was called
         app.app_event_loop_stopped.assert_called_once()
 
     def test_signal_sigterm(self):
         """ Test signal SIGTERM """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         app.app_event_loop_stopped = MagicMock()
 
         with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
@@ -195,20 +194,20 @@ class TestOpenFactoryApp(unittest.TestCase):
 
         # Check that deregister_asset was called with the expected arguments
         self.mock_deregister.assert_called_once_with(
-            'init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
+            'DEV-UUID', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
         )
         # Check app_event_loop_stopped was called
         app.app_event_loop_stopped.assert_called_once()
 
     def test_main_loop_not_implemented(self):
         """ Test call to main_loop raise NotImplementedError """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         with self.assertRaises(NotImplementedError):
             app.main_loop()
 
     def test_run_invokes_main_loop(self):
         """ Test run method invokes main_loop """
-        app = OpenFactoryApp(app_uuid='init-uuid', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         app.main_loop = MagicMock()
         app.run()
         app.main_loop.assert_called_once()
@@ -216,7 +215,6 @@ class TestOpenFactoryApp(unittest.TestCase):
     def test_run_handles_main_loop_exception(self):
         """ Test handling of exception in main_loop """
         app = OpenFactoryApp(
-            app_uuid='init-uuid',
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock_bootstrap'
         )
@@ -266,13 +264,13 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_main_loop_not_implemented(self):
         """ Verify async_main_loop raises NotImplementedError by default. """
-        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
         with self.assertRaises(NotImplementedError):
             await app.async_main_loop()
 
     async def test_async_run_calls_welcome_and_adds_avail(self):
         """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
-        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Mock async_main_loop
         app.async_main_loop = AsyncMock()
@@ -299,7 +297,7 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_run_handles_exception(self):
         """ Verify async_run handles exceptions from async_main_loop. """
-        app = OpenFactoryApp(app_uuid="test-uuid", bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
         # Patch async_main_loop to raise an exception
         app.async_main_loop = AsyncMock(side_effect=Exception("Boom!"))

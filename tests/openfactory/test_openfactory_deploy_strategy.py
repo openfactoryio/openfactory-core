@@ -165,6 +165,7 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
             image="test-image",
             name="test-container",
             env=["ENV=dev"],
+            networks=None,
             mounts=mounts
         )
 
@@ -224,3 +225,92 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
 
         # The returned object is the mocked Mount
         self.assertEqual(mount_obj, mock_mount_class.return_value)
+
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_additional_networks(self, mock_from_env):
+        """ Test that additional networks are connected after container deployment """
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        mock_network = MagicMock()
+        mock_client.containers.run.return_value = mock_container
+        # networks.get() returns the mocked network
+        mock_client.networks.get.return_value = mock_network
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        # Case: multiple networks
+        networks = ["first-net", "second-net", "third-net"]
+
+        strategy.deploy(
+            image="test-image",
+            name="test-container",
+            env=["ENV=dev"],
+            networks=networks
+        )
+
+        # The first network is used in containers.run
+        _, kwargs = mock_client.containers.run.call_args
+        self.assertEqual(kwargs["network"], "first-net")
+
+        # networks.get should be called for additional networks only
+        mock_client.networks.get.assert_any_call("second-net")
+        mock_client.networks.get.assert_any_call("third-net")
+        self.assertEqual(mock_client.networks.get.call_count, 2)
+
+        # The container should be connected to each additional network
+        mock_network.connect.assert_any_call(mock_container)
+        self.assertEqual(mock_network.connect.call_count, 2)
+
+        # Case: single network
+        strategy.deploy(
+            image="test-image",
+            name="test-container-2",
+            env=["ENV=dev"],
+            networks=["only-net"]
+        )
+        # containers.run should use the single network
+        _, kwargs = mock_client.containers.run.call_args
+        self.assertEqual(kwargs["network"], "only-net")
+        # networks.get and connect should NOT be called again for single network
+        self.assertEqual(mock_client.networks.get.call_count, 2)  # unchanged
+
+        # Case: networks=None
+        strategy.deploy(
+            image="test-image",
+            name="test-container-3",
+            env=["ENV=dev"],
+            networks=None
+        )
+        _, kwargs = mock_client.containers.run.call_args
+        self.assertIsNone(kwargs["network"])
+        # networks.get should still only have been called twice total
+        self.assertEqual(mock_client.networks.get.call_count, 2)
+
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_single_network(self, mock_from_env):
+        """ Test deploy when there is exactly one network """
+        mock_client = MagicMock()
+        mock_container = MagicMock()
+        mock_client.containers.run.return_value = mock_container
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        networks = ["single-net"]
+
+        strategy.deploy(
+            image="test-image",
+            name="test-container-single-net",
+            env=["ENV=dev"],
+            networks=networks
+        )
+
+        # The first (and only) network should be used in containers.run
+        _, kwargs = mock_client.containers.run.call_args
+        self.assertEqual(kwargs["network"], "single-net")
+
+        # networks.get should NOT be called, because there are no additional networks
+        self.assertFalse(mock_client.networks.get.called)
+        # container.connect should also NOT be called
+        self.assertFalse(mock_client.networks.get.return_value.connect.called)

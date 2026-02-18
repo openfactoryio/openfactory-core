@@ -196,6 +196,7 @@ class OpenFactoryManager(OpenFactory):
                 name=application.uuid.lower(),
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,
+                networks=application.networks,
                 mounts=mounts
             )
         except docker.errors.APIError as err:

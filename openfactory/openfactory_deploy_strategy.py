@@ -214,8 +214,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         See parent method for argument descriptions.
 
         Note:
-            - Only the first network in the list is used.
-            - `constraints` and `mode` are ignored for local containers.
+            - ``constraints`` and ``mode`` are ignored for local containers.
         """
         client = docker.from_env()
 
@@ -233,7 +232,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                 else:
                     raise ValueError(f"Unsupported mount type: {m['Type']}")
 
-        client.containers.run(
+        container = client.containers.run(
             image=image,
             name=name,
             environment=env,
@@ -245,6 +244,12 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             nano_cpus=resources.get("Limits", {}).get("NanoCPUs") if resources else None,
             mounts=docker_mounts
         )
+
+        # Attach to additional networks
+        if networks:
+            for net_name in networks[1:]:
+                network = client.networks.get(net_name)
+                network.connect(container)
 
     def remove(self, service_name):
         """

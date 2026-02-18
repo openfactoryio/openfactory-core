@@ -70,7 +70,6 @@ class OPCUASupervisorTestCase(unittest.TestCase):
         """ Test if OPCUASupervisor sets its OPC UA attributes correctly """
 
         OPCUASupervisor(
-            supervisor_uuid='sup-opc-1',
             device_uuid='dev-opc-1',
             adapter_ip='192.168.0.10',
             adapter_port=4840,
@@ -121,7 +120,6 @@ class OPCUASupervisorTestCase(unittest.TestCase):
     def test_opcua_client_initialized(self):
         """ Test if OPC UA client is initialized with correct URL """
         supervisor = OPCUASupervisor(
-            supervisor_uuid='sup-opc-2',
             device_uuid='dev-opc-2',
             adapter_ip='10.0.0.42',
             adapter_port=4841,

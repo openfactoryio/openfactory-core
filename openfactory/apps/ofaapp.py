@@ -56,7 +56,6 @@ class OpenFactoryApp(Asset):
             # environment variables KSQLDB_URL and KAFKA_BROKER will be set.
             # The default values can be used for local development.
             app = DemoApp(
-                app_uuid='DEMO-APP',
                 ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL", "http://localhost:8088")),
                 bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092")
             )
@@ -64,6 +63,7 @@ class OpenFactoryApp(Asset):
 
     Note:
       - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` are set and can be used.
+      - The ``UUID`` of the App is set based on the OpenFactory configuration file of the App during the deployment process.
       - Subclasses must implement either ``main_loop`` (synchronous) or ``async_main_loop`` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
 
@@ -76,7 +76,6 @@ class OpenFactoryApp(Asset):
     APPLICATION_LICENSE = os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license')
 
     def __init__(self,
-                 app_uuid: str,
                  ksqlClient: KSQLDBClient,
                  bootstrap_servers: str,
                  loglevel: str = 'INFO'):
@@ -88,7 +87,6 @@ class OpenFactoryApp(Asset):
         termination signal handlers.
 
         Args:
-            app_uuid (str): The UUID of the application (overridden by the environment variable ``APP_UUID`` if set).
             ksqlClient (KSQLDBClient): The KSQL client instance.
             bootstrap_servers (str): Kafka bootstrap servers URL.
             loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
@@ -101,9 +99,9 @@ class OpenFactoryApp(Asset):
         .. tip::
            The environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` will be set when deployed on the OpenFactory Cluster.
         """
-        # get APP-UUID from environment (set when deployed by ofa deployment tool)
-        app_uuid = os.getenv('APP_UUID', app_uuid)
-        super().__init__(app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
+        # get APP-UUID from environment (set during deployement by ofa deployment tool)
+        app_uuid = os.getenv('APP_UUID', 'DEV-UUID')
+        super().__init__(asset_uuid=app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
 
         # setup logging
         self.logger = configure_prefixed_logger(
@@ -325,7 +323,6 @@ if __name__ == "__main__":
             self.ksql.close()
 
     app = MyApp(
-        app_uuid='DEMO-APP',
         ksqlClient=KSQLDBClient("http://localhost:8088"),
         bootstrap_servers="localhost:9092"
     )

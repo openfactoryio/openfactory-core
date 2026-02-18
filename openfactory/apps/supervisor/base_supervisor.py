@@ -19,7 +19,6 @@ class BaseSupervisor(OpenFactoryApp):
     """
 
     def __init__(self,
-                 supervisor_uuid: str,
                  device_uuid: str,
                  ksqlClient: KSQLDBClient,
                  bootstrap_servers: str = config.KAFKA_BROKER,
@@ -28,14 +27,12 @@ class BaseSupervisor(OpenFactoryApp):
         Initializes the BaseSupervisor.
 
         Args:
-            supervisor_uuid (str): UUID of the supervisor application instance.
             device_uuid (str): UUID of the device that this supervisor monitors or controls.
             ksqlClient (KSQLDBClient): Instance of the KSQLDB client for streaming interaction.
             bootstrap_servers (str): Kafka broker address(es). Defaults to the value from config.
             loglevel (str): Logging level for the supervisor (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
         """
-        super().__init__(app_uuid=supervisor_uuid,
-                         ksqlClient=ksqlClient,
+        super().__init__(ksqlClient=ksqlClient,
                          bootstrap_servers=bootstrap_servers,
                          loglevel=loglevel)
 
@@ -176,7 +173,6 @@ if __name__ == "__main__":
             self.ksql.close()
 
     supervisor = DemoSupervisor(
-        supervisor_uuid='DEMO-SUPERVISOR',
         device_uuid='PROVER3018',
         ksqlClient=ksql,
         bootstrap_servers="localhost:9092"

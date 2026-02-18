@@ -56,7 +56,7 @@ class OPCUASupervisor(BaseSupervisor):
 
     APPLICATION_LICENSE = 'Polyform Noncommercial License 1.0.0'
 
-    def __init__(self, supervisor_uuid: str, device_uuid: str, adapter_ip: str, adapter_port: int,
+    def __init__(self, device_uuid: str, adapter_ip: str, adapter_port: int,
                  ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER,
                  loglevel: str = 'INFO'):
         """
@@ -67,7 +67,6 @@ class OPCUASupervisor(BaseSupervisor):
         the connection URI, connection status, and other OPC UA-related settings.
 
         Args:
-            supervisor_uuid (str): UUID of the supervisor.
             device_uuid (str): UUID of the device to listen for commands.
             adapter_ip (str): The IP address of the OPC UA adapter.
             adapter_port (int): The port on which the OPC UA adapter is accessible.
@@ -75,7 +74,7 @@ class OPCUASupervisor(BaseSupervisor):
             bootstrap_servers (str): Kafka bootstrap server URL.
             loglevel (str): Logging level for the supervisor (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
         """
-        super().__init__(supervisor_uuid=supervisor_uuid, device_uuid=device_uuid,
+        super().__init__(device_uuid=device_uuid,
                          ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers,
                          loglevel=loglevel)
 

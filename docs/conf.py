@@ -75,8 +75,8 @@ html_theme_options = {
 }
 
 html_context = {
-    "github_user": "Demo-Smart-Factory-Concordia-University",
-    "github_repo": "OpenFactory",
+    "github_user": "openfactoryio",
+    "github_repo": "openfactory-core",
     "github_version": "main",
     "doc_path": "docs",
 }

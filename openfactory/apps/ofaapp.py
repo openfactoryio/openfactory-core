@@ -6,12 +6,12 @@ import time
 import json
 from types import FrameType
 from typing import Optional
+from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
 from openfactory.setup_logging import configure_prefixed_logger
 from openfactory.schemas.filelayer.storage import StorageBackendSchema
 from openfactory.filelayer.backend import FileBackend
-import openfactory.config as config
 
 
 class OpenFactoryApp(Asset):
@@ -63,7 +63,7 @@ class OpenFactoryApp(Asset):
             app.run()
 
     Note:
-      - Environment variables set by the OpenFactory Cluster (e.g., ``KSQLDB_URL``, ``KAFKA_BROKER``) are automatically used if available.
+      - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` are set and can be used.
       - Subclasses must implement either ``main_loop`` (synchronous) or ``async_main_loop`` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
 
@@ -76,8 +76,9 @@ class OpenFactoryApp(Asset):
     APPLICATION_LICENSE = os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license')
 
     def __init__(self,
-                 app_uuid: str, ksqlClient,
-                 bootstrap_servers: str = config.KAFKA_BROKER,
+                 app_uuid: str,
+                 ksqlClient: KSQLDBClient,
+                 bootstrap_servers: str,
                  loglevel: str = 'INFO'):
         """
         Initializes the OpenFactory application.
@@ -87,21 +88,21 @@ class OpenFactoryApp(Asset):
         termination signal handlers.
 
         Args:
-            app_uuid (str): The UUID of the application (overrides the environment variable `APP_UUID` if provided).
+            app_uuid (str): The UUID of the application (overridden by the environment variable ``APP_UUID`` if available).
             ksqlClient (KSQLDBClient): The KSQL client instance.
-            bootstrap_servers (str): Kafka bootstrap server URL, default value is read from `config.KAFKA_BROKER`.
+            bootstrap_servers (str): Kafka bootstrap servers URL.
             loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
 
         Side effects:
             - Configures logging with the application UUID as prefix.
-            - Mounts a storage backend if the `STORAGE` environment variable is set.
-            - Registers signal handlers for `SIGINT` and `SIGTERM`.
+            - Mounts a storage backend if the ``STORAGE`` environment variable is set.
+            - Registers signal handlers for ``SIGINT`` and ``SIGTERM``.
         """
-        # get paramters from environment (set if deployed by ofa deployment tool)
+        # get APP-UUID from environment (set when deployed by ofa deployment tool)
         app_uuid = os.getenv('APP_UUID', app_uuid)
         super().__init__(app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
 
-        # Set up logging
+        # setup logging
         self.logger = configure_prefixed_logger(
             app_uuid,
             prefix=app_uuid.upper(),
@@ -143,7 +144,7 @@ class OpenFactoryApp(Asset):
             )
         )
 
-        # Setup signal handlers
+        # setup signal handlers
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
@@ -298,8 +299,6 @@ class OpenFactoryApp(Asset):
 if __name__ == "__main__":
 
     # Example usage of the OpenFactoryApp
-    from openfactory.kafka import KSQLDBClient
-    ksql = KSQLDBClient("http://localhost:8088")
 
     class MyApp(OpenFactoryApp):
         """ Example Application. """
@@ -318,13 +317,13 @@ if __name__ == "__main__":
             """
             Close connection to ksqlDB server.
 
-            Not absolutely required as it is already done by KSQLDBClient class
+            Optional as it is already done by KSQLDBClient class
             """
             self.ksql.close()
 
     app = MyApp(
         app_uuid='DEMO-APP',
-        ksqlClient=ksql,
+        ksqlClient=KSQLDBClient("http://localhost:8088"),
         bootstrap_servers="localhost:9092"
     )
     app.run()

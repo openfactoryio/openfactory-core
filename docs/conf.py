@@ -70,6 +70,7 @@ html_theme_options = {
     ],
     "show_prev_next": False,
     "navigation_depth": 3,
+    "show_toc_level": 2,
     "use_edit_page_button": True,
 }
 

@@ -18,17 +18,18 @@ class OpenFactoryApp(Asset):
     """
     Generic OpenFactory application.
 
-    Inherits from `Asset` and extends it to represent an OpenFactory application with standard metadata,
+    Inherits from ``Asset`` and extends it to represent an OpenFactory application with standard metadata,
     logging, and lifecycle management.
 
     Attributes:
-        APPLICATION_VERSION (str): Class attribute. Version string from `APPLICATION_VERSION` environment variable or 'latest'.
-        APPLICATION_MANUFACTURER (str): Class attribute. Manufacturer from `APPLICATION_MANUFACTURER` environment variable or 'OpenFactory'.
-        APPLICATION_LICENSE (str): Class attribute. License string from `APPLICATION_LICENSE` environment variable or 'BSD-3-Clause license'.
-        logger (logging.Logger): Instance attribute. Prefixed logger instance configured with the app UUID.
-        storage (Optional[FileBackend]): Storage backend instance created from the `STORAGE` environment variable, or `None` if not configured.
+        APPLICATION_VERSION (str): Version string from ``APPLICATION_VERSION`` environment variable or 'latest'.
+        APPLICATION_MANUFACTURER (str): Manufacturer from ``APPLICATION_MANUFACTURER`` environment variable or 'OpenFactory'.
+        APPLICATION_LICENSE (str): License string from ``APPLICATION_LICENSE`` environment variable or 'BSD-3-Clause license'.
+        logger (logging.Logger): Prefixed logger instance configured with the app UUID.
+        storage (Optional [FileBackend]): Storage backend instance created from the ``STORAGE`` environment variable, or 'None' if not configured.
 
-    Example usage:
+    .. admonition:: Usage Example
+
         .. code-block:: python
 
             import time
@@ -48,7 +49,7 @@ class OpenFactoryApp(Asset):
                         time.sleep(2)
 
                 def app_event_loop_stopped(self):
-                    # Not absolutely required as it is already done by the `KSQLDBClient` class
+                    # Optional as it is already done by the `KSQLDBClient` class
                     self.ksql.close()
 
             # When the Application is deployed on the OpenFactory Cluster, the
@@ -60,9 +61,16 @@ class OpenFactoryApp(Asset):
                 bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092")
             )
             app.run()
+
+    Note:
+      - Environment variables set by the OpenFactory Cluster (e.g., ``KSQLDB_URL``, ``KAFKA_BROKER``) are automatically used if available.
+      - Subclasses must implement either ``main_loop`` (synchronous) or ``async_main_loop`` (asynchronous) to define application behavior.
+      - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
+
+    .. seealso::
+       The schema of OpenFactory Apps is :class:`openfactory.schemas.apps.OpenFactoryAppSchema`.
     """
 
-    # Application version number
     APPLICATION_VERSION = os.getenv('APPLICATION_VERSION', 'latest')
     APPLICATION_MANUFACTURER = os.getenv('APPLICATION_MANUFACTURER', 'OpenFactory')
     APPLICATION_LICENSE = os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license')

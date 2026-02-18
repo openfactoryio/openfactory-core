@@ -1,71 +1,77 @@
 """
-OpenFactory Application Schemas
-
 This module defines Pydantic models and utility functions to parse, validate,
 and enrich application configuration files in OpenFactory. Application definitions
 include Docker image info, environment variables, optional UNS metadata, storage
 backends, and container networks.
 
-Key Components:
----------------
-- **OpenFactoryApp**: Defines a single application including its UUID, Docker image,
+This module is used by OpenFactory deployment tools and runtime components to
+ensure application configurations are consistent, valid, and semantically enriched.
+
+Key Components
+--------------
+- ``OpenFactoryApp``: Defines a single application including its UUID, Docker image,
   environment variables, UNS metadata, storage backend, and container networks.
-- **OpenFactoryAppsConfig**: Validates a dictionary of application entries and ensures
+- ``OpenFactoryAppsConfig``: Validates a dictionary of application entries and ensures
   correct schema structure.
-- **get_apps_from_config_file**: Loads, validates, and enriches applications from a
+- ``get_apps_from_config_file``: Loads, validates, and enriches applications from a
   YAML file with UNS metadata.
 
-Features:
----------
-- Supports UNS (Unified Namespace) enrichment through the `AttachUNSMixin`.
+Features
+--------
+- Supports UNS (Unified Namespace) enrichment through the ``AttachUNSMixin``.
 - Restricts configuration fields with `extra="forbid"` to ensure strict schema conformance.
 - Supports storage backends, including:
-    - **LocalBackend**: Bind-mount a local host directory into containers (for development).
-    - **NFSBackend**: Mount an NFS share into containers with configurable mount options.
+
+  - ``LocalBackend``: Bind-mount a local host directory into containers (for development).
+  - ``NFSBackend``: Mount an NFS share into containers with configurable mount options.
+
 - Supports connecting containers to multiple Docker networks.
 - Provides utilities to load application configs from YAML with user-friendly
   error handling and notifications.
 - Ensures validated and enriched applications are returned as plain dictionaries.
 
-Developer Guidance:
-------------------
-- **Networks**: All network names must exist in Docker before deployment.
-- **UNS metadata**: Must match the `UNSSchema` used in the environment for semantic consistency.
-- **Storage backends**: Can be extended to support new types if needed.
-- **Adding new fields**: Requires updating schema and any corresponding validators.
-- Use the `apps_dict` property to access validated apps in runtime code.
-
-YAML Example:
--------------
-.. code-block:: yaml
-
-    apps:
-      scheduler:
-        uuid: "app-scheduler"
-        image: ghcr.io/openfactoryio/scheduler:v1.0.0
-        environment:
-          - ENV=production
-        uns:
-          location: building-a
-          workcenter: scheduler
-        storage:
-          type: nfs
-          server: deskfab.openfactory.com
-          remote_path: /nfs/deskfab
-          mount_point: /mnt
-          mount_options:
-            - ro
-        networks:
-        - factory-net
-        - monitoring-net
-
-Usage:
-------
-Use `get_apps_from_config_file(path, uns_schema)` to load and validate an application
+Usage
+-----
+Use ``get_apps_from_config_file(path, uns_schema)`` to load and validate an application
 configuration YAML file, with automatic UNS enrichment.
 
-This module is used by OpenFactory deployment tools and runtime components to
-ensure application configurations are consistent, valid, and semantically enriched.
+.. admonition:: YAML Example
+
+  .. code-block:: yaml
+
+      apps:
+        scheduler:
+          uuid: "app-scheduler"
+          image: ghcr.io/openfactoryio/scheduler:v1.0.0
+
+          uns:
+            location: building-a
+            workcenter: scheduler
+
+          environment:
+           - ENV=production
+
+          storage:
+            type: nfs
+            server: deskfab.openfactory.com
+            remote_path: /nfs/deskfab
+            mount_point: /mnt
+            mount_options:
+              - ro
+
+          networks:
+            - factory-net
+            - monitoring-net
+
+Note:
+    - **Networks**: All network names must exist in Docker before deployment.
+    - **UNS metadata**: Must match the `UNSSchema` used in the environment for semantic consistency.
+    - **Storage backends**: Can be extended to support new types if needed.
+    - Use the `apps_dict` property to access validated apps in runtime code.
+
+.. seealso::
+
+   The runtime class of OpenFactory Apps is :class:`openfactory.apps.ofaapp.OpenFactoryApp`.
 """
 
 from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator

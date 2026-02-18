@@ -48,7 +48,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         MockAssetAttribute.return_value = mock_asset_attr
 
         device_uuid = "dev-456"
-        SupervisorTestImpl("sup-123", device_uuid, self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        SupervisorTestImpl(device_uuid, self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Verify that add_attribute was called with only asset_attribute
         self.mock_add_attribute.assert_any_call(asset_attribute=mock_asset_attr)
@@ -66,7 +66,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         """ Test _send_available_commands method """
         # Setup
         mock_asset_instance = MockAsset.return_value
-        supervisor = SupervisorTestImpl("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        supervisor = SupervisorTestImpl("dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Execute
         supervisor._send_available_commands()
@@ -97,7 +97,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         """ Test command consumer in main loop """
         # Setup
         mock_consumer_instance = MockKafkaConsumer.return_value
-        supervisor = SupervisorTestImpl("sup-123", "dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
+        supervisor = SupervisorTestImpl("dev-456", self.ksql_mock, bootstrap_servers='mock_bootstrap_servers')
 
         # Execute
         supervisor.main_loop()
@@ -105,7 +105,7 @@ class BaseSupervisorTestCase(unittest.TestCase):
         # Assert
         mock_send_commands.assert_called_once()
         MockKafkaConsumer.assert_called_once_with(
-            consumer_group_id='sup-123-SUPERVISOR-GROUP',
+            consumer_group_id='DEV-UUID-SUPERVISOR-GROUP',
             asset_uuid='dev-456',
             on_command=supervisor.on_command,
             ksqlClient=self.ksql_mock,
@@ -115,12 +115,12 @@ class BaseSupervisorTestCase(unittest.TestCase):
 
     def test_available_commands_not_implemented(self):
         """ Test call to available_commands raise NotImplementedError """
-        sup = BaseSupervisor('sup-uuid', "dev-uuid", ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        sup = BaseSupervisor("dev-uuid", ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         with self.assertRaises(NotImplementedError):
             sup.available_commands()
 
     def test_on_command_not_implemented(self):
         """ Test call to on_command raise NotImplementedError """
-        sup = BaseSupervisor('sup-uuid', "dev-uuid", ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        sup = BaseSupervisor("dev-uuid", ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
         with self.assertRaises(NotImplementedError):
             sup.on_command("msg_key", "msg_value")

@@ -16,22 +16,41 @@ The <cluster_config_file> must define the OpenFactory network and,
 optionally, a custom ingress network. Below is an example structure:
 
 Example:
-    networks:
-      openfactory-network:
-        ipam:
-          config:
-            - subnet: 10.2.0.0/24
-              gateway: 10.2.0.1
-              ip_range: 10.2.0.128/25
 
-      docker-ingress-network:
-        name: ofa_ingress
-        ipam:
-          config:
-            - subnet: 10.1.0.0/24
+nodes:
+  managers:
+    manager1:
+      ip: <IP ADDRESS>
+
+    manager2:
+      ip: <IP ADDRESS>
+
+    manager3:
+      ip: <IP ADDRESS>
+
+  workers:
+    node1:
+      ip: <IP ADDRESS>
+
+    node2:
+      ip: <IP ADDRESS>
+
+networks:
+  openfactory-network:
+    ipam:
+      config:
+        - subnet: 10.2.0.0/24
+          gateway: 10.2.0.1
+          ip_range: 10.2.0.128/25
+
+  docker-ingress-network:
+    name: ofa_ingress
+    ipam:
+      config:
+        - subnet: 10.1.0.0/24
 
 Note:
-    The current host must be listed under the 'managers' section of the
+    The host on which the script is run must be listed under the 'managers' section of the
     cluster configuration, with a valid IP address that matches one of its
     local interfaces.
 """

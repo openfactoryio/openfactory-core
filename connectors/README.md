@@ -1,5 +1,8 @@
 # OpenFactory Connectors
 
+> **Important**: OpenFactory connectors are now part of [openfactoryio/openfactory-connectors](https://github.com/openfactoryio/openfactory-connectors) .
+This folder contains only connectors which are not yet migrated. They will progressivley be removed.
+
 This folder contains Kafka data connectors used in the OpenFactory platform. These connectors run as Docker containers and push data into the Kafka cluster for further processing and streaming via ksqlDB.
 
 ## Available Connectors

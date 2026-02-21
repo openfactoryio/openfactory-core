@@ -43,3 +43,11 @@ Storage
    :maxdepth: 1
 
    storage
+
+Commands
+--------
+
+.. toctree::
+   :maxdepth: 1
+
+   commands

@@ -20,7 +20,8 @@ class Asset(BaseAsset):
         bootstrap_servers (str): Kafka bootstrap server address.
         producer (AssetProducer): Kafka producer instance for sending Asset messages.
 
-    Example usage:
+    .. admonition:: Example usage:
+
         .. code-block:: python
 
             import time

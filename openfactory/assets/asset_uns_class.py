@@ -26,7 +26,8 @@ class AssetUNS(BaseAsset):
         ASSET_CONSUMER_CLASS (KafkaAssetUNSConsumer): Kafka consumer class for reading messages from Asset strean.
         producer (AssetProducer): Kafka producer instance for sending Asset messages.
 
-    Example usage:
+    .. admonition:: Example usage:
+
         .. code-block:: python
 
             import time

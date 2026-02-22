@@ -16,7 +16,7 @@ It is designed for large-scale, low-latency coordination, with the goal of manag
 
 ## Key Features
 
-- **Device Integration**: Supports both [MTConnect](http://mtconnect.org)-enabled devices directly and non-enabled devices via adapters, providing flexibility in connecting diverse equipment.
+- **Device Integration**: Supports various standard protecole (OPC UA, [MTConnect](http://mtconnect.org)) directly and non-standart devices via adapters, providing flexibility in connecting diverse equipment.
 - **Data Streaming to Kafka**: Although Kafka itself is not part of *OpenFactory*, the system includes everything needed to prepare, process, and stream device data into a Kafka instance.
 - **Microservices Architecture**: Using Docker Swarm, *OpenFactory* orchestrates each microservice independently, allowing for modular, scalable deployments.
 - **Infrastructure as Code (IaC)**: Fully configurable via YAML files, *OpenFactory* leverages IaC principles, making it easy to define, version, and deploy infrastructure consistently across environments.

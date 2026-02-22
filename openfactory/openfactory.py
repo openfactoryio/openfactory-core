@@ -54,7 +54,7 @@ class OpenFactory:
 
         Args:
             ksqlClient (KSQLDBClient): A client capable of executing KSQL queries.
-            bootstrap_servers (str): Kafka bootstrap server address.
+            bootstrap_servers (str): Kafka bootstrap server address. Defaults to ``openfactory.config.KAFKA_BROKER``.
         """
         self.bootstrap_servers = bootstrap_servers
         self.ksql = ksqlClient

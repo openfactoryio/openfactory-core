@@ -102,6 +102,7 @@ class AssetForwarderService:
         Required environment variables:
             KAFKA_BROKER: Kafka bootstrap server(s)
             NATS_CLUSTER_<NAME>: NATS cluster URLs
+
         Optional environment variables:
             KAFKA_GROUP: Kafka consumer group (default: "ofa_fan_out_layer_group")
             KAFKA_TOPIC: Kafka topic (default: "ofa_assets")

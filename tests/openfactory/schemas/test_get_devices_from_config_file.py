@@ -5,6 +5,7 @@ from unittest.mock import patch
 from tempfile import NamedTemporaryFile
 from openfactory.schemas.devices import get_devices_from_config_file
 from openfactory.schemas.uns import UNSSchema
+from openfactory.schemas.connectors.opcua import OPCUAVariableConfig
 
 
 class TestGetDevicesFromConfigFile(unittest.TestCase):
@@ -42,6 +43,33 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                     },
                     "ksql_tables": [],
                     "uns": {"workcenter": "WC2", "asset": "cnc"}
+                }
+            }
+        }
+
+        self.opcua_devices_yaml = {
+            "devices": {
+                "opcua_device": {
+                    "uuid": "opcua-001",
+                    "connector": {
+                        "type": "opcua",
+                        "server": {
+                            "uri": "opc.tcp://127.0.0.1:4840/server/",
+                            "subscription": {"queue_size": 10, "sampling_interval": 20},
+                        },
+                        "variables": {
+                            "temp": {"node_id": "ns=3;i=1050", "tag": "Temperature"},
+                            "pressure": {
+                                "browse_path": "0:Root/0:Objects/2:Device/2:Pressure",
+                                "tag": "Pressure",
+                                "deadband": 0.05,
+                                "access_level": "rw"
+                            }
+                        },
+                        "events": {
+                            "alarm": {"node_id": "ns=2;i=500"}
+                        }
+                    }
                 }
             }
         }
@@ -94,3 +122,39 @@ class TestGetDevicesFromConfigFile(unittest.TestCase):
                     devices_dict = get_devices_from_config_file(temp_file.name, self.uns_schema)
                     self.assertIsNone(devices_dict)
                     mock_notify.fail.assert_called_once()
+
+    @patch("openfactory.schemas.devices.load_yaml")
+    def test_opcua_connector_loading_and_normalization(self, mock_load_yaml):
+        """ Variables and events are correctly normalized with defaults and overrides """
+        mock_load_yaml.return_value = self.opcua_devices_yaml
+        devices = get_devices_from_config_file("fake_path.yml", self.uns_schema)
+
+        self.assertIn("opcua_device", devices)
+        connector = devices["opcua_device"].connector
+
+        # Connector type
+        self.assertEqual(connector.type, "opcua")
+
+        # Variables normalization
+        temp_var = connector.variables["temp"]
+        pressure_var = connector.variables["pressure"]
+
+        self.assertIsInstance(temp_var, OPCUAVariableConfig)
+        self.assertIsInstance(pressure_var, OPCUAVariableConfig)
+
+        # Server defaults applied
+        self.assertEqual(temp_var.queue_size, 10)
+        self.assertEqual(temp_var.sampling_interval, 20)
+
+        # Explicit overrides preserved
+        self.assertEqual(pressure_var.deadband, 0.05)
+        self.assertEqual(pressure_var.access_level, "rw")
+
+        # Node_id vs browse_path
+        self.assertIsNone(temp_var.browse_path)
+        self.assertIsNone(pressure_var.node_id)
+        self.assertEqual(pressure_var.browse_path, "0:Root/0:Objects/2:Device/2:Pressure")
+
+        # Event parsing
+        alarm_evt = connector.events["alarm"]
+        self.assertEqual(alarm_evt.node_id, "ns=2;i=500")

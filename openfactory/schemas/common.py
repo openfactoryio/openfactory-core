@@ -38,6 +38,7 @@ This module is typically used as part of device, connector, or application
 schemas that involve resource scheduling or orchestration.
 """
 
+import re
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
@@ -128,24 +129,44 @@ def cpus_limit(deploy: Optional[Deploy], default: float = 1.0) -> float:
 
 def constraints(deploy: Optional[Deploy]) -> Optional[List[str]]:
     """
-    Extract placement constraints from a Deploy object and format them for use in Python Docker deployments.
+    Retrieve and normalize placement constraints from a Deploy object for Docker deployments.
 
-    Docker Engine and Docker Swarm APIs expect placement constraints to use `==` for equality checks
-    (e.g., node labels). This function transforms any single `=` signs in constraint expressions into
-    the required `==` syntax, ensuring the constraints are correctly interpreted when creating containers
-    or services programmatically using Python Docker clients.
+    This function:
+     - Extracts the ``constraints`` list from ``deploy.placement`` if available.
+     - Converts single ``'='`` into ``' == '`` for Docker/Docker Swarm API compatibility.
+     - Normalizes spacing around ``'=='``.
+     - Returns None if no constraints are defined.
 
     Args:
-        deploy (Optional[Deploy]): The deployment configuration object.
+        deploy (Optional[Deploy]): Deployment configuration containing optional placement info.
 
     Returns:
-        Optional[List[str]]: A list of constraints formatted for Docker/Docker Swarm API usage,
-        or None if no constraints are provided.
+        Optional[List[str]]: List of normalized constraint strings, or None if empty or undefined.
     """
     if deploy is None:
         return None
-    placement = getattr(deploy, 'placement', None)
-    placement_constraints = placement.constraints if placement else None
-    if placement_constraints:
-        return [c.replace('=', ' == ') for c in placement_constraints]
-    return None
+
+    placement = deploy.placement
+    if placement is None or placement.constraints is None:
+        return None
+
+    placement = deploy.placement
+    if placement is None:
+        return None
+
+    raw_constraints = placement.constraints
+    if not raw_constraints:  # catches None and []
+        return None
+
+    normalized = []
+
+    for c in raw_constraints:
+        # Replace single '=' not part of '=='
+        c = re.sub(r'(?<![=])=(?!=)', ' == ', c)
+
+        # Normalize spacing around ==
+        c = re.sub(r'\s*==\s*', ' == ', c)
+
+        normalized.append(c.strip())
+
+    return normalized

@@ -302,3 +302,75 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         self.assertEqual(app.networks, ["factory-net", "monitoring-net"])
         # Still has UNS enrichment
         self.assertEqual(app.uns["uns_id"], "OpenFactory/WC2/DEMO-APP")
+
+    def test_optional_deploy(self):
+        """ deploy field is optional """
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1"
+                }
+            }
+        }
+        config = OpenFactoryAppsConfig(**valid_config)
+        self.assertIsNone(config.apps["demo1"].deploy)
+
+    def test_deploy_with_replicas_and_resources(self):
+        """ deploy field with replicas, resources, and placement """
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "deploy": {
+                        "replicas": 2,
+                        "resources": {
+                            "reservations": {"cpus": 0.5, "memory": "512Mi"},
+                            "limits": {"cpus": 1.0, "memory": "1Gi"}
+                        },
+                        "placement": {
+                            "constraints": ["node.labels.zone == building-a"]
+                        }
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+        deploy = config.apps["demo1"].deploy
+        self.assertIsNotNone(deploy)
+        self.assertEqual(deploy.replicas, 2)
+        self.assertEqual(deploy.resources.reservations.cpus, 0.5)
+        self.assertEqual(deploy.resources.limits.memory, "1Gi")
+        self.assertEqual(deploy.placement.constraints, ["node.labels.zone == building-a"])
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_deploy_integration_with_get_apps_from_config_file(self, mock_load_yaml):
+        """ deploy field is correctly parsed and attached using get_apps_from_config_file """
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "uns": {"workcenter": "WC2"},
+                    "image": "demofact/demo1",
+                    "deploy": {
+                        "replicas": 3,
+                        "resources": {
+                            "reservations": {"cpus": 0.5},
+                            "limits": {"cpus": 1.0}
+                        },
+                        "placement": {"constraints": ["node.labels.zone == WC2"]}
+                    }
+                }
+            }
+        }
+
+        result = get_apps_from_config_file("dummy_path.yaml", self.uns_schema)
+        self.assertIsNotNone(result)
+
+        deploy = result["demo1"].deploy
+        self.assertIsNotNone(deploy)
+        self.assertEqual(deploy.replicas, 3)
+        self.assertEqual(deploy.resources.reservations.cpus, 0.5)
+        self.assertEqual(deploy.placement.constraints, ["node.labels.zone == WC2"])

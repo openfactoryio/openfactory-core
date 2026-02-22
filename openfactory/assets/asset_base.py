@@ -9,7 +9,6 @@ import threading
 import asyncio
 from uuid import uuid4
 from typing import Literal, List, Dict, Any, Callable, Self, Tuple, Optional
-import openfactory.config as config
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict
 from openfactory.assets.utils import AssetAttribute, AssetNATSCallback, AsyncLoopThread, NATSSubscriber, get_nats_cluster_url
@@ -51,13 +50,13 @@ class BaseAsset:
     ASSET_ID = None
     ASSET_CONSUMER_CLASS = None
 
-    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER) -> None:
+    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
         """
         Initializes the Asset with metadata.
 
         Args:
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
-            bootstrap_servers (str): Kafka bootstrap server address. Defaults to config setting.
+            bootstrap_servers (str): Kafka bootstrap server address.
         """
         if not hasattr(self, 'KSQL_ASSET_TABLE') or self.KSQL_ASSET_TABLE is None:
             raise ValueError("KSQL_ASSET_TABLE must be set before initializing the Asset.")

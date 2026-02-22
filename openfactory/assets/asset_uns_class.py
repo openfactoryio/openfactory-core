@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from typing import List
-import openfactory.config as config
 from openfactory.assets.asset_base import BaseAsset
 from openfactory.kafka import KafkaAssetUNSConsumer, KSQLDBClient
 
@@ -35,7 +34,7 @@ class AssetUNS(BaseAsset):
             from openfactory.kafka import KSQLDBClient
 
             ksql = KSQLDBClient('http://localhost:8088')
-            cnc = AssetUNS('cnc-003', ksqlClient=ksql)
+            cnc = AssetUNS('cnc-003', ksqlClient=ksql, bootstrap_servers='localhost:9092')
 
             # list samples
             print(cnc.samples())
@@ -85,14 +84,14 @@ class AssetUNS(BaseAsset):
     ASSET_CONSUMER_CLASS = KafkaAssetUNSConsumer
 
     def __init__(self, uns_id: str,
-                 ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER) -> None:
+                 ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
         Args:
             uns_id (str): UNS identifier of the asset.
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
-            bootstrap_servers (str): Kafka bootstrap server address. Defaults to config setting.
+            bootstrap_servers (str): Kafka bootstrap server address.
         """
         object.__setattr__(self, 'ASSET_ID', uns_id)
         super().__init__(ksqlClient, bootstrap_servers)

@@ -6,6 +6,7 @@ from openfactory.exceptions import OFAException
 from openfactory.connectors.registry import CONNECTOR_REGISTRY
 from openfactory.connectors.mtconnect.mtc_connector import MTConnectConnector
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
+from openfactory.schemas.common import Deploy
 
 
 class TestMTConnectConnector(unittest.TestCase):
@@ -18,7 +19,10 @@ class TestMTConnectConnector(unittest.TestCase):
         agent_cfg = MagicMock()
         agent_cfg.ip = "192.168.1.10"
         agent_cfg.port = 5000
-        agent_cfg.deploy = {"dummy": "cfg"}
+        agent_cfg.deploy = Deploy(
+            replicas=2,
+            placement=None
+        )
 
         connector_cfg = MagicMock()
         connector_cfg.type = "mtconnect"

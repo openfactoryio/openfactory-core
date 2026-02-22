@@ -29,8 +29,8 @@ class TestConstraints(unittest.TestCase):
         self.assertIsNone(constraints(deploy))
 
     def test_deploy_with_constraints_replaces_single_equals(self):
-        """ Test constraints replace single '=' with ' == ' """
-        raw_constraints = ["node.labels.region=can-west", "node.role=manager"]
+        """ Test constraints replace single '=' with ' == ' and accepts '==' """
+        raw_constraints = ["node.labels.region=can-west", "node.role==manager"]
         placement = Placement(constraints=raw_constraints)
         deploy = Deploy(placement=placement)
 

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open
 from openfactory.exceptions import OFAException
 from openfactory.connectors.mtconnect.mtcagent_deployer import MTConnectAgentDeployer
+from openfactory.schemas.common import Deploy
 from docker.errors import APIError
 
 
@@ -185,7 +186,7 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
         adapter = MagicMock()
         adapter.image = "adapter-image"
         adapter.environment = []
-        adapter.deploy = {}
+        adapter.deploy = Deploy()
         self.device.connector.agent.adapter = adapter
 
         self.deployer.deployment_strategy.deploy.side_effect = APIError("Docker error")
@@ -203,7 +204,7 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
         mock_config.OPENFACTORY_DOMAIN = "openfactory.local"
 
         self.device.connector.agent.port = 5000
-        self.device.connector.agent.deploy = {}
+        self.device.connector.agent.deploy = Deploy()
 
         fake_env = [
             f"MTC_AGENT_UUID={self.device.uuid.upper()}-AGENT",

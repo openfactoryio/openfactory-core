@@ -233,6 +233,8 @@ class TestOpenFactoryManager(unittest.TestCase):
             name="app123",
             mode={"Replicated": {"Replicas": 1}},
             env=expected_env,
+            resources=None,
+            constraints=None,
             networks=None,
             mounts=[]
         )
@@ -249,6 +251,74 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # user_notify.success called
         mock_user_notify.success.assert_called_once_with("Application APP123 deployed successfully")
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_includes_resources(self, mock_user_notify, mock_register_asset):
+        """ Test that resources() result is passed to deploy when Deploy has limits and reservations. """
+        res = Resources(
+            limits=ResourcesDefinition(cpus=1.0, memory="1Gi"),
+            reservations=ResourcesDefinition(cpus=0.5, memory="512Mi")
+        )
+        deploy_cfg = Deploy(resources=res)
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_RESOURCES",
+            image="app_image",
+            deploy=deploy_cfg
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        passed_resources = deploy_call.kwargs["resources"]
+
+        expected = {
+            "Limits": {"NanoCPUs": 1000000000, "MemoryBytes": 1024**3},
+            "Reservations": {"NanoCPUs": 500000000, "MemoryBytes": 512*1024**2}
+        }
+
+        self.assertEqual(passed_resources, expected)
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_includes_constraints(self, mock_user_notify, mock_register_asset):
+        """ Test that constraints() result is passed to deploy from Deploy.placement. """
+        placement = Placement(constraints=["node.labels.zone==eu-west"])
+        deploy_cfg = Deploy(resources=None, placement=placement)
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_CONSTRAINTS",
+            image="app_image",
+            deploy=deploy_cfg
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        passed_constraints = deploy_call.kwargs["constraints"]
+
+        # constraints() helper replaces '=' with ' == '
+        expected = ["node.labels.zone == eu-west"]
+        self.assertEqual(passed_constraints, expected)
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_none_resources_constraints(self, mock_user_notify, mock_register_asset):
+        """ Test deploy works when deploy.resources and deploy.placement are None. """
+        deploy_cfg = Deploy(resources=None, placement=None)
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_NONE",
+            image="app_image",
+            deploy=deploy_cfg
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        self.assertIsNone(deploy_call.kwargs["resources"])
+        self.assertIsNone(deploy_call.kwargs["constraints"])
 
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")

@@ -7,11 +7,13 @@ import time
 import uuid
 import threading
 import asyncio
-from typing import Literal, List, Dict, Any, Callable, Self
+from uuid import uuid4
+from typing import Literal, List, Dict, Any, Callable, Self, Tuple, Optional
 import openfactory.config as config
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict
 from openfactory.assets.utils import AssetAttribute, AssetNATSCallback, AsyncLoopThread, NATSSubscriber, get_nats_cluster_url
+from openfactory.schemas.command_header import CommandEnvelope, CommandHeader
 
 
 class BaseAsset:
@@ -20,7 +22,8 @@ class BaseAsset:
 
     Warning:
         This is an abstract class not intented to be used.
-        From this class, two classes are derived (`Asset` and `AssetUNS`) for actual usage.
+        From this class, two classes are derived (:class:`Asset <openfactory.assets.Asset>`
+        and :class:`AssetUNS <openfactory.assets.AssetUNS>`) for actual usage.
 
     It can interact with the Kafka topic of the OpenFactory assets or the ksqlDB streams
     and state tables.
@@ -139,11 +142,11 @@ class BaseAsset:
         Retrieves the type of the asset from ksqlDB.
 
         Executes a SQL query to fetch the asset type. If the query returns no result,
-        the method defaults to 'UNAVAILABLE'.
+        the method defaults to ``UNAVAILABLE``.
 
         Returns:
             Literal['Samples', 'Condition', 'Events', 'Method', 'OpenFactory', 'UNAVAILABLE']:
-                The asset type as stored in the `assets_type` table, or 'UNAVAILABLE' if not found.
+                The asset type as stored in the ``assets_type`` table, or ``UNAVAILABLE`` if not found.
         """
         query = f"SELECT TYPE FROM assets_type WHERE ASSET_UUID='{self.asset_uuid}';"
         result = self.ksql.query(query)
@@ -155,9 +158,7 @@ class BaseAsset:
 
     def attributes(self) -> List[str]:
         """
-        Returns all non-'Method' attribute IDs associated with this asset.
-
-        Queries `KSQL_ASSET_TABLE` for all attribute IDs of the asset where the type is not 'Method'.
+        Returns all non-``Method`` attribute IDs associated with this asset.
 
         Returns:
             List[str]: A list of attribute IDs.
@@ -193,9 +194,9 @@ class BaseAsset:
 
         Returns:
             List[Dict]: A list of dictionaries, each containing:
-                - "ID" (str): The attribute ID.
-                - "VALUE" (Any): The value of the sample.
-                - "TAG" (str): The cleaned tag name with placeholders removed.
+                - ``ID`` (str): The attribute ID.
+                - ``VALUE`` (Any): The value of the sample.
+                - ``TAG`` (str): The cleaned tag name with placeholders removed.
         """
         return self._get_attributes_by_type('Samples')
 
@@ -205,9 +206,9 @@ class BaseAsset:
 
         Returns:
             List[Dict]: A list of dictionaries, each containing:
-                - "ID" (str): The attribute ID.
-                - "VALUE" (Any): The value of the event.
-                - "TAG" (str): The cleaned tag name with placeholders removed.
+                - ``ID`` (str): The attribute ID.
+                - ``VALUE`` (Any): The value of the event.
+                - ``TAG`` (str): The cleaned tag name with placeholders removed.
         """
         return self._get_attributes_by_type('Events')
 
@@ -217,44 +218,125 @@ class BaseAsset:
 
         Returns:
             List[Dict]: A list of dictionaries, each containing:
-                - "ID" (str): The attribute ID.
-                - "VALUE" (Any): The value of the condition.
-                - "TAG" (str): The condition tag ('Normal', 'Warning', 'Fault')
+                - ``ID`` (str): The attribute ID.
+                - ``VALUE`` (Any): The value of the condition.
+                - ``TAG`` (str): The condition tag ('Normal', 'Warning', 'Fault')
         """
         return self._get_attributes_by_type('Condition')
 
-    def methods(self) -> Dict[str, Any]:
+    def methods(self) -> Dict[str, dict | None]:
         """
         Returns method-type attributes for this asset.
 
-        Queries `KSQL_ASSET_TABLE` for entries where `TYPE = 'Method'` for the asset.
-
         Returns:
-            Dict: A dictionary where keys are method attribute IDs and values are the corresponding method values.
+            Dict[str, dict | None]:
+                Dictionary mapping method IDs to their parsed method contract (description + arguments).
+                Returns None if no value is stored.
+
+        .. admonition:: Returned Dictionnary Example
+
+           .. code-block:: json
+
+             {
+                "GenerateCode": {
+                    "description": "GenerateCode",
+                    "arguments": [
+                      {
+                        "name": "Code",
+                        "description": "Barcode to generate (empty for random)"
+                      }
+                    ]
+                },
+                "SetAutomaticMode": {
+                    "description": "SetAutomaticMode",
+                    "arguments": []
+                },
+                "SetManualMode": {
+                    "description": "SetManualMode",
+                    "arguments": []
+                }
+             }
         """
         query = f"SELECT ID, VALUE, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='Method';"
         result = self.ksql.query(query)
-        return {row["ID"]: row["VALUE"] for row in result}
+        parsed: Dict[str, Any] = {}
 
-    def method(self, method: str, args: str = "") -> None:
+        for row in result:
+            value = row.get("VALUE")
+
+            if value is None:
+                parsed[row["ID"]] = None
+                continue
+
+            # If already parsed (rare but possible depending on driver)
+            if isinstance(value, dict):
+                parsed[row["ID"]] = value
+                continue
+
+            # If JSON string → parse
+            if isinstance(value, str):
+                try:
+                    parsed[row["ID"]] = json.loads(value)
+                except json.JSONDecodeError:
+                    parsed[row["ID"]] = value
+                continue
+
+            # Fallback
+            parsed[row["ID"]] = value
+
+        return parsed
+
+    def method(self, method: str, sender_uuid: str, args: Optional[List[Tuple[str, str]]] = None) -> str:
         """
-        Requests the execution of a method for the asset by sending a command to the Kafka stream.
+        Requests the execution of a method for the asset.
 
-        Constructs a message with the provided method name and optional arguments, and sends
-        it to the `CMDS_STREAM` Kafka topic for processing.
+        This function further sets the corresponding callable attribute with the name of the method
+        (e.g. ``GenerateCode``) to trigger the command execution.
+
+        Methods execution can be requested in two ways:
+
+        1. Using the :meth:`method()` interface:
+
+           .. code-block:: python
+
+              asset.method('GenerateCode', sender_uuid='SENDER-ID', args=[('Code', '123')])
+
+        2. Or directly via the generated callable attribute:
+
+           .. code-block:: python
+
+              asset.GenerateCode(sender_uuid='SENDER-ID', Code='123')
+
+        In both cases, ``sender_uuid`` must be provided in addition to the command's named arguments.
+
+        Note:
+          Named arguments are case sensitive and can be discovered by calling :meth:`methods()`.
 
         Args:
-            method (str): The name of the method to be executed.
-            args (str): Arguments for the method, if any. Defaults to an empty string.
+            method (str): Name of the method to be executed.
+            sender_uuid (str): Asset UUID of the asset sending the request.
+            args (Optional[List[Tuple[str, str]]]): List of (argument_name, value) pairs.
+                All values must be strings. Defaults to empty list if not provided.
+
+        Returns:
+            str: The correlation_id of the command, which can be used to track the response.
         """
-        msg = {
-            "CMD": method,
-            "ARGS": args
-        }
-        self.producer.produce(topic=self.ksql.get_kafka_topic('CMDS_STREAM'),
-                              key=self.asset_uuid,
-                              value=json.dumps(msg))
-        self.producer.flush()
+        cmd_args = {name: value for name, value in (args or [])}
+
+        correlation_id = uuid4()
+        envelope = CommandEnvelope(
+            header=CommandHeader(
+                correlation_id=correlation_id,
+                sender_uuid=sender_uuid,
+                signature=None,
+            ),
+            arguments=cmd_args
+        )
+
+        # Set the attribute to trigger the command
+        self.__setattr__(f"{method}_CMD", envelope.model_dump_json())
+
+        return str(correlation_id)
 
     def __getattr__(self, attribute_id: str) -> AssetAttribute | Callable[..., Any]:
         """
@@ -287,9 +369,25 @@ class BaseAsset:
         first_row = result[0]
 
         if first_row['TYPE'] == 'Method':
-            def method_caller(*args, **kwargs):
-                args_str = " ".join(map(str, args))
-                return self.method(attribute_id, args_str)
+
+            def method_caller(**kwargs) -> str:
+                """
+                Executes the asset method with named string arguments.
+
+                Special keyword:
+                    sender_uuid (str): The UUID of the asset requesting the command.
+                All other keyword arguments are treated as command arguments.
+
+                Returns:
+                    str: correlation_id of the command.
+                """
+                sender_uuid = kwargs.pop("sender_uuid", None)
+                if not sender_uuid:
+                    raise ValueError("sender_uuid must be provided for method execution")
+
+                args_list = list(kwargs.items())
+                return self.method(attribute_id, sender_uuid, args_list)
+
             return method_caller
 
         return AssetAttribute(
@@ -581,7 +679,6 @@ class BaseAsset:
     def subscribe_to_samples(self, on_sample: AssetNATSCallback) -> None:
         """
         Subscribes to asset samples using a NATS consumer.
-        Only messages with TYPE == 'Samples' are forwarded to the callback.
 
         Args:
             on_sample (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
@@ -601,7 +698,6 @@ class BaseAsset:
     def subscribe_to_events(self, on_event: AssetNATSCallback) -> None:
         """
         Subscribes to asset events using a NATS consumer.
-        Only messages with TYPE == 'Events' are forwarded to the callback.
 
         Args:
             on_event (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
@@ -621,7 +717,6 @@ class BaseAsset:
     def subscribe_to_conditions(self, on_condition: AssetNATSCallback) -> None:
         """
         Subscribes to asset conditions using a NATS consumer.
-        Only messages with TYPE == 'Condition' are forwarded to the callback.
 
         Args:
             on_condition (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).

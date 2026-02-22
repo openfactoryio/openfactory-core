@@ -314,39 +314,36 @@ class TestBaseAsset(TestCase):
         expected_query = f"SELECT ID, VALUE, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Method';"
         ksqlMock.query.assert_any_call(expected_query)
 
-    def test_method_execution(self, MockAssetProducer):
-        """ Test method() sends the correct Kafka message """
-        ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [{"ID": "ID1"}]
+    def test_method_builds_correct_envelope(self, MockAssetProducer):
+        """ Test that method() builds and sends a valid CommandEnvelope """
 
-        # Mock the Kafka topic resolution
-        ksqlMock.get_kafka_topic.return_value = "test_topic"
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
 
-        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
-        asset.producer = MagicMock()
-        ksqlMock.get_kafka_topic.reset_mock()
+        # Spy on __setattr__
+        asset.__setattr__ = MagicMock()
 
-        # Call the method
-        asset.method("start", "param1 param2")
-
-        # Check Kafka topic resolution
-        ksqlMock.get_kafka_topic.assert_called_once_with("CMDS_STREAM")
-
-        # Expected message
-        expected_msg = {
-            "CMD": "start",
-            "ARGS": "param1 param2"
-        }
-
-        # Ensure produce() was called with correct values
-        asset.producer.produce.assert_called_once_with(
-            topic="test_topic",
-            key="uuid-123",
-            value=json.dumps(expected_msg)
+        correlation_id = asset.method(
+            method="start",
+            sender_uuid="SENDER-1",
+            args=[("param1", "value1"), ("param2", "value2")]
         )
 
-        # Ensure flush() was called
-        asset.producer.flush.assert_called_once()
+        # Ensure attribute was set correctly
+        asset.__setattr__.assert_called_once()
+
+        attr_name, payload = asset.__setattr__.call_args.args
+
+        assert attr_name == "start_CMD"
+
+        # Parse payload
+        parsed = json.loads(payload)
+
+        assert parsed["header"]["correlation_id"] == correlation_id
+        assert parsed["header"]["sender_uuid"] == "SENDER-1"
+        assert parsed["arguments"] == {
+            "param1": "value1",
+            "param2": "value2"
+        }
 
     def test_setattr_non_asset_attribute(self, MockAssetProducer):
         """ Test setting a non-asset attribute (not in attributes list) """
@@ -479,9 +476,11 @@ class TestBaseAsset(TestCase):
 
     @patch("openfactory.assets.asset_base.BaseAsset.method")
     def test_getattr_method(self, mock_method, MockAssetProducer):
-        """ Test __getattr__ returns a callable for 'Method' type """
-        mock_method.return_value = "Mocked method called successfully"
+        """ Test __getattr__ returns a callable for 'Method' type attributes """
+        # Arrange: mock method returns fixed correlation_id
+        mock_method.return_value = "mocked-correlation-id"
 
+        # Mock KSQL query to return a Method type row
         ksqlMock = MagicMock()
         ksqlMock.query.return_value = [
             {
@@ -494,12 +493,18 @@ class TestBaseAsset(TestCase):
         ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
-        ret = asset.a_method('arg1', 'arg2')
 
-        self.assertEqual(ret, "Mocked method called successfully")
-        mock_method.assert_called_once_with("a_method", "arg1 arg2")
+        # Act: call the dynamically returned method with kwargs
+        correlation_id = asset.a_method(sender_uuid="TEST-ASSET", arg1="value1", arg2="value2")
 
-        # Ensure correct query was exectued
+        # Assert: the return value comes from mock_method
+        self.assertEqual(correlation_id, "mocked-correlation-id")
+
+        # Ensure BaseAsset.method() was called with correct arguments
+        expected_args_list = [("arg1", "value1"), ("arg2", "value2")]
+        mock_method.assert_called_once_with("a_method", "TEST-ASSET", expected_args_list)
+
+        # Ensure the correct KSQL query was executed
         expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|a_method';"
         ksqlMock.query.assert_any_call(expected_query)
 

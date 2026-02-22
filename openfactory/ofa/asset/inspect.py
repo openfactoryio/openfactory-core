@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from openfactory.assets import Asset
 from openfactory.ofa.ksqldb import ksql
+import openfactory.config as config
 
 
 @click.command(name='inspect')
@@ -13,7 +14,9 @@ from openfactory.ofa.ksqldb import ksql
 def click_inspect(asset_uuid: str) -> None:
     """ List all attributes from an asset. """
 
-    asset = Asset(asset_uuid, ksqlClient=ksql.client)
+    asset = Asset(asset_uuid,
+                  ksqlClient=ksql.client,
+                  bootstrap_servers=config.KAFKA_BROKER)
 
     console = Console()
     table = Table(

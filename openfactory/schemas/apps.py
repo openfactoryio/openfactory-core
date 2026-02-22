@@ -63,10 +63,25 @@ configuration YAML file, with automatic UNS enrichment.
             - factory-net
             - monitoring-net
 
+          deploy:
+            replicas: 2
+
+            resources:
+              reservations:
+                cpus: 0.5
+                memory: "512Mi"
+              limits:
+                cpus: 1.0
+                memory: "1Gi"
+
+            placement:
+                constraints:
+                - node.labels.zone == building-a
+
 Note:
     - **Networks**: All network names must exist in Docker before deployment.
-    - **UNS metadata**: Must match the `UNSSchema` used in the environment for semantic consistency.
-    - **Storage backends**: Can be extended to support new types if needed.
+    - **UNS metadata**: Must match the ``UNSSchema`` used in the environment for semantic consistency.
+    - **Storage backends**: Will be extended in future to support more types.
     - Use the ``apps_dict`` property to access validated apps in runtime code.
 
 .. seealso::
@@ -80,6 +95,7 @@ from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
 from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
 from openfactory.schemas.filelayer.types import StorageBackend
+from openfactory.schemas.common import Deploy
 
 
 class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
@@ -107,6 +123,11 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
         description="Optional list of Docker networks the App container should connect to"
     )
 
+    deploy: Optional[Deploy] = Field(
+        default=None,
+        description="Deployment configuration including resources and placement."
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("networks")
@@ -125,7 +146,8 @@ class OpenFactoryAppsConfig(BaseModel):
 
     This schema validates the structure of application configuration data.
 
-    Example usage:
+    .. admonition:: Usage example
+
         .. code-block:: python
 
             apps_config = OpenFactoryAppsConfig(apps=yaml_data['apps'])
@@ -162,7 +184,7 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
         uns_schema (UNSSchema): Schema instance used to extract and validate UNS metadata for each application.
 
     Returns:
-        Optional[Dict[str, OpenFactoryApp]]: A dictionary of validated and enriched application configurations, or ``None`` if validation fails.
+        Optional[Dict[str, OpenFactoryAppSchema]]: A dictionary of validated and enriched application configurations, or ``None`` if validation fails.
 
     Note:
         In case of validation errors, user notifications will be triggered and ``None`` will be returned.
@@ -173,10 +195,7 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
     # validate and create apps configuration
     try:
         apps_cfg = OpenFactoryAppsConfig(**cfg)
-    except ValidationError as err:
-        user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
-        return None
-    except ValueError as err:
+    except (ValidationError, ValueError) as err:
         user_notify.fail(f"Provided YAML configuration file has invalid format\n{err}")
         return None
 

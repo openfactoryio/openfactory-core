@@ -80,7 +80,7 @@ class TestDeregisterAsset(unittest.TestCase):
         mock_ksql_client.get_kafka_topic.return_value = expected_topic
 
         # Call function
-        deregister_asset(asset_uuid, mock_ksql_client)
+        deregister_asset(asset_uuid, bootstrap_servers="kafka-broker:9092", ksqlClient=mock_ksql_client)
 
         # Assert get_kafka_topic was called correctly
         mock_ksql_client.get_kafka_topic.assert_any_call("asset_to_uns_map_raw")

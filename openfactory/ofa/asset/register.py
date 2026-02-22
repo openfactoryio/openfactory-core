@@ -3,6 +3,7 @@
 import click
 from openfactory.utils import register_asset
 from openfactory.ofa.ksqldb import ksql
+import openfactory.config as config
 
 
 @click.command(name='register')
@@ -22,4 +23,5 @@ def register(asset_uuid: str, asset_type: str, docker_service: str) -> None:
     register_asset(asset_uuid=asset_uuid,
                    asset_type=asset_type,
                    ksqlClient=ksql.client,
+                   bootstrap_servers=config.KAFKA_BROKER,
                    docker_service=docker_service)

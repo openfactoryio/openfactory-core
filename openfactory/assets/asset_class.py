@@ -29,7 +29,7 @@ class Asset(BaseAsset):
             from openfactory.kafka import KSQLDBClient
 
             ksql = KSQLDBClient('http://localhost:8088')
-            cnc = Asset('PROVER3018', ksqlClient=ksql)
+            cnc = Asset('PROVER3018', ksqlClient=ksql, bootstrap_servers='localhost:9092')
 
             # list samples
             print(cnc.samples())
@@ -79,14 +79,14 @@ class Asset(BaseAsset):
     ASSET_CONSUMER_CLASS = KafkaAssetConsumer
 
     def __init__(self, asset_uuid: str,
-                 ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER) -> None:
+                 ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
         Args:
             asset_uuid (str): UUID identifier of the asset.
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
-            bootstrap_servers (str): Kafka bootstrap server address. Defaults to config setting.
+            bootstrap_servers (str): Kafka bootstrap server address.
         """
         object.__setattr__(self, 'ASSET_ID', asset_uuid)
         super().__init__(ksqlClient, bootstrap_servers)
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     # Example usage of Asset
     ksql = KSQLDBClient(config.KSQLDB_URL)
-    cnc = Asset('PROVER3018', ksqlClient=ksql)
+    cnc = Asset('PROVER3018', ksqlClient=ksql, bootstrap_servers=config.KAFKA_BROKER)
 
     # list samples
     print(cnc.samples())

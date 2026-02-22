@@ -7,7 +7,6 @@ from kafka import KafkaProducer
 from openfactory.assets.utils import AssetAttribute
 from openfactory.kafka import AssetProducer
 from openfactory.kafka.ksql import KSQLDBClient
-import openfactory.config as config
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,7 +25,7 @@ def now_iso_to_epoch_millis() -> int:
 
 
 def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
-                   ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER, docker_service=""):
+                   ksqlClient: KSQLDBClient, bootstrap_servers: str, docker_service=""):
     """
     Register an asset in OpenFactory.
 
@@ -83,7 +82,7 @@ def register_asset(asset_uuid: str, uns: Dict, asset_type: str,
 
 
 def deregister_asset(asset_uuid: str,
-                     ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER):
+                     ksqlClient: KSQLDBClient, bootstrap_servers: str):
     """
     Deregister an asset from OpenFactory.
 
@@ -154,14 +153,14 @@ def register_device_connector(device: "Device",
 
 
 def deregister_device_connector(device_uuid: str,
-                                bootstrap_servers: str = config.KAFKA_BROKER,
+                                bootstrap_servers: str,
                                 topic: str = "device_connector_topic"):
     """
     Deregister a device connector configuration.
 
     Args:
         device_uuid (str): UUID of the device to deregister.
-        bootstrap_servers (str): Kafka bootstrap servers. Defaults to config.KAFKA_BROKER.
+        bootstrap_servers (str): Kafka bootstrap servers.
         topic (str): Kafka topic backing the device connector table. Defaults to 'device_connector_topic'.
 
     Raises:

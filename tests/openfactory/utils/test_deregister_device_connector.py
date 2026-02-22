@@ -45,7 +45,7 @@ class TestDeregisterDeviceConnectorKafka(unittest.TestCase):
         mock_producer_class.return_value = mock_producer
 
         device_uuid = "uuid123"
-        deregister_device_connector(device_uuid)
+        deregister_device_connector(device_uuid, bootstrap_servers="kafka-broker:9092")
 
         # Extract the serializers
         key_serializer = mock_producer_class.call_args[1]["key_serializer"]
@@ -69,4 +69,4 @@ class TestDeregisterDeviceConnectorKafka(unittest.TestCase):
         mock_producer_class.return_value = mock_producer
 
         with self.assertRaises(KafkaError):
-            deregister_device_connector("some-uuid")
+            deregister_device_connector("some-uuid", bootstrap_servers="kafka-broker:9092")

@@ -64,7 +64,7 @@ class OpenFactoryApp(Asset):
     Note:
       - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` are set and can be used.
       - The ``UUID`` of the App is set based on the OpenFactory configuration file of the App during the deployment process.
-      - Subclasses must implement either ``main_loop`` (synchronous) or ``async_main_loop`` (asynchronous) to define application behavior.
+      - Subclasses must implement either :meth:`main_loop` (synchronous) or :meth:`async_main_loop` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
 
     .. seealso::

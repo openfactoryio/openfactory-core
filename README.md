@@ -33,7 +33,7 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 
 1. **Perception Layer**: This foundational layer consists of devices such as sensors and manufacturing equipment that collect data from and send commands to the physical environment.
 
-2. **Connection Layer**: This layer comprises data connectors that facilitate communication between devices and the system and supervisors sending back commands to devices willing to respond to them.
+2. **Connection Layer**: This layer comprises data connectors that facilitate communication between devices.
 
 3. **Aggregation Layer**: Here, Kafka acts as a storage layer, while ksqlDB serves as a compute layer, enabling the processing and organization of incoming data streams.
 

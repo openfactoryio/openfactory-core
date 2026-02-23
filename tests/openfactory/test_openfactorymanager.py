@@ -22,7 +22,7 @@ class DummyDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         pass
 
 
-def create_mock_device(uuid="device-uuid-1", uns=None, connector_type="mocked_connector", supervisor=None):
+def create_mock_device(uuid="device-uuid-1", uns=None, connector_type="mocked_connector"):
     """ Mock a Device """
     device = MagicMock()
     device.uuid = uuid
@@ -31,8 +31,6 @@ def create_mock_device(uuid="device-uuid-1", uns=None, connector_type="mocked_co
     connector = MagicMock()
     connector.type = connector_type
     device.connector = connector
-
-    device.supervisor = supervisor
 
     return device
 
@@ -480,7 +478,6 @@ class TestOpenFactoryManager(unittest.TestCase):
             "known_connector": MagicMock()
         }
         self.manager.devices_uuid = MagicMock(return_value=[])  # no devices deployed yet
-        self.manager.deploy_device_supervisor = MagicMock()
 
         # Mock device with unknown connector type
         device_mock = MagicMock()
@@ -499,9 +496,8 @@ class TestOpenFactoryManager(unittest.TestCase):
             "Device dev001 has an unknown connector unknown_connector"
         )
 
-        # Ensure that no deployment or supervisor deploy is called
+        # Ensure that no deployment deploy is called
         self.manager.connectors["known_connector"].deploy.assert_not_called()
-        self.manager.deploy_device_supervisor.assert_not_called()
         mock_user_notify.success.assert_not_called()
 
     @patch('openfactory.openfactory_manager.register_device_connector')
@@ -668,7 +664,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_build_connector.return_value = mock_connector_instance
 
         self.manager.devices_uuid = MagicMock(return_value=[])
-        self.manager.deploy_device_supervisor = MagicMock()
 
         # Run method
         self.manager.deploy_devices_from_config_file("mock_devices.yaml")
@@ -682,9 +677,8 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.assertIn("Device device-uuid-err not deployed", fail_msg)
         self.assertIn("Simulated deployment failure", fail_msg)
 
-        # Ensure no success message and no supervisor deploy
+        # Ensure no success message
         mock_user_notify.success.assert_not_called()
-        self.manager.deploy_device_supervisor.assert_not_called()
         mock_register_device_connector.assert_not_called()
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')

@@ -33,7 +33,7 @@ class TestDevice(unittest.TestCase):
         self.assertEqual(device.connector.agent.deploy.replicas, 1)
 
     def test_device_valid_full(self):
-        """ Full Device with connector, supervisor, ksql_tables, and UNS metadata. """
+        """ Full Device with connector, ksql_tables, and UNS metadata. """
         device = Device(
             uuid="device-123",
             connector=self.valid_connector,

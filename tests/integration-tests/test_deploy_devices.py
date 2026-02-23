@@ -31,7 +31,6 @@ class TestDeployDevices(TestCase):
         self.assertIn('TEMP-001', ofa.devices_uuid(), 'Device [TEMP-001] is not deployed as expected')
         self.assertIn('TEMP-001-AGENT', ofa.agents_uuid(), 'Agent of [TEMP-001] is not deployed as expected')
         self.assertIn('TEMP-001-PRODUCER', ofa.producers_uuid(), 'Producer of [TEMP-001] is not deployed as expected')
-        self.assertNotIn('TEMP-001-SUPERVISOR', ofa.supervisors_uuid(), 'An unexpected supervisor was deployed')
 
         # Check availability of assets
         sensor = Asset('TEMP-001', ksqlClient=ksql.client, bootstrap_servers=config.KAFKA_BROKER)
@@ -80,7 +79,6 @@ class TestDeployDevices(TestCase):
         self.assertIn('TEMP-002', ofa.devices_uuid(), 'Device [TEMP-002] is not deployed as expected')
         self.assertIn('TEMP-002-AGENT', ofa.agents_uuid(), 'Agent of [TEMP-002] is not deployed as expected')
         self.assertIn('TEMP-002-PRODUCER', ofa.producers_uuid(), 'Producer of [TEMP-002] is not deployed as expected')
-        self.assertNotIn('TEMP-002-SUPERVISOR', ofa.supervisors_uuid(), 'An unexpected supervisor was deployed')
 
         # Check availability of assets
         sensor = Asset('TEMP-002', ksqlClient=ksql.client, bootstrap_servers=config.KAFKA_BROKER)

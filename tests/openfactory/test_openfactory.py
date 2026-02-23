@@ -248,58 +248,6 @@ class TestOpenFactory(TestCase):
         # Expect an empty list
         assert producers == []
 
-    def test_supervisors_uuid(self):
-        """ Test supervisors_uuid() """
-        # Mock query result as list of dicts
-        mock_ksql = MagicMock()
-        mock_ksql.query.return_value = [
-            {"ASSET_UUID": "uuid1"},
-            {"ASSET_UUID": "uuid2"}
-        ]
-
-        ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
-        result = ofa.supervisors_uuid()
-
-        # Ensure the function returns the expected result
-        assert result == ["uuid1", "uuid2"]
-
-        # Verify the correct query was executed
-        mock_ksql.query.assert_called_once_with(
-            "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Supervisor';"
-        )
-
-    @patch("openfactory.openfactory.Asset")
-    def test_supervisors(self, MockAsset):
-        """ Test supervisors() """
-
-        # Mock Asset instances
-        mock_asset_instances = [MagicMock(), MagicMock()]
-        MockAsset.side_effect = mock_asset_instances
-
-        ofa = OpenFactory(ksqlClient=self.ksql_mock, bootstrap_servers="MockedBroker")
-        ofa.supervisors_uuid = MagicMock()
-        ofa.supervisors_uuid.return_value = ["asset-001", "asset-002"]
-
-        result = ofa.supervisors()
-
-        # Assert that Asset was called with the correct arguments
-        MockAsset.assert_any_call("asset-001", self.ksql_mock, "MockedBroker")
-        MockAsset.assert_any_call("asset-002", self.ksql_mock, "MockedBroker")
-
-        # Assert that the return value matches the mock objects
-        self.assertEqual(result, mock_asset_instances)
-
-    def test_supervisors_empty(self):
-        """ Test supervisors() when no supervisors exist """
-        mock_ksql = MagicMock()
-        mock_ksql.query.return_value = []  # Simulate empty result
-
-        ofa = OpenFactory(ksqlClient=mock_ksql, bootstrap_servers="MockedBroker")
-        supervisors = ofa.supervisors()
-
-        # Expect an empty list
-        assert supervisors == []
-
     def test_applications_uuid(self):
         """ Test applications_uuid() """
         # Mock query result as list of dicts

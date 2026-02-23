@@ -5,7 +5,7 @@ This module provides the `OpenFactoryManager` class, which manages the deploymen
 and teardown of devices and applications within an OpenFactory environment.
 
 Core responsibilities:
-    - Deploy MTConnect agents, supervisors, and OpenFactory applications
+    - Deploy MTConnect agents, and OpenFactory applications
     - Manage Docker-based services via the configured deployment strategy
     - Register and deregister assets in the OpenFactory environment
     - Integrate deployed services with Kafka, ksqlDB, and other OpenFactory components
@@ -163,7 +163,7 @@ class OpenFactoryManager(OpenFactory):
         from the specified YAML file, and deploys each device that is not already deployed.
 
         Deployment includes registering the device asset, deploying the MTConnect agent,
-        Kafka producer, KSQLDB tables (if defined), and device supervisor (if defined).
+        Kafka producer, and KSQLDB tables (if defined).
 
         Args:
             yaml_config_file (str): Path to the YAML configuration file containing device definitions.

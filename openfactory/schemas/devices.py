@@ -3,11 +3,11 @@ OpenFactory Device Schemas
 
 This module defines Pydantic models and utility functions to parse and validate
 device configuration files in OpenFactory. Device definitions include connection
-details, UNS metadata, ksql table mappings, and supervisor configurations.
+details, UNS metadata, and ksql table mappings.
 
 Key Components:
 ---------------
-- **Device**: Defines a single device including its UUID, connector, optional supervisor,
+- **Device**: Defines a single device including its UUID, connector,
   UNS metadata, and supported Kafka ksqlDB tables.
 - **DevicesConfig**: Validates a dictionary of device entries and ensures UUID uniqueness.
 - **get_devices_from_config_file**: Loads, validates, and enriches devices from a YAML file.

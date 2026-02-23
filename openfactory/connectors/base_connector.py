@@ -24,7 +24,7 @@ To add a new connector type to OpenFactory, follow these steps:
 
    - ``deploy(device: Device, yaml_config_file: str) -> None``
       Register the device asset, deploy any required services (agents, producers),
-      and create dependencies (Kafka topics, ksqlDB tables, supervisors).
+      and create dependencies (Kafka topics, ksqlDB tables).
 
    - ``tear_down(device_uuid: str) -> None``
       Remove all deployed resources for the device.

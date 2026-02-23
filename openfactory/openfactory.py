@@ -9,7 +9,7 @@ Core responsibilities:
     - Retrieve deployed assets and their UUIDs
     - Access availability information for assets
     - Query Docker services associated with assets
-    - Classify assets by type (devices, MTConnect agents, Kafka producers, supervisors, applications)
+    - Classify assets by type (devices, MTConnect agents, Kafka producers, applications)
     - Provide high-level `Asset` objects for interacting with deployed components
 
 Key integrations:
@@ -158,26 +158,6 @@ class OpenFactory:
             List[Asset]: Kafka producer assets.
         """
         return [Asset(uuid, self.ksql, self.bootstrap_servers) for uuid in self.producers_uuid()]
-
-    def supervisors_uuid(self) -> List[str]:
-        """
-        Get UUIDs of deployed Supervisors.
-
-        Returns:
-            List[str]: UUIDs of deployed supervisor-type assets.
-        """
-        query = "SELECT ASSET_UUID FROM assets_type WHERE TYPE = 'Supervisor';"
-        results = self.ksql.query(query)
-        return [row['ASSET_UUID'] for row in results] if results else []
-
-    def supervisors(self) -> List[Asset]:
-        """
-        Get Asset objects corresponding to deployed Supervisors.
-
-        Returns:
-            List[Asset]: Deployed supervisor-type assets.
-        """
-        return [Asset(uuid, self.ksql, self.bootstrap_servers) for uuid in self.supervisors_uuid()]
 
     def applications_uuid(self) -> List[str]:
         """

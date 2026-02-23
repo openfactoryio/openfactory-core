@@ -18,10 +18,6 @@ flowchart TD
         TABLE
         topic: *asset_to_uns_map_topic*"]
 
-        cmds_stream["**cmds_stream**
-        STREAM
-        topic: *ofa_cmds*"]
-
         device_connector_source["**DEVICE_CONNECTOR_SOURCE**
         TABLE
         topic: *device_connector_topic*"]
@@ -102,11 +98,6 @@ flowchart TD
     end
 
     %% ---------------------------------------------------------------------
-    %% External Consumers
-
-    external_consumers["External Consumers / Applications"]
-
-    %% ---------------------------------------------------------------------
     %% Main flows
 
     %% Assets main flow
@@ -136,9 +127,6 @@ flowchart TD
     asset_to_uns_map_table --> assets_stream_uns
     assets_table --> assets_uns_table
     asset_to_uns_map_table --> assets_uns_table
-
-    %% Commands
-    cmds_stream --> external_consumers
 
     %% Device connector (identity projection)
     device_connector_source -.->|*identity projection*| device_connector_table

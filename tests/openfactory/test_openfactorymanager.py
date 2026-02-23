@@ -1,7 +1,6 @@
 import unittest
 import docker
 from unittest.mock import patch, MagicMock, call
-from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 from openfactory.schemas.common import Deploy, Resources, ResourcesDefinition, Placement
 from openfactory.schemas.apps import OpenFactoryAppSchema
 from openfactory.schemas.filelayer.nfs_backend import NFSBackendConfig
@@ -92,109 +91,6 @@ class TestOpenFactoryManager(unittest.TestCase):
             OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked_broker")
 
         self.assertIn("must inherit from OpenFactoryServiceDeploymentStrategy", str(ctx.exception))
-
-    @patch("openfactory.openfactory_manager.config")
-    @patch("openfactory.openfactory_manager.register_asset")
-    @patch("openfactory.openfactory_manager.Asset")
-    def test_deploy_device_supervisor(self, mock_asset, mock_register_asset, mock_config):
-        """ Test deploy_device_supervisor """
-
-        # Setup config constants
-        mock_config.KSQLDB_LOG_LEVEL = "INFO"
-
-        # Create two distinct mocks to be returned on Asset() calls
-        mock_dev_asset = MagicMock()
-        mock_sup_asset = MagicMock()
-
-        def asset_side_effect(uuid, **kwargs):
-            if uuid == device.uuid:
-                return mock_dev_asset
-            elif uuid == f"{device.uuid.upper()}-SUPERVISOR":
-                return mock_sup_asset
-            else:
-                return MagicMock()
-
-        mock_asset.side_effect = asset_side_effect
-
-        supervisor = Supervisor(
-            image="mocked_supervisor_image",
-            adapter=SupervisorAdapter(
-                ip="127.0.0.1",
-                port="5000",
-                environment=["FOO=bar", "BAZ=qux"]
-            ),
-            deploy=Deploy(
-                replicas=1,
-                resources=Resources(
-                    limits=ResourcesDefinition(cpus=2.0),
-                    reservations=ResourcesDefinition(cpus=1.5)
-                ),
-                placement=Placement(
-                    constraints=["node=worker"]
-                )
-            )
-        )
-
-        # Mock Device and nested supervisor/adapter
-        device = MagicMock()
-        device.uuid = "dev123"
-        device.supervisor = supervisor
-
-        # Mock Deploy object with constraints and resources
-        resources = Resources(
-            limits=ResourcesDefinition(cpus=2.0),
-            reservations=ResourcesDefinition(cpus=1.5)
-        )
-        placement = Placement(constraints=["node.role=worker"])
-
-        device.supervisor.deploy = Deploy(
-            replicas=1,
-            resources=resources,
-            placement=placement
-        )
-
-        self.manager.deploy_device_supervisor(device)
-
-        expected_env = [
-            "SUPERVISOR_UUID=DEV123-SUPERVISOR",
-            "DEVICE_UUID=dev123",
-            f"KAFKA_BROKER={self.manager.bootstrap_servers}",
-            f"KSQLDB_URL={self.manager.ksql.ksqldb_url}",
-            "ADAPTER_IP=127.0.0.1",
-            "ADAPTER_PORT=5000",
-            "KSQLDB_LOG_LEVEL=INFO",
-            "FOO=bar",
-            "BAZ=qux"
-        ]
-
-        # Assert deployment_strategy.deploy called correctly
-        self.manager.deployment_strategy.deploy.assert_called_once_with(
-            image="mocked_supervisor_image",
-            name="dev123-supervisor",
-            mode={"Replicated": {"Replicas": 1}},
-            env=expected_env,
-            resources={
-                "Limits": {"NanoCPUs": 2000000000},       # 2.0 * 1_000_000_000
-                "Reservations": {"NanoCPUs": 1500000000}  # 1.5 * 1_000_000_000
-            },
-            constraints=["node.role == worker"]
-        )
-
-        # Assert register_asset called with correct supervisor uuid and params
-        mock_register_asset.assert_called_once_with(
-            "DEV123-SUPERVISOR",
-            uns=None,
-            asset_type="Supervisor",
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers,
-            docker_service="dev123-supervisor"
-        )
-
-        # Check that add_reference_below was called correctly on dev Asset instance
-        mock_dev_asset.add_reference_below.assert_called_once_with("DEV123-SUPERVISOR")
-
-        # Check that add_reference_above was called correctly on sup Asset instance
-        mock_sup_asset.add_reference_above.assert_called_once_with("dev123")
 
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.register_asset")
@@ -634,12 +530,10 @@ class TestOpenFactoryManager(unittest.TestCase):
             "Device1": create_mock_device(
                 uuid="device-uuid-1",
                 connector_type="mocked_connector",
-                supervisor=MagicMock(),
                 uns={"uns_id": "some/mocked/path"}),
             "Device2": create_mock_device(
                 uuid="device-uuid-2",
                 connector_type="mocked_connector",
-                supervisor=None,
                 uns={"uns_id": "some/other/path"})
         }
         mock_get_devices.return_value = devices_dict
@@ -649,7 +543,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_build_connector.return_value = mock_connector_instance
 
         self.manager.devices_uuid = MagicMock(return_value=[])
-        self.manager.deploy_device_supervisor = MagicMock()
 
         # Call method under test
         self.manager.deploy_devices_from_config_file("mock_devices.yaml")
@@ -662,7 +555,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         for device_key, device_obj in devices_dict.items():
             mock_user_notify.info.assert_any_call(f"{device_key} - {device_obj.uuid}:")
             mock_connector_instance.deploy.assert_any_call(device_obj, "mock_devices.yaml")
-            self.manager.deploy_device_supervisor.assert_any_call(device_obj)
             mock_register_device_connector.assert_any_call(device_obj, self.manager.ksql)
             mock_user_notify.success.assert_any_call(f"Device {device_obj.uuid} deployed successfully")
 
@@ -863,20 +755,14 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Connector teardown called for deployed device only
         mock_connector_instance.tear_down.assert_called_once_with("device-uuid-1")
 
-        # Deployment strategy remove should be called for the supervisor of device-uuid-1
-        self.manager.deployment_strategy.remove.assert_called_once_with("device-uuid-1-supervisor")
-
-        # Assets should be deregistered exactly twice (supervisor + device itself)
+        # Assets should be deregistered
         expected_calls = [
-            call("DEVICE-UUID-1-SUPERVISOR",
-                 ksqlClient=self.manager.ksql,
-                 bootstrap_servers=self.manager.bootstrap_servers),
             call("device-uuid-1",
                  ksqlClient=self.manager.ksql,
                  bootstrap_servers=self.manager.bootstrap_servers),
         ]
         mock_deregister_asset.assert_has_calls(expected_calls, any_order=False)
-        assert mock_deregister_asset.call_count == 2  # strict check
+        assert mock_deregister_asset.call_count == 1
 
         # Check deregister_device_connector
         expected_calls = [
@@ -886,8 +772,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_deregister_device_connector.assert_has_calls(expected_calls, any_order=True)
         assert mock_deregister_device_connector.call_count == 1
 
-        # Success messages
-        mock_user_notify.success.assert_any_call("Supervisor for device device-uuid-1 shut down successfully")
+        # Success message
         mock_user_notify.success.assert_any_call("Device device-uuid-1 shut down successfully")
 
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')

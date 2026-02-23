@@ -32,14 +32,6 @@ YAML Example:
         connector:
           type: mtconnect
           ip: 192.168.1.100
-        supervisor:
-          image: ghcr.io/openfactoryio/opcua-supervisor:v4.0.1
-          adapter:
-            ip: 192.168.0.201
-            port: 4840
-            environment:
-            - NAMESPACE_URI=openfactory
-            - BROWSE_NAME=PRESS
 
 Usage:
 ------
@@ -53,7 +45,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator, ConfigDict, ValidationError
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
-from openfactory.schemas.supervisors import Supervisor
 from openfactory.schemas.connectors.types import Connector
 from openfactory.schemas.uns import AttachUNSMixin, UNSSchema
 
@@ -63,7 +54,6 @@ class Device(AttachUNSMixin, BaseModel):
     uuid: str = Field(..., description="Unique device identifier.")
     uns: Optional[Dict[str, Any]] = Field(None, description="Unified Namespace metadata.")
     connector: Connector = Field(..., description="Connector configuration for the device.")
-    supervisor: Optional[Supervisor] = Field(None, description="Supervisor configuration.")
     ksql_tables: Optional[List[str]] = Field(None, description="List of Kafka ksqlDB tables.")
 
     model_config = ConfigDict(extra="forbid")

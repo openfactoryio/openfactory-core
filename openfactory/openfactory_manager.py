@@ -44,10 +44,10 @@ import docker
 import json
 import openfactory.config as config
 from openfactory import OpenFactory
-from openfactory.schemas.devices import Device, get_devices_from_config_file
+from openfactory.schemas.devices import get_devices_from_config_file
 from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file
 from openfactory.schemas.uns import UNSSchema
-from openfactory.schemas.common import constraints, resources, cpus_limit, cpus_reservation
+from openfactory.schemas.common import constraints, resources
 from openfactory.assets import Asset
 from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
@@ -92,60 +92,6 @@ class OpenFactoryManager(OpenFactory):
 
         self.deployment_strategy: OpenFactoryServiceDeploymentStrategy = platform_cls()
         self.deployment_strategy = platform_cls()
-
-    def deploy_device_supervisor(self, device: Device) -> None:
-        """
-        Deploy an OpenFactory device supervisor.
-
-        Args:
-            device (Device): The device for which the supervisor is to be deployed.
-
-        Raises:
-            OFAException: If the supervisor cannot be deployed.
-        """
-        if device.supervisor is None:
-            return
-
-        # build environment variables
-        supervisor_uuid = f"{device.uuid.upper()}-SUPERVISOR"
-        env = [f"SUPERVISOR_UUID={supervisor_uuid}",
-               f"DEVICE_UUID={device.uuid}",
-               f"KAFKA_BROKER={self.bootstrap_servers}",
-               f"KSQLDB_URL={self.ksql.ksqldb_url}",
-               f"ADAPTER_IP={device.supervisor.adapter.ip}",
-               f"ADAPTER_PORT={device.supervisor.adapter.port}",
-               f"KSQLDB_LOG_LEVEL={config.KSQLDB_LOG_LEVEL}"]
-
-        if device.supervisor.adapter.environment is not None:
-            for item in device.supervisor.adapter.environment:
-                var, val = item.split('=')
-                env.append(f"{var.strip()}={val.strip()}")
-
-        try:
-            self.deployment_strategy.deploy(
-                image=device.supervisor.image,
-                name=device.uuid.lower() + '-supervisor',
-                mode={"Replicated": {"Replicas": 1}},
-                env=env,
-                resources={
-                    "Limits": {"NanoCPUs": int(1000000000*cpus_limit(device.supervisor.deploy, 1.0))},
-                    "Reservations": {"NanoCPUs": int(1000000000*cpus_reservation(device.supervisor.deploy, 0.5))}
-                    },
-                constraints=constraints(device.supervisor.deploy)
-            )
-        except docker.errors.APIError as err:
-            user_notify.fail(f"Supervisor {device.uuid.lower()}-supervisor could not be deployed\n{err}")
-            return
-        register_asset(supervisor_uuid, uns=None, asset_type='Supervisor',
-                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=device.uuid.lower() + '-supervisor')
-        dev = Asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        dev.add_reference_below(supervisor_uuid)
-        dev.close()
-        sup = Asset(supervisor_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        sup.add_reference_above(device.uuid)
-        sup.close()
-
-        user_notify.success(f"Supervisor {supervisor_uuid} deployed successfully")
 
     def deploy_openfactory_application(self, application: OpenFactoryAppSchema) -> None:
         """
@@ -259,7 +205,6 @@ class OpenFactoryManager(OpenFactory):
 
             try:
                 connector.deploy(device, yaml_config_file)
-                self.deploy_device_supervisor(device)
                 register_device_connector(device, self.ksql)
                 user_notify.success(f"Device {device.uuid} deployed successfully")
             except OFAException as e:
@@ -347,17 +292,6 @@ class OpenFactoryManager(OpenFactory):
                 connector.tear_down(device.uuid)
             except OFAException as err:
                 user_notify.fail(f"Device {device.uuid} could not be torn down: {err}")
-
-            # Tear down Supervisor
-            try:
-                self.deployment_strategy.remove(device.uuid.lower() + '-supervisor')
-                deregister_asset(f"{device.uuid.upper()}-SUPERVISOR", ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-                user_notify.success(f"Supervisor for device {device.uuid} shut down successfully")
-            except docker.errors.NotFound:
-                # No supervisor
-                pass
-            except docker.errors.APIError as err:
-                raise OFAException(err)
 
             deregister_device_connector(device.uuid, bootstrap_servers=self.bootstrap_servers)
             deregister_asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)

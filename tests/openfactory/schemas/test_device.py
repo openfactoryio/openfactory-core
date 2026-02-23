@@ -2,7 +2,6 @@ import unittest
 from pydantic import ValidationError
 from openfactory.schemas.devices import Device
 from openfactory.schemas.connectors.types import MTConnectConnectorSchema
-from openfactory.schemas.supervisors import Supervisor, SupervisorAdapter
 
 
 class TestDevice(unittest.TestCase):
@@ -21,13 +20,6 @@ class TestDevice(unittest.TestCase):
         }
         self.valid_connector = MTConnectConnectorSchema(**self.valid_connector_data)
 
-        # Optional supervisor config
-        self.valid_supervisor = Supervisor(
-            image="supervisor-image",
-            adapter=SupervisorAdapter(ip="192.168.1.1", port=8080),
-            deploy=None
-        )
-
     def test_device_valid_minimal(self):
         """ Minimal Device with connector only. """
         device = Device(
@@ -35,7 +27,6 @@ class TestDevice(unittest.TestCase):
             connector=self.valid_connector
         )
         self.assertEqual(device.uuid, "device-123")
-        self.assertIsNone(device.supervisor)
         self.assertIsNone(device.uns)
         self.assertIsNone(device.ksql_tables)
         self.assertIsNotNone(device.connector.agent.deploy)
@@ -46,7 +37,6 @@ class TestDevice(unittest.TestCase):
         device = Device(
             uuid="device-123",
             connector=self.valid_connector,
-            supervisor=self.valid_supervisor,
             ksql_tables=["device", "agent"],
             uns={"some": "metadata"}
         )

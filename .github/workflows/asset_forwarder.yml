@@ -6,6 +6,10 @@ on:
       - created
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   DOCKER_IMAGE: ghcr.io/openfactoryio/asset-forwarder
 

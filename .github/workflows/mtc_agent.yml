@@ -2,6 +2,10 @@ name: Create MTConnect Agent Docker image on GitHub Container Registry
 
 on: [workflow_dispatch]
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   CPPAGENT_VERSION: v2.5.0.11
 

@@ -26,7 +26,6 @@ Devices
    devices
    uns
    connectors
-   supervisors
 
 Applications
 ------------

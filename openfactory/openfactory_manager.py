@@ -313,7 +313,7 @@ class OpenFactoryManager(OpenFactory):
             app.close()
         except docker.errors.NotFound:
             # the application was not running as a Docker swarm service
-            deregister_asset(app_uuid, ksqlClient=self.ksql)
+            deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             pass
         except docker.errors.APIError as err:
             raise OFAException(err)

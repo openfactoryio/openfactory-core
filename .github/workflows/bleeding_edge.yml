@@ -1,0 +1,36 @@
+name: Unit tests - Bleeding Edge
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'  # weekly Monday 3AM
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install latest dependencies (bleeding edge)
+        run: |
+          # Install latest versions ignoring upper bounds
+          pip install --upgrade --upgrade-strategy eager .[dev]
+
+      - name: Test with unittest
+        run: python tests/run_unit_tests.py

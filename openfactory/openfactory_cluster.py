@@ -112,8 +112,9 @@ class OpenFactoryCluster():
 
         # add labels
         labels = {'name': node_name}
-        if 'labels' in node_details:
-            labels.update(node_details['labels'])
+        extra_labels = node_details.get('labels')
+        if isinstance(extra_labels, dict):
+            labels.update(extra_labels)
         node_spec = node.attrs['Spec']
         node_spec['Labels'] = labels
         node.update(node_spec)

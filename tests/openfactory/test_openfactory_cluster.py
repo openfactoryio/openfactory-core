@@ -66,6 +66,19 @@ class TestOpenFactoryCluster(TestCase):
         expected_spec = {'Labels': {'name': 'some_node_name'}}
         mock_node.update.assert_called_once_with(expected_spec)
 
+    def test_add_label_with_none_labels(self, *args):
+        """ Test that add_label ignores labels=None and still set the name label."""
+        dal.docker_client.nodes.list = Mock(return_value=[mock_node])
+        mock_node.update.reset_mock()
+
+        self.cluster.add_label(
+            'some_node_name',
+            {'ip': IPv4Address('192.168.1.1'), 'labels': None}
+        )
+
+        expected_spec = {'Labels': {'name': 'some_node_name'}}
+        mock_node.update.assert_called_once_with(expected_spec)
+
     def test_add_label(self, *args):
         """ Test add_label for some label """
         dal.docker_client.nodes.list = Mock(return_value=[mock_node])

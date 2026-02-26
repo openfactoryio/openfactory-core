@@ -70,36 +70,62 @@ class TestOFAEntryPoint(unittest.TestCase):
             mock_exit.assert_called_once_with(1)
             self.assertEqual(cm.exception.code, 1)
 
-    @patch('openfactory.ofacli.cli')
-    @patch('openfactory.ofacli.init_environment')
-    def test_main_skips_env_setup_on_version(self, mock_init_env, mock_cli):
-        """ main() skips init_environment() if command is 'version' """
-        with patch.object(sys, 'argv', ['ofa', 'version']):
-            main()
-            mock_init_env.assert_not_called()
-            mock_cli.assert_called_once()
+    @patch('openfactory.ofacli.ksql.connect')
+    @patch('openfactory.ofacli.dal.connect')
+    @patch('openfactory.ofacli.user_notify.setup')
+    def test_init_environment_skips_ksql_when_disabled(self, mock_notify, mock_dal_connect, mock_ksql_connect):
+        """ init_environment skips ksql connection when connect_ksql=False. """
+        result = init_environment(connect_ksql=False)
+
+        self.assertTrue(result)
+        mock_dal_connect.assert_called_once()
+        mock_ksql_connect.assert_not_called()
 
     @patch('openfactory.ofacli.cli')
     @patch('openfactory.ofacli.init_environment')
-    def test_main_skips_env_setup_on_help(self, mock_init_env, mock_cli):
-        """ main() skips init_environment() if --help is used """
-        with patch.object(sys, 'argv', ['ofa', '--help']):
-            main()
-            mock_init_env.assert_not_called()
-            mock_cli.assert_called_once()
+    def test_main_skippable_commands(self, mock_init_env, mock_cli):
+        """
+        main() calls init_environment(connect_ksql=False) for commands that
+        skip full environment setup, and then calls cli().
+        """
+        skip_commands = [
+            ['ofa', 'version'],
+            ['ofa', '--help'],
+            ['ofa', 'config'],
+            ['ofa', 'templates'],
+            ['ofa', 'nodes'],
+        ]
+
+        for argv in skip_commands:
+            with self.subTest(argv=argv):
+                with patch.object(sys, 'argv', argv):
+                    main()
+
+                mock_init_env.assert_called_once_with(connect_ksql=False)
+                mock_cli.assert_called_once()
+
+                mock_init_env.reset_mock()
+                mock_cli.reset_mock()
 
     @patch('openfactory.ofacli.cli')
     @patch('openfactory.ofacli.init_environment')
-    def test_main_skips_env_setup_on_config(self, mock_init_env, mock_cli):
-        """ main() skips init_environment() if config is used """
-        with patch.object(sys, 'argv', ['ofa', 'config']):
-            main()
-            mock_init_env.assert_not_called()
-            mock_cli.assert_called_once()
+    def test_main_normal_commands(self, mock_init_env, mock_cli):
+        """
+        main() calls init_environment() normally (connect_ksql=True) for commands
+        that require full environment setup, and then calls cli().
+        """
+        normal_commands = [
+            ['ofa', 'device'],
+            ['ofa', 'some_other_command'],
+        ]
 
-        mock_init_env.reset_mock()
-        mock_cli.reset_mock()
-        with patch.object(sys, 'argv', ['ofa', 'config', 'ls']):
-            main()
-            mock_init_env.assert_not_called()
-            mock_cli.assert_called_once()
+        for argv in normal_commands:
+            with self.subTest(argv=argv):
+                with patch.object(sys, 'argv', argv):
+                    main()
+
+                mock_init_env.assert_called_once_with()  # default connect_ksql=True
+                mock_cli.assert_called_once()
+
+                mock_init_env.reset_mock()
+                mock_cli.reset_mock()

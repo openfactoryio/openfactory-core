@@ -24,4 +24,4 @@ def click_up(yaml_config_file: str) -> None:
         ofa = OpenFactoryCluster()
         ofa.create_infrastack_from_config_file(yaml_config_file)
     except (OFAConfigurationException, OFAException) as err:
-        user_notify.fail(err)
+        user_notify.fail(f"Could not add node: {err}")

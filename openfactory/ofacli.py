@@ -25,8 +25,18 @@ from openfactory.kafka.ksql import KSQLDBClientException
 import openfactory.config as Config
 
 
-def init_environment() -> bool:
-    """ Setup OpenFactory environment (Docker, ksqlDB, notifications). """
+def init_environment(connect_ksql: bool = True) -> bool:
+    """
+    Setup OpenFactory environment (Docker, ksqlDB, notifications).
+
+    This function configures user notifications and attempts to establish
+    required external connections, including the Docker manager node and,
+    optionally, the ksqlDB server.
+
+    Args:
+        connect_ksql (bool, optional): Whether to establish a connection to
+            the ksqlDB server. Defaults to True.
+    """
     user_notify.setup(
         success_msg=lambda msg: print(f"{Config.OFA_SUCCSESS}{msg}{Config.OFA_END}"),
         fail_msg=lambda msg: print(f"{Config.OFA_FAIL}{msg}{Config.OFA_END}"),
@@ -42,19 +52,22 @@ def init_environment() -> bool:
         user_notify.fail(f"Connection to {Config.OPENFACTORY_MANAGER_NODE_DOCKER_URL} failed: {e}")
         return False
 
-    try:
-        ksql.connect(Config.KSQLDB_URL)
-    except KSQLDBClientException:
-        user_notify.fail('Failed to connect to ksqlDB server')
-        return False
+    if connect_ksql:
+        try:
+            ksql.connect(Config.KSQLDB_URL)
+        except KSQLDBClientException:
+            user_notify.fail('Failed to connect to ksqlDB server')
+            return False
 
     return True
 
 
 def main():
     """ Command line interface of OpenFactory. """
-    skip_env_commands = {"--help", "version", "config", "templates"}
-    if len(sys.argv) == 1 or sys.argv[1] in skip_env_commands:
+    skip_ksql_connection = {"--help", "version", "config", "templates", "nodes"}
+    if len(sys.argv) == 1 or sys.argv[1] in skip_ksql_connection:
+        if not init_environment(connect_ksql=False):
+            exit(1)
         cli()
         return
 

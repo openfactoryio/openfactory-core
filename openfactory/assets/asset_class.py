@@ -9,15 +9,16 @@ from openfactory.kafka import KafkaAssetConsumer, KSQLDBClient
 
 class Asset(BaseAsset):
     """
-    Represents an OpenFactory Asset using the ASSET_UUID as identifier.
+    Represents an OpenFactory Asset using the ``ASSET_UUID`` as identifier.
 
     This class encapsulates Asset metadata and a Kafka producer responsible for sending asset data.
-    It uses the ksqlDB topology based on the `ASSETS_STREAM` stream to handle Asset data.
+    It uses the ksqlDB topology based on the ``ASSETS_STREAM`` stream to handle Asset data.
 
     Attributes:
         asset_uuid (str): Unique identifier of the Asset.
         ksql (KSQLDBClient): Client for interacting with ksqlDB.
         bootstrap_servers (str): Kafka bootstrap server address.
+        asset_router_url (str): Asset Router URL from the OpenFactory Fan-Out-Layer.
         producer (AssetProducer): Kafka producer instance for sending Asset messages.
 
     .. admonition:: Example usage:
@@ -79,7 +80,8 @@ class Asset(BaseAsset):
     ASSET_CONSUMER_CLASS = KafkaAssetConsumer
 
     def __init__(self, asset_uuid: str,
-                 ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
+                 ksqlClient: KSQLDBClient,
+                 bootstrap_servers: str, asset_router_url: str | None = None) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
@@ -87,9 +89,18 @@ class Asset(BaseAsset):
             asset_uuid (str): UUID identifier of the asset.
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
             bootstrap_servers (str): Kafka bootstrap server address.
+            asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+
+        Raises:
+            OFAException: If ``asset_router_url`` is not provided and the
+                ``ASSET_ROUTER_URL`` environment variable is not set.
+
+        Note:
+          - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
+          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variable ``ASSET_ROUTER_URL`` will be set.
         """
         object.__setattr__(self, 'ASSET_ID', asset_uuid)
-        super().__init__(ksqlClient, bootstrap_servers)
+        super().__init__(ksqlClient, bootstrap_servers, asset_router_url)
 
     @property
     def asset_uuid(self) -> str:

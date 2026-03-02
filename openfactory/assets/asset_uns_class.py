@@ -11,17 +11,18 @@ class AssetUNS(BaseAsset):
     Represents an OpenFactory Asset using the UNS identifier.
 
     This class encapsulates Asset metadata and a Kafka producer responsible for sending Asset data.
-    It uses the ksqlDB topology based on the `ASSETS_STREAM_UNS` stream to handle Asset data.
+    It uses the ksqlDB topology based on the ``ASSETS_STREAM_UNS`` stream to handle Asset data.
 
     Note:
-        All write operations to the asset take place in the `assets` stream.
+        All write operations to the asset take place in the ``assets`` stream.
 
     Attributes:
-        KSQL_ASSET_TABLE (str): Name of ksqlDB table of Asset states (`assets_uns`)
-        KSQL_ASSET_ID (str): ksqlDB ID used to identify the Asset (`uns_id`) in the KSQL_ASSET_TABLE
-        ASSET_ID (str): value of the identifer of the Asset (uns_id) used in the KSQL_ASSET_TABLE
+        KSQL_ASSET_TABLE (str): Name of ksqlDB table of Asset states (``assets_uns``)
+        KSQL_ASSET_ID (str): ksqlDB ID used to identify the Asset (``uns_id``) in the ``KSQL_ASSET_TABLE``
+        ASSET_ID (str): value of the identifer of the Asset (``uns_id``) used in the ``KSQL_ASSET_TABLE``
         ksql (KSQLDBClient): Client for interacting with ksqlDB.
         bootstrap_servers (str): Kafka bootstrap server address.
+        asset_router_url (str): Asset Router URL from the OpenFactory Fan-Out-Layer.
         ASSET_CONSUMER_CLASS (KafkaAssetUNSConsumer): Kafka consumer class for reading messages from Asset strean.
         producer (AssetProducer): Kafka producer instance for sending Asset messages.
 
@@ -84,7 +85,8 @@ class AssetUNS(BaseAsset):
     ASSET_CONSUMER_CLASS = KafkaAssetUNSConsumer
 
     def __init__(self, uns_id: str,
-                 ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
+                 ksqlClient: KSQLDBClient, bootstrap_servers: str,
+                 asset_router_url: str | None = None) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
@@ -92,9 +94,18 @@ class AssetUNS(BaseAsset):
             uns_id (str): UNS identifier of the asset.
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
             bootstrap_servers (str): Kafka bootstrap server address.
+            asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+
+        Raises:
+            OFAException: If ``asset_router_url`` is not provided and the
+                ``ASSET_ROUTER_URL`` environment variable is not set.
+
+        Note:
+          - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
+          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variable ``ASSET_ROUTER_URL`` will be set.
         """
         object.__setattr__(self, 'ASSET_ID', uns_id)
-        super().__init__(ksqlClient, bootstrap_servers)
+        super().__init__(ksqlClient, bootstrap_servers, asset_router_url)
 
     @property
     def asset_uuid(self) -> str:

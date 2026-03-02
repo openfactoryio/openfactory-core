@@ -1,9 +1,9 @@
 OpenFactory Assets
 ==================
 
-Two classes, :class:`Asset <openfactory.assets.Asset>` and :class:`AssetUNS <openfactory.assets.AssetUNS>` are available to interact with deployed OpenFactory Assets.
-The `Asset` class uses the `ASSET_UUID` to identify the Asset, whereas the `AssetUNS` class
-uses the UNS (unified namespace) to identify the Asset.
+Two classes, :class:`Asset <openfactory.assets.asset_class.Asset>` and :class:`AssetUNS <openfactory.assets.asset_uns_class.AssetUNS>` are available to interact with deployed OpenFactory Assets.
+The :class:`Asset <openfactory.assets.asset_class.Asset>` class uses the ``ASSET_UUID`` to identify the Asset,
+whereas the :class:`AssetUNS <openfactory.assets.asset_uns_class.AssetUNS>` class uses the UNS (unified namespace) to identify the Asset.
 
 Both classes are derived from the abstract :class:`BaseAsset <openfactory.assets.asset_base.BaseAsset>` class.
 

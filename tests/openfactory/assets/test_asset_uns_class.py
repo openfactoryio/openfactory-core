@@ -17,7 +17,8 @@ class TestAssetUNS(unittest.TestCase):
 
     def test_init_sets_attributes(self, MockAssetProducer):
         """ Test correct inital attributes """
-        asset = AssetUNS('test_uns_001', ksqlClient=MagicMock(), bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=MagicMock(),
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         self.assertEqual(asset.KSQL_ASSET_TABLE, 'assets_uns')
         self.assertEqual(asset.KSQL_ASSET_ID, 'uns_id')
         self.assertEqual(asset.ASSET_CONSUMER_CLASS, KafkaAssetUNSConsumer)
@@ -29,7 +30,8 @@ class TestAssetUNS(unittest.TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.return_value = mock_result
 
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset.asset_uuid
 
         expected_query = (
@@ -42,7 +44,8 @@ class TestAssetUNS(unittest.TestCase):
         """ Test asset_uuid is None when no mapping """
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.return_value = []
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
 
         result = asset.asset_uuid
         self.assertIsNone(result)
@@ -54,7 +57,8 @@ class TestAssetUNS(unittest.TestCase):
             [{'VALUE': 'ref_001, ref_002'}]  # references query
         ]
 
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('above')
 
         self.assertEqual(result, ['ref_001', 'ref_002'])
@@ -67,7 +71,8 @@ class TestAssetUNS(unittest.TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.side_effect = [mock_map, []]
 
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('below')
         self.assertEqual(result, [])
 
@@ -77,7 +82,8 @@ class TestAssetUNS(unittest.TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.side_effect = [mock_map, [{'VALUE': '   '}]]
 
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('above')
         self.assertEqual(result, [])
 
@@ -92,7 +98,8 @@ class TestAssetUNS(unittest.TestCase):
         mock_asset_2 = MagicMock()
         MockAssetUNS.side_effect = [mock_asset_1, mock_asset_2]
 
-        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = AssetUNS('test_uns_001', ksqlClient=mock_ksqlClient,
+                         bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('below', as_assets=True)
 
         self.assertEqual(result, [mock_asset_1, mock_asset_2])

@@ -4,6 +4,7 @@ import signal
 import os
 import json
 from datetime import datetime
+from openfactory.exceptions import OFAException
 from openfactory.apps import OpenFactoryApp
 from openfactory.assets import AssetAttribute
 from openfactory.filelayer.backend import FileBackend
@@ -49,7 +50,8 @@ class TestOpenFactoryApp(unittest.TestCase):
             'APPLICATION_VERSION': '1.0.0',
             'APPLICATION_MANUFACTURER': 'TestFactory',
             'APPLICATION_LICENSE': 'MIT',
-            'APP_UUID': 'env-uuid'
+            'APP_UUID': 'env-uuid',
+            'ASSET_ROUTER_URL': 'http://mocked.router.test'
         }, clear=True):
             import importlib
             import openfactory.apps.ofaapp as openfactoryapp
@@ -64,15 +66,31 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(app.APPLICATION_MANUFACTURER, 'TestFactory')
                 self.assertEqual(app.APPLICATION_LICENSE, 'MIT')
                 self.assertEqual(app.asset_uuid, 'env-uuid')
+                self.assertEqual(app.asset_router_url, 'http://mocked.router.test')
 
-    def test_initialization_with_defaults(self):
-        """ Test initialization with no external environment variables set """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+    def test_missing_asset_router_url_raises(self):
+        """ Initialization should fail if ASSET_ROUTER_URL is missing """
 
-        self.assertEqual(app.APPLICATION_VERSION, 'latest')
-        self.assertEqual(app.APPLICATION_MANUFACTURER, 'OpenFactory')
-        self.assertEqual(app.APPLICATION_LICENSE, 'BSD-3-Clause license')
-        self.assertEqual(app.asset_uuid, 'DEV-UUID')
+        with patch.dict(os.environ, {
+            'APPLICATION_VERSION': '1.0.0',
+            'APPLICATION_MANUFACTURER': 'TestFactory',
+            'APPLICATION_LICENSE': 'MIT',
+            'APP_UUID': 'env-uuid'
+            # ASSET_ROUTER_URL intentionally missing
+        }, clear=True):
+
+            import importlib
+            import openfactory.apps.ofaapp as openfactoryapp
+            importlib.reload(openfactoryapp)
+            OpenFactoryApp = openfactoryapp.OpenFactoryApp
+
+            with self.assertRaises(OFAException) as ctx:
+                OpenFactoryApp(
+                    bootstrap_servers='mocked_broker',
+                    ksqlClient=self.ksql_mock
+                )
+
+            self.assertIn("ASSET_ROUTER_URL", str(ctx.exception))
 
     @patch("openfactory.apps.ofaapp.StorageBackendSchema")
     def test_storage_initialization(self, MockStorageSchema):
@@ -98,7 +116,8 @@ class TestOpenFactoryApp(unittest.TestCase):
         })
 
         with patch.dict("os.environ", {"STORAGE": storage_json}):
-            app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+            app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
+                                 ksqlClient=self.ksql_mock)
 
         # Assert StorageBackendSchema was called with parsed JSON
         MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json))
@@ -119,7 +138,8 @@ class TestOpenFactoryApp(unittest.TestCase):
             return original_add_attribute(self_obj, *args, **kwargs)
 
         with patch.object(OpenFactoryApp, 'add_attribute', new=spy_add_attribute):
-            OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+            OpenFactoryApp(ksqlClient=self.ksql_mock,
+                           bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
 
         # Check that the expected attribute_ids were added
         expected_ids = ['application_version', 'application_manufacturer', 'application_license']
@@ -152,6 +172,7 @@ class TestOpenFactoryApp(unittest.TestCase):
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock-bootstrap',
+            asset_router_url='mocked_asset_url',
             loglevel='DEBUG'
         )
 
@@ -165,7 +186,8 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_signal_sigint(self):
         """ Test signal SIGINT """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
+                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
         app.app_event_loop_stopped = MagicMock()
 
         with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
@@ -183,7 +205,8 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_signal_sigterm(self):
         """ Test signal SIGTERM """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
+                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
         app.app_event_loop_stopped = MagicMock()
 
         with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
@@ -201,13 +224,15 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_main_loop_not_implemented(self):
         """ Test call to main_loop raise NotImplementedError """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
+                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
         with self.assertRaises(NotImplementedError):
             app.main_loop()
 
     def test_run_invokes_main_loop(self):
         """ Test run method invokes main_loop """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
+                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
         app.main_loop = MagicMock()
         app.run()
         app.main_loop.assert_called_once()
@@ -216,7 +241,8 @@ class TestOpenFactoryApp(unittest.TestCase):
         """ Test handling of exception in main_loop """
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
-            bootstrap_servers='mock_bootstrap'
+            bootstrap_servers='mock_bootstrap',
+            asset_router_url='mocked_asset_url'
         )
         app.main_loop = MagicMock(side_effect=Exception("Boom"))
 
@@ -264,13 +290,15 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_main_loop_not_implemented(self):
         """ Verify async_main_loop raises NotImplementedError by default. """
-        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
+                             ksqlClient=self.ksql_mock)
         with self.assertRaises(NotImplementedError):
             await app.async_main_loop()
 
     async def test_async_run_calls_welcome_and_adds_avail(self):
         """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
-        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
+                             ksqlClient=self.ksql_mock)
 
         # Mock async_main_loop
         app.async_main_loop = AsyncMock()
@@ -297,7 +325,8 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
     async def test_async_run_handles_exception(self):
         """ Verify async_run handles exceptions from async_main_loop. """
-        app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
+        app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
+                             ksqlClient=self.ksql_mock)
 
         # Patch async_main_loop to raise an exception
         app.async_main_loop = AsyncMock(side_effect=Exception("Boom!"))

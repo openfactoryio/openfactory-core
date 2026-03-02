@@ -1,14 +1,14 @@
 import requests
-import openfactory.config as config
 from openfactory.exceptions import OFAConfigurationException
 
 
-def get_nats_cluster_url(asset_uuid: str) -> str:
+def get_nats_cluster_url(asset_uuid: str, asset_router_url: str) -> str:
     """
     Fetch the NATS URL for a given asset UUID.
 
     Args:
-        asset_uuid (str): The asset identifier (e.g., "toto").
+        asset_uuid (str): The asset UUID.
+        asset_router_url (str): Asset router URL.
 
     Returns:
         str: The nats_url of the asset.
@@ -17,12 +17,12 @@ def get_nats_cluster_url(asset_uuid: str) -> str:
         requests.exceptions.RequestException: If the HTTP request fails.
         ValueError: If the response is not valid JSON or nats_url is missing.
     """
-    url = f"{config.ASSET_ROUTER_URL}/asset/{asset_uuid}"
+    url = f"{asset_router_url}/asset/{asset_uuid}"
 
     try:
         response = requests.get(url)
     except Exception as e:
-        raise OFAConfigurationException(f'Could not connect to Asset Router. Is ASSET_ROUTER_URL={config.ASSET_ROUTER_URL} defined correctly?\n{e}')
+        raise OFAConfigurationException(f'Could not connect to Asset Router. Is ASSET_ROUTER_URL={asset_router_url} defined correctly?\n{e}')
     response.raise_for_status()
 
     data = response.json()

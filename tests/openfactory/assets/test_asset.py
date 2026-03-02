@@ -17,7 +17,8 @@ class TestAsset(TestCase):
 
     def test_init_sets_attributes(self, MockAssetProducer):
         """ Test correct inital attributes """
-        asset = Asset('test_uns_001', ksqlClient=MagicMock(), bootstrap_servers='mocked_broker')
+        asset = Asset('test_uns_001', ksqlClient=MagicMock(),
+                      bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         self.assertEqual(asset.KSQL_ASSET_TABLE, 'assets')
         self.assertEqual(asset.KSQL_ASSET_ID, 'asset_uuid')
         self.assertEqual(asset.ASSET_CONSUMER_CLASS, KafkaAssetConsumer)
@@ -25,7 +26,8 @@ class TestAsset(TestCase):
 
     def test_asset_uuid_returns_value(self, MockAssetProducer):
         """ Test asset_uuid returns correct value """
-        asset = Asset("uuid-123", ksqlClient=MagicMock(), bootstrap_servers="mock_broker")
+        asset = Asset("uuid-123", ksqlClient=MagicMock(),
+                      bootstrap_servers="mock_broker", asset_router_url='mocked_asset_url')
 
         # Ensure correct attributes
         self.assertEqual(asset.asset_uuid, "uuid-123")
@@ -35,7 +37,8 @@ class TestAsset(TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.return_value = [{"VALUE": "ref_001, ref_002"}]
 
-        asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = Asset('test_001', ksqlClient=mock_ksqlClient,
+                      bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('above')
 
         self.assertEqual(result, ['ref_001', 'ref_002'])
@@ -47,7 +50,8 @@ class TestAsset(TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.return_value = []
 
-        asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = Asset('test_001', ksqlClient=mock_ksqlClient,
+                      bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('below')
         self.assertEqual(result, [])
 
@@ -56,7 +60,8 @@ class TestAsset(TestCase):
         mock_ksqlClient = MagicMock()
         mock_ksqlClient.query.return_value = [{"VALUE": "   "}]
 
-        asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = Asset('test_001', ksqlClient=mock_ksqlClient,
+                      bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('above')
         self.assertEqual(result, [])
 
@@ -71,7 +76,8 @@ class TestAsset(TestCase):
         mock_asset_2 = MagicMock()
         MockAsset.side_effect = [mock_asset_1, mock_asset_2]
 
-        asset = Asset('test_001', ksqlClient=mock_ksqlClient, bootstrap_servers='mocked_broker')
+        asset = Asset('test_001', ksqlClient=mock_ksqlClient,
+                      bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url')
         result = asset._get_reference_list('below', as_assets=True)
 
         self.assertEqual(result, [mock_asset_1, mock_asset_2])

@@ -18,7 +18,7 @@ class OpenFactoryApp(Asset):
     """
     Generic OpenFactory application.
 
-    Inherits from :class:`openfactory.assets.Asset` and extends it to represent an OpenFactory application with standard metadata,
+    Inherits from :class:`openfactory.assets.asset_class.Asset` and extends it to represent an OpenFactory application with standard metadata,
     logging, and lifecycle management.
 
     Attributes:
@@ -62,7 +62,7 @@ class OpenFactoryApp(Asset):
             app.run()
 
     Note:
-      - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` are set and can be used.
+      - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL``, ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` are set and can be used.
       - The ``UUID`` of the App is set based on the OpenFactory configuration file of the App during the deployment process.
       - Subclasses must implement either :meth:`main_loop` (synchronous) or :meth:`async_main_loop` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
@@ -78,6 +78,7 @@ class OpenFactoryApp(Asset):
     def __init__(self,
                  ksqlClient: KSQLDBClient,
                  bootstrap_servers: str,
+                 asset_router_url: str | None = None,
                  loglevel: str = 'INFO'):
         """
         Initializes the OpenFactory application.
@@ -89,19 +90,22 @@ class OpenFactoryApp(Asset):
         Args:
             ksqlClient (KSQLDBClient): The KSQL client instance.
             bootstrap_servers (str): Kafka bootstrap servers URL.
-            loglevel (str): Logging level for the app (e.g., 'INFO', 'DEBUG'). Defaults to 'INFO'.
+            asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+            loglevel (str): Logging level for the app (e.g., ``INFO``, ``DEBUG``). Defaults to ``INFO``.
 
         Note:
+            - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
             - Configures logging with the application UUID as prefix.
             - Mounts a storage backend if the ``STORAGE`` environment variable is set.
             - Registers signal handlers for ``SIGINT`` and ``SIGTERM``.
 
         .. tip::
-           The environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` will be set when deployed on the OpenFactory Cluster.
+           The environment variables ``KSQLDB_URL``, ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set when deployed on the OpenFactory Cluster.
         """
         # get APP-UUID from environment (set during deployement by ofa deployment tool)
         app_uuid = os.getenv('APP_UUID', 'DEV-UUID')
-        super().__init__(asset_uuid=app_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
+        super().__init__(asset_uuid=app_uuid, ksqlClient=ksqlClient,
+                         bootstrap_servers=bootstrap_servers, asset_router_url=asset_router_url)
 
         # setup logging
         self.logger = configure_prefixed_logger(

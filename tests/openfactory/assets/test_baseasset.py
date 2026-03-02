@@ -14,9 +14,9 @@ class ValidAsset(BaseAsset):
     KSQL_ASSET_ID = "asset_uuid"
     ASSET_CONSUMER_CLASS = KafkaAssetConsumer
 
-    def __init__(self, asset_id, ksqlClient, bootstrap_servers='MockedBroker'):
+    def __init__(self, asset_id, ksqlClient, bootstrap_servers='MockedBroker', asset_router_url='Mocked_Asset_URL'):
         object.__setattr__(self, 'ASSET_ID', asset_id)
-        super().__init__(ksqlClient, bootstrap_servers)
+        super().__init__(ksqlClient, bootstrap_servers, asset_router_url)
 
     @property
     def asset_uuid(self):
@@ -63,6 +63,31 @@ class TestBaseAsset(TestCase):
         )
         # Confirm the asset is using the mock instance
         self.assertEqual(asset.producer, MockAssetProducer.return_value)
+
+    def test_asset_router_url_explicit(self, MockAssetProducer):
+        """ Test explicite definition of asset_router_url """
+        asset = ValidAsset(
+            "some_id",
+            self.ksql_mock,
+            asset_router_url="http://explicit-router"
+        )
+
+        self.assertEqual(asset.asset_router_url, "http://explicit-router")
+
+    @patch.dict("os.environ", {"ASSET_ROUTER_URL": "http://env-router"})
+    def test_asset_router_url_from_env(self, MockAssetProducer):
+        """ Test environment variable fallback for asset_router_url """
+        asset = ValidAsset("some_id", self.ksql_mock, asset_router_url=None)
+
+        self.assertEqual(asset.asset_router_url, "http://env-router")
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_asset_router_url_missing_raises(self, MockAssetProducer):
+        """ Test missing asset_router_url and missing ASSET_ROUTER_URL env var raises """
+        with self.assertRaises(OFAException) as ctx:
+            ValidAsset("some_id", self.ksql_mock, asset_router_url=None)
+
+        self.assertIn("ASSET_ROUTER_URL", str(ctx.exception))
 
     def test_missing_ksql_asset_table(self, MockAssetProducer):
         """ Test missing KSQL_ASSET_TABLE raise error """

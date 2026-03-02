@@ -1,6 +1,7 @@
 """ OpenFactory Assets Base class. """
 
 from __future__ import annotations
+import os
 import json
 import re
 import time
@@ -21,22 +22,23 @@ class BaseAsset:
 
     Warning:
         This is an abstract class not intented to be used.
-        From this class, two classes are derived (:class:`Asset <openfactory.assets.Asset>`
-        and :class:`AssetUNS <openfactory.assets.AssetUNS>`) for actual usage.
+        From this class, two classes are derived (:class:`Asset <openfactory.assets.asset_class.Asset>`
+        and :class:`AssetUNS <openfactory.assets.asset_uns_class.AssetUNS>`) for actual usage.
 
     It can interact with the Kafka topic of the OpenFactory assets or the ksqlDB streams
     and state tables.
 
     Note:
-        - All write operations to the asset take place in the `assets` stream.
-        - NATS subscribers allow filtering messages by TYPE ('Samples', 'Events', 'Condition').
+        - All write operations to the asset take place in the ``assets`` stream.
+        - NATS subscribers allow filtering messages by TYPE (``Samples``, ``Events``, ``Condition``).
 
     Attributes:
-        KSQL_ASSET_TABLE (str): Name of ksqlDB table of asset states (`assets` or `assets_uns`).
-        KSQL_ASSET_ID (str): ksqlDB ID used to identify the asset (`asset_uuid` or `uns_id`) in the KSQL_ASSET_TABLE.
-        ASSET_ID (str): Value of the identifier of the asset (asset_uuid or uns_id) used in the KSQL_ASSET_TABLE.
+        KSQL_ASSET_TABLE (str): Name of ksqlDB table of asset states (``assets`` or ``assets_uns``).
+        KSQL_ASSET_ID (str): ksqlDB ID used to identify the asset (``asset_uuid`` or ``uns_id``) in the ``KSQL_ASSET_TABLE``.
+        ASSET_ID (str): Value of the identifier of the asset (``asset_uuid`` or ``uns_id``) used in the ``KSQL_ASSET_TABLE``.
         ksql (KSQLDBClient): Client for interacting with ksqlDB.
         bootstrap_servers (str): Kafka bootstrap server address.
+        asset_router_url (str): Asset Router URL from the OpenFactory Fan-Out-Layer.
         ASSET_CONSUMER_CLASS (KafkaAssetConsumer|KafkaAssetUNSConsumer): Kafka consumer class for reading messages from asset stream.
         producer (AssetProducer): Shared Kafka producer instance used to publish asset messages (singleton across all BaseAsset subclasses).
         loop_thread (AsyncLoopThread): Async event loop thread used for NATS subscriptions.
@@ -50,13 +52,27 @@ class BaseAsset:
     ASSET_ID = None
     ASSET_CONSUMER_CLASS = None
 
-    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str) -> None:
+    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str, asset_router_url: str | None = None) -> None:
         """
         Initializes the Asset with metadata.
 
         Args:
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
             bootstrap_servers (str): Kafka bootstrap server address.
+            asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+
+        Raises:
+            ValueError: If any of the class-level attributes
+                (``KSQL_ASSET_TABLE``, ``KSQL_ASSET_ID``, ``ASSET_ID``, ``ASSET_CONSUMER_CLASS``)
+                are missing or invalid.
+            TypeError: If ``ASSET_CONSUMER_CLASS`` is not a subclass of
+                ``KafkaAssetConsumer`` or ``KafkaAssetUNSConsumer``.
+            OFAException: If ``asset_router_url`` is not provided and the
+                ``ASSET_ROUTER_URL`` environment variable is not set.
+
+        Note:
+          - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
+          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variable ``ASSET_ROUTER_URL`` will be set.
         """
         if not hasattr(self, 'KSQL_ASSET_TABLE') or self.KSQL_ASSET_TABLE is None:
             raise ValueError("KSQL_ASSET_TABLE must be set before initializing the Asset.")
@@ -73,6 +89,15 @@ class BaseAsset:
         super().__setattr__('bootstrap_servers', bootstrap_servers)
         super().__setattr__('loop_thread', AsyncLoopThread())
         super().__setattr__('subscribers', {})
+
+        if asset_router_url is None:
+            asset_router_url = os.getenv("ASSET_ROUTER_URL")
+        if not asset_router_url:
+            raise OFAException(
+                "OpenFactory Asset requires 'asset_router_url' to be provided "
+                "either explicitly or via the ASSET_ROUTER_URL environment variable."
+            )
+        super().__setattr__('asset_router_url', asset_router_url)
 
         # Initialize the shared producer once
         if BaseAsset._shared_producer is None:
@@ -625,7 +650,10 @@ class BaseAsset:
         """
         Starts a NATS subscriber and stores it in self.subscribers with a unique key.
         """
-        sub = NATSSubscriber(self.loop_thread, get_nats_cluster_url(self.asset_uuid), subject, on_message)
+        sub = NATSSubscriber(
+            self.loop_thread,
+            get_nats_cluster_url(self.asset_uuid, self.asset_router_url),
+            subject, on_message)
         sub.start()
         self.subscribers[sub_key] = sub
 

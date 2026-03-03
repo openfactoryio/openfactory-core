@@ -47,6 +47,13 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.manager.bootstrap_servers = "mocked_bootstrap_servers"
         self.manager.deployment_strategy = MagicMock()
 
+        self.asset_url_patcher = patch(
+            "openfactory.openfactory.config.ASSET_ROUTER_URL",
+            "http://mocked-asset-router"
+        )
+        self.asset_url_patcher.start()
+        self.addCleanup(self.asset_url_patcher.stop)
+
     @patch("openfactory.openfactory_manager.load_plugin")
     @patch("openfactory.openfactory_manager.config")
     def test_init_success(self, mock_config, mock_load_plugin):

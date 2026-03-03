@@ -1,6 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 from openfactory import OpenFactory
+from openfactory.exceptions import OFAException
 
 
 class TestOpenFactory(TestCase):
@@ -16,10 +17,47 @@ class TestOpenFactory(TestCase):
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
+        self.asset_url_patcher = patch(
+            "openfactory.openfactory.config.ASSET_ROUTER_URL",
+            "http://mocked-asset-router"
+        )
+        self.asset_url_patcher.start()
+        self.addCleanup(self.asset_url_patcher.stop)
+
     def test_init_success(self):
         """ Test OpenFactory initialization when KSQL connection succeeds """
         ofa = OpenFactory(ksqlClient=self.ksql_mock, bootstrap_servers="MockedBroker")
         self.assertEqual(ofa.ksql, self.ksql_mock)
+
+    def test_init_with_explicit_asset_url(self):
+        """ Test OpenFactory initialization with explicit asset_url """
+        ofa = OpenFactory(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="MockedBroker",
+            asset_url="http://explicit-url"
+        )
+        self.assertEqual(ofa.asset_url, "http://explicit-url")
+
+    @patch("openfactory.openfactory.config.ASSET_ROUTER_URL", "http://from-config")
+    def test_init_uses_config_when_asset_url_none(self):
+        """ Test __init__ uses config when asset_url=None"""
+        ofa = OpenFactory(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="MockedBroker",
+            asset_url=None
+        )
+
+        self.assertEqual(ofa.asset_url, "http://from-config")
+
+    @patch("openfactory.openfactory.config.ASSET_ROUTER_URL", None)
+    def test_init_raises_when_no_asset_url_available(self):
+        """ Test __init__ raises when no asset_url is available """
+        with self.assertRaises(OFAException):
+            OpenFactory(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="MockedBroker",
+                asset_url=None
+            )
 
     def test_assets_uuid(self):
         """ Test assets_uuid() """
@@ -57,15 +95,15 @@ class TestOpenFactory(TestCase):
         mock_asset_instances = [MagicMock(), MagicMock()]
         MockAsset.side_effect = mock_asset_instances
 
-        ofa = OpenFactory(ksqlClient=self.ksql_mock, bootstrap_servers="MockedBroker")
+        ofa = OpenFactory(ksqlClient=self.ksql_mock, bootstrap_servers="MockedBroker", asset_url="mocked_url")
         ofa.assets_uuid = MagicMock()
         ofa.assets_uuid.return_value = ["asset-001", "asset-002"]
 
         result = ofa.assets()
 
         # Assert that Asset was called with the correct arguments
-        MockAsset.assert_any_call("asset-001", self.ksql_mock, "MockedBroker")
-        MockAsset.assert_any_call("asset-002", self.ksql_mock, "MockedBroker")
+        MockAsset.assert_any_call("asset-001", self.ksql_mock, "MockedBroker", "mocked_url")
+        MockAsset.assert_any_call("asset-002", self.ksql_mock, "MockedBroker", "mocked_url")
 
         # Assert that the return value matches the mock objects
         self.assertEqual(result, mock_asset_instances)

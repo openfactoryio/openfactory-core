@@ -2,6 +2,7 @@
 
 import json
 import nats
+import traceback
 from typing import Protocol
 from .async_loop import AsyncLoopThread
 
@@ -75,6 +76,7 @@ class NATSSubscriber:
 
         async def error_handler(e):
             print("NATS client error:", e)
+            traceback.print_exception(type(e), e, e.__traceback__)
 
         async def disconnected_cb():
             if not self._closing:

@@ -49,14 +49,18 @@ class OpenFactory:
     and their classification by type (devices, agents, etc.).
     """
 
-    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str = config.KAFKA_BROKER,
+    def __init__(self, ksqlClient: KSQLDBClient,
+                 bootstrap_servers: str | None = None,
                  asset_url: str | None = None):
         """
         Initialize the OpenFactory API.
 
         Args:
             ksqlClient (KSQLDBClient): A client capable of executing KSQL queries.
-            bootstrap_servers (str): Kafka bootstrap server address. Defaults to ``openfactory.config.KAFKA_BROKER``.
+            bootstrap_servers (str | None):
+                Kafka bootstrap server address.
+                If not provided, the value from
+                ``openfactory.config.KAFKA_BROKER`` is used.
             asset_url (str | None):
                 URL of the Asset Router.
                 If not provided, the value from
@@ -67,13 +71,14 @@ class OpenFactory:
                 If no Asset Router URL is available (neither explicitly provided nor configured via ``.ofaenv``).
         """
         self.asset_url = asset_url if asset_url is not None else config.ASSET_ROUTER_URL
+        self.bootstrap_servers = bootstrap_servers if bootstrap_servers is not None else config.KAFKA_BROKER
+
         if self.asset_url is None:
             raise OFAException(
                 "OpenFactory requires 'asset_router_url' to be provided "
                 "either explicitly or via the '.ofaenv' file"
             )
 
-        self.bootstrap_servers = bootstrap_servers
         self.ksql = ksqlClient
 
     def assets_uuid(self) -> List[str]:

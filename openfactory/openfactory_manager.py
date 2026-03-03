@@ -71,18 +71,27 @@ class OpenFactoryManager(OpenFactory):
     """
 
     def __init__(self, ksqlClient: KSQLDBClient,
-                 bootstrap_servers: str = config.KAFKA_BROKER):
+                 bootstrap_servers: str = config.KAFKA_BROKER,
+                 asset_url: str | None = None):
         """
         Initializes the OpenFactoryManager.
 
         Args:
             ksqlClient (KSQLDBClient): The client for interacting with ksqlDB.
             bootstrap_servers (str): The Kafka bootstrap server address. Defaults to config.KAFKA_BROKER.
+            asset_url (str | None):
+                URL of the Asset Router.
+                If not provided, the value from
+                ``openfactory.config.ASSET_ROUTER_URL`` is used.
+
+        Raises:
+            OFAException:
+                If no Asset Router URL is available (neither explicitly provided nor configured via ``.ofaenv``).
 
         Note:
-            The deployment strategy to use (e.g., swarm or docker) is selected based on `config.DEPLOYMENT_PLATFORM`
+            The deployment strategy to use (e.g., swarm or docker) is selected based on ``config.DEPLOYMENT_PLATFORM``
         """
-        super().__init__(ksqlClient, bootstrap_servers)
+        super().__init__(ksqlClient, bootstrap_servers, asset_url)
 
         platform_cls = load_plugin("openfactory.deployment_platforms", config.DEPLOYMENT_PLATFORM)
         if not issubclass(platform_cls, OpenFactoryServiceDeploymentStrategy):

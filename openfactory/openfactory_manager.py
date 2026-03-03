@@ -71,14 +71,17 @@ class OpenFactoryManager(OpenFactory):
     """
 
     def __init__(self, ksqlClient: KSQLDBClient,
-                 bootstrap_servers: str = config.KAFKA_BROKER,
+                 bootstrap_servers: str | None = None,
                  asset_url: str | None = None):
         """
         Initializes the OpenFactoryManager.
 
         Args:
             ksqlClient (KSQLDBClient): The client for interacting with ksqlDB.
-            bootstrap_servers (str): The Kafka bootstrap server address. Defaults to config.KAFKA_BROKER.
+            bootstrap_servers (str | None):
+                Kafka bootstrap server address.
+                If not provided, the value from
+                ``openfactory.config.KAFKA_BROKER`` is used.
             asset_url (str | None):
                 URL of the Asset Router.
                 If not provided, the value from

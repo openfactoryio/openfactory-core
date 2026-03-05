@@ -19,18 +19,55 @@ Output:
 """
 import xml.etree.ElementTree as ET
 
+# Parse coverage.xml
 tree = ET.parse("coverage.xml")
 root = tree.getroot()
 coverage_percent = float(root.attrib.get("line-rate", 0)) * 100
 
+# Badge settings
+label = "Test coverage"
+value = f"{int(coverage_percent)}%"
 color = "#4c1" if coverage_percent >= 90 else "#dfb317" if coverage_percent >= 70 else "#e05d44"
 
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20">
-  <rect width="90" height="20" fill="#555"/>
-  <rect x="90" width="50" height="20" fill="{color}"/>
-  <text x="45" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">Test coverage</text>
-  <text x="115" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">{int(coverage_percent)}%</text>
-</svg>'''
+# Dimensions
+label_width = max(60, len(label)*7)   # adjust width dynamically
+value_width = max(35, len(value)*7)
+height = 20
+total_width = label_width + value_width
+radius = 3
 
+# Left rectangle: round only top-left and bottom-left
+left_path = f'''
+  <path d="
+    M0,{radius} 
+    a{radius},{radius} 0 0 1 {radius},-{radius} 
+    h{label_width - radius} 
+    v{height} 
+    h-{label_width - radius} 
+    a{radius},{radius} 0 0 1 -{radius},-{radius} 
+    z" fill="#555"/>
+'''
+
+# Right rectangle: round only top-right and bottom-right
+right_path = f'''
+  <path d="
+    M{label_width},0
+    h{value_width - radius} 
+    a{radius},{radius} 0 0 1 {radius},{radius} 
+    v{height - 2*radius} 
+    a{radius},{radius} 0 0 1 -{radius},{radius} 
+    h-{value_width - radius} 
+    z" fill="{color}"/>
+'''
+
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="{height}">
+  {left_path}
+  {right_path}
+  <text x="{label_width/2}" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">{label}</text>
+  <text x="{label_width + value_width/2}" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">{value}</text>
+</svg>
+'''
+
+# Save
 with open("tests/coverage.svg", "w") as f:
     f.write(svg)

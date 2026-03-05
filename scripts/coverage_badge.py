@@ -25,11 +25,11 @@ coverage_percent = float(root.attrib.get("line-rate", 0)) * 100
 
 color = "#4c1" if coverage_percent >= 90 else "#dfb317" if coverage_percent >= 70 else "#e05d44"
 
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="120" height="20">
-  <rect width="70" height="20" fill="#555"/>
-  <rect x="70" width="50" height="20" fill="{color}"/>
-  <text x="35" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">coverage</text>
-  <text x="95" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">{int(coverage_percent)}%</text>
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20">
+  <rect width="90" height="20" fill="#555"/>
+  <rect x="90" width="50" height="20" fill="{color}"/>
+  <text x="45" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">Test coverage</text>
+  <text x="115" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">{int(coverage_percent)}%</text>
 </svg>'''
 
 with open("tests/coverage.svg", "w") as f:

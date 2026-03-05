@@ -5,3 +5,4 @@ OpenFactory Apps
    :maxdepth: 2
 
    ofa_app
+   ofa_method

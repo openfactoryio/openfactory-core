@@ -1,5 +1,7 @@
 import unittest
+import json
 from unittest.mock import patch, MagicMock
+from typing import Annotated
 from datetime import datetime, timezone
 from uuid import uuid4
 from openfactory.apps import OpenFactoryApp, ofa_method
@@ -24,6 +26,11 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
         self.subscribe_patch = patch.object(OpenFactoryApp, 'subscribe_to_attribute')
         self.mock_subscribe = self.subscribe_patch.start()
         self.addCleanup(self.subscribe_patch.stop)
+
+        # Patch add_attribute
+        self.add_attribute_patch = patch.object(OpenFactoryApp, "add_attribute")
+        self.mock_add_attribute = self.add_attribute_patch.start()
+        self.addCleanup(self.add_attribute_patch.stop)
 
         # Patch logger
         self.logger_patch = patch('openfactory.apps.ofaapp.configure_prefixed_logger', return_value=MagicMock())
@@ -148,3 +155,98 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
             app._execute_ofa_method(app.move_axis, envelope)
 
         self.assertIn("Missing required argument 'y'", str(ctx.exception))
+
+    def test_cmd_attribute_created(self):
+        """ Verify CMD attribute is added for decorated methods. """
+
+        class MyApp(OpenFactoryApp):
+
+            @ofa_method()
+            def move_axis(self, x: float, y: float):
+                return x + y
+
+        MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        calls = self.mock_add_attribute.call_args_list
+
+        cmd_found = False
+        for c in calls:
+            attr = c.kwargs["asset_attribute"]
+            if attr.id == "move_axis_CMD":
+                cmd_found = True
+
+        self.assertTrue(cmd_found)
+
+    def test_register_ofa_method_creates_contract(self):
+        """ Verify that method contract is correctly generated. """
+
+        class MyApp(OpenFactoryApp):
+
+            @ofa_method(param_description={"x": "X coord", "y": "Y coord"})
+            def move_axis(self, x: float, y: float):
+                """Move axis"""
+                return x + y
+
+        MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        # capture add_attribute calls
+        calls = self.mock_add_attribute.call_args_list
+
+        # Find the method attribute
+        method_attr = None
+        for c in calls:
+            attr = c.kwargs["asset_attribute"]
+            if attr.id == "move_axis":
+                method_attr = attr
+                break
+
+        self.assertIsNotNone(method_attr)
+
+        contract = json.loads(method_attr.value)
+        self.assertEqual(contract["description"], "Move axis")
+        args = {a["name"]: a for a in contract["arguments"]}
+        self.assertEqual(args["x"]["description"], "X coord")
+        self.assertEqual(args["y"]["description"], "Y coord")
+
+    def test_annotated_param_description_propagates_to_contract(self):
+        """ Verify Annotated descriptions appear in method contract. """
+
+        class MyApp(OpenFactoryApp):
+
+            @ofa_method()
+            def move_axis(
+                self,
+                x: Annotated[float, "X coord"],
+                y: Annotated[float, "Y coord"]
+            ):
+                return x + y
+
+        MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        calls = self.mock_add_attribute.call_args_list
+
+        method_attr = None
+        for c in calls:
+            attr = c.kwargs["asset_attribute"]
+            if attr.id == "move_axis":
+                method_attr = attr
+                break
+
+        contract = json.loads(method_attr.value)
+
+        args = {a["name"]: a for a in contract["arguments"]}
+
+        self.assertEqual(args["x"]["description"], "X coord")
+        self.assertEqual(args["y"]["description"], "Y coord")

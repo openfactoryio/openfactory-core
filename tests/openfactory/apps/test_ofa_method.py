@@ -1,4 +1,5 @@
 import unittest
+from typing import Annotated
 from openfactory.apps import ofa_method
 
 
@@ -55,7 +56,31 @@ class TestOFAMethodDecorator(unittest.TestCase):
                 pass
 
         metadata = Dummy.move._ofa_method_metadata
-        self.assertEqual(metadata["docstring"], "Move axis to position x.")
+        self.assertEqual(metadata["description"], "Move axis to position x.")
+
+    def test_description_is_used(self):
+        """ Description should be stored in metadata. """
+
+        class Dummy:
+            @ofa_method(description="This should be used.")
+            def move(self, x: float):
+                """Some other doc not to be used."""
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["description"], "This should be used.")
+
+    def test_requires_at_least_self_parameter(self):
+        """ Decorator should reject functions with no parameters at all. """
+
+        with self.assertRaises(TypeError) as ctx:
+
+            class Dummy:
+                @ofa_method()
+                def move():  # no parameters at all
+                    pass
+
+        self.assertIn("has no parameters", str(ctx.exception))
 
     def test_requires_self_as_first_parameter(self):
         """ Decorator should reject functions without self. """
@@ -125,3 +150,81 @@ class TestOFAMethodDecorator(unittest.TestCase):
         self.assertIsNone(metadata["parameters"]["y"]["annotation"])
         self.assertEqual(metadata["parameters"]["y"]["default"], 5)
         self.assertFalse(metadata["parameters"]["y"]["required"])
+
+    def test_param_description_dict(self):
+        """ Should use descriptions provided in param_description dict. """
+
+        class Dummy:
+            @ofa_method(param_description={"x": "X coord", "y": "Y coord"})
+            def move(self, x: float, y: float):
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["parameters"]["x"]["description"], "X coord")
+        self.assertEqual(metadata["parameters"]["y"]["description"], "Y coord")
+
+    def test_param_description_annotated(self):
+        """ Should extract parameter descriptions from Annotated types. """
+
+        class Dummy:
+            @ofa_method()
+            def move(
+                self,
+                x: Annotated[float, "X coord"],
+                y: Annotated[float, "Y coord"]
+            ):
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["parameters"]["x"]["description"], "X coord")
+        self.assertEqual(metadata["parameters"]["y"]["description"], "Y coord")
+
+    def test_param_description_dict_takes_precedence_over_annotated(self):
+        """ param_description dict should override Annotated description. """
+
+        class Dummy:
+            @ofa_method(param_description={"x": "Override X"})
+            def move(
+                self,
+                x: Annotated[float, "X coord"],
+                y: Annotated[float, "Y coord"]
+            ):
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["parameters"]["x"]["description"], "Override X")
+        self.assertEqual(metadata["parameters"]["y"]["description"], "Y coord")
+
+    def test_trailing_whitespace_stripped_from_param_description(self):
+        """ Leading/trailing spaces in param_description should be stripped. """
+
+        class Dummy:
+            @ofa_method(param_description={"x": "  X coord  "})
+            def move(self, x: float):
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["parameters"]["x"]["description"], "X coord")
+
+    def test_trailing_whitespace_stripped_from_docstring(self):
+        """ Leading/trailing spaces in docstring should be stripped. """
+
+        class Dummy:
+            @ofa_method()
+            def move(self, x: float):
+                """   Move axis   """
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["description"], "Move axis")
+
+    def test_description_argument_whitespace_stripped(self):
+        """ Leading/trailing spaces in decorator `description` argument should be stripped. """
+
+        class Dummy:
+            @ofa_method(description="  Some spaces to remove.  ")
+            def move(self, x: float):
+                pass
+
+        metadata = Dummy.move._ofa_method_metadata
+        self.assertEqual(metadata["description"], "Some spaces to remove.")

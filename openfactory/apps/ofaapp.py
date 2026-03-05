@@ -193,8 +193,6 @@ class OpenFactoryApp(Asset):
                             )
                     return on_cmd
 
-                self.subscribe_to_attribute(cmd_attribute, make_callback(method))
-
                 # Register command as asset attributes
                 self._register_ofa_method(method)
                 self.add_attribute(
@@ -206,6 +204,8 @@ class OpenFactoryApp(Asset):
                     )
                 )
 
+                self.subscribe_to_attribute(cmd_attribute, make_callback(method))
+
     def _register_ofa_method(self, method) -> None:
         """
         Register an OpenFactory method as a command attribute.
@@ -216,20 +216,22 @@ class OpenFactoryApp(Asset):
         Args:
             method: Bound method decorated with @ofa_method.
         """
-
         metadata = getattr(method, "_ofa_method_metadata", None)
         if metadata is None:
             raise ValueError("Method is not decorated with @ofa_method")
 
+        self.logger.info(f"Register OpenFactory method '{metadata['method_name']}'")
         method_contract = {
             "description": metadata.get("description", "") or "",
             "arguments": []
         }
 
         for param_name, param_meta in metadata["parameters"].items():
+            desc = param_meta.get("description", "") or ""
+            self.logger.info(f"  {param_name}: {desc}")
             method_contract["arguments"].append({
                 "name": param_name,
-                "description": param_meta.get("description", "") or ""
+                "description": desc
             })
 
         self.add_attribute(

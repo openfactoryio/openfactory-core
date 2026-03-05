@@ -16,3 +16,7 @@ jobs:
   unit-tests:
     name: Run Unit Tests
     uses: ./.github/workflows/unittests.yml
+
+  test-coverage:
+    name: Run test coverage calculation
+    uses: ./.github/workflows/test_coverage.yml

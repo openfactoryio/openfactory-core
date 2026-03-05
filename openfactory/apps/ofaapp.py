@@ -40,7 +40,7 @@ class OpenFactoryApp(Asset):
             from openfactory.kafka import KSQLDBClient
 
             class DemoApp(OpenFactoryApp):
-            
+
                 @ofa_method()
                 def move_axis(self, x: float, y: float, speed: int = 100):
                     # This method is callable over OpenFactory due to the @ofa_method decorator

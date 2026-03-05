@@ -4,6 +4,7 @@ import os
 import signal
 import time
 import json
+import inspect
 from types import FrameType
 from typing import Optional
 from openfactory.kafka import KSQLDBClient
@@ -11,6 +12,7 @@ from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
 from openfactory.setup_logging import configure_prefixed_logger
 from openfactory.schemas.filelayer.storage import StorageBackendSchema
+from openfactory.schemas.command_header import CommandEnvelope
 from openfactory.filelayer.backend import FileBackend
 
 
@@ -34,10 +36,15 @@ class OpenFactoryApp(Asset):
 
             import time
             import os
-            from openfactory.apps import OpenFactoryApp
+            from openfactory.apps import OpenFactoryApp, ofa_method
             from openfactory.kafka import KSQLDBClient
 
             class DemoApp(OpenFactoryApp):
+            
+                @ofa_method()
+                def move_axis(self, x: float, y: float, speed: int = 100):
+                    # This method is callable over OpenFactory due to the @ofa_method decorator
+                    self.logger.info(f"Moving axis to x={x}, y={y} at speed={speed}")
 
                 def main_loop(self):
                     # For actual use case, add here your logic of the app
@@ -85,7 +92,8 @@ class OpenFactoryApp(Asset):
 
         Sets up the application UUID, storage backend (if configured), standard
         attributes (version, manufacturer, license), a prefixed logger, and
-        termination signal handlers.
+        termination signal handlers, and automatically registers all methods decorated with
+        `@ofa_method <ofa_method.html>`_ decorator.
 
         Args:
             ksqlClient (KSQLDBClient): The KSQL client instance.
@@ -123,6 +131,9 @@ class OpenFactoryApp(Asset):
             self.logger.debug(f"Adding storage of type {self.storage.config.type}")
             self.logger.debug(json.dumps(self.storage.get_mount_spec(), indent=2))
 
+        # attach decorated methods
+        self._subscribe_ofa_methods()
+
         # attributes of the application
         self.add_attribute(
             asset_attribute=AssetAttribute(
@@ -152,6 +163,65 @@ class OpenFactoryApp(Asset):
         # setup signal handlers
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+
+    def _subscribe_ofa_methods(self):
+        """ Scan decorated methods and subscribe to their CMD attributes. """
+        # Iterate over class attributes
+        for attr_name, attr in type(self).__dict__.items():
+            if hasattr(attr, "_ofa_method_metadata") and inspect.isfunction(attr):
+                # attr is the original function (safe to access __name__)
+                method = getattr(self, attr_name)       # bind to self for execution
+                cmd_attribute = f"{attr.__name__}_CMD"  # use unbound function's __name__
+
+                # Build callback closure
+                def make_callback(meth):
+                    def on_cmd(msg_key, msg_value):
+                        try:
+                            envelope = CommandEnvelope.model_validate_json(msg_value['VALUE'])
+                            # execute method with envelope arguments
+                            self._execute_ofa_method(meth, envelope)
+                        except Exception as e:
+                            self.logger.error(
+                                f"[{self.asset_uuid}] Failed to execute {meth.__name__}: {e}"
+                            )
+                    return on_cmd
+
+                self.subscribe_to_attribute(cmd_attribute, make_callback(method))
+
+    def _execute_ofa_method(self, method, envelope: CommandEnvelope):
+        """
+        Execute a decorated OpenFactory method with arguments from CommandEnvelope.
+
+        Args:
+            method: the decorated method to call (bound method)
+            envelope: CommandEnvelope instance containing command arguments
+        """
+        metadata = getattr(method, "_ofa_method_metadata")
+
+        # Build argument dict for method call
+        kwargs = {}
+        for param_name, param_meta in metadata["parameters"].items():
+            if param_name in envelope.arguments:
+                # Convert argument from string to the correct type
+                value_str = envelope.arguments[param_name]
+                param_type = param_meta["annotation"]
+                try:
+                    kwargs[param_name] = param_type(value_str)
+                except Exception as e:
+                    raise ValueError(
+                        f"Failed to convert argument '{param_name}'='{value_str}' "
+                        f"to type {param_type}: {e}"
+                    )
+            else:
+                # Parameter missing in envelope
+                if param_meta.get("required", True):
+                    raise ValueError(f"Missing required argument '{param_name}' for method {method.__name__}")
+                else:
+                    # Optional parameter: use default
+                    kwargs[param_name] = param_meta.get("default")
+
+        # Call the method on self
+        return method(**kwargs)
 
     def welcome_banner(self) -> None:
         """

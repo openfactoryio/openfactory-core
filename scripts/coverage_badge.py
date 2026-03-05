@@ -39,12 +39,12 @@ radius = 3
 # Left rectangle: round only top-left and bottom-left
 left_path = f'''
   <path d="
-    M0,{radius} 
-    a{radius},{radius} 0 0 1 {radius},-{radius} 
-    h{label_width - radius} 
-    v{height} 
-    h-{label_width - radius} 
-    a{radius},{radius} 0 0 1 -{radius},-{radius} 
+    M0,{radius}
+    a{radius},{radius} 0 0 1 {radius},-{radius}
+    h{label_width - radius}
+    v{height}
+    h-{label_width - radius}
+    a{radius},{radius} 0 0 1 -{radius},-{radius}
     z" fill="#555"/>
 '''
 
@@ -52,11 +52,11 @@ left_path = f'''
 right_path = f'''
   <path d="
     M{label_width},0
-    h{value_width - radius} 
-    a{radius},{radius} 0 0 1 {radius},{radius} 
-    v{height - 2*radius} 
-    a{radius},{radius} 0 0 1 -{radius},{radius} 
-    h-{value_width - radius} 
+    h{value_width - radius}
+    a{radius},{radius} 0 0 1 {radius},{radius}
+    v{height - 2*radius}
+    a{radius},{radius} 0 0 1 -{radius},{radius}
+    h-{value_width - radius}
     z" fill="{color}"/>
 '''
 

@@ -12,7 +12,7 @@ import openfactory.config as config
 @click.command(name='methods')
 @click.argument('asset_uuid', type=click.STRING)
 def click_methods(asset_uuid: str) -> None:
-    """ List all attributes from an asset. """
+    """ List all methods from an asset. """
 
     asset = Asset(asset_uuid,
                   ksqlClient=ksql.client,

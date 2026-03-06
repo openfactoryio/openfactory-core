@@ -76,6 +76,7 @@ asset.add_command(ofa.asset.register)
 asset.add_command(ofa.asset.deregister)
 asset.add_command(ofa.asset.click_ls)
 asset.add_command(ofa.asset.click_inspect)
+asset.add_command(ofa.asset.click_methods)
 
 templates.add_command(ofa.templates.ls)
 templates.add_command(ofa.templates.copy_templates)

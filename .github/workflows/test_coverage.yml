@@ -50,6 +50,6 @@ jobs:
         git add tests/coverage.svg
         # Only commit if there are changes
         git diff --cached --quiet || git commit -m "Update coverage badge"
-        git push
+        git push origin HEAD:${{ github.head_ref }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,4 +19,6 @@ jobs:
 
   test-coverage:
     name: Run test coverage calculation
+    permissions:
+      contents: write
     uses: ./.github/workflows/test_coverage.yml

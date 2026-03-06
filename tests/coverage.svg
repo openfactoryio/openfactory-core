@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="126" height="20">
   
   <path d="
-    M0,3 
-    a3,3 0 0 1 3,-3 
-    h88 
-    v20 
-    h-88 
-    a3,3 0 0 1 -3,-3 
+    M0,3
+    a3,3 0 0 1 3,-3
+    h88
+    v20
+    h-88
+    a3,3 0 0 1 -3,-3
     z" fill="#555"/>
 
   
   <path d="
     M91,0
-    h32 
-    a3,3 0 0 1 3,3 
-    v14 
-    a3,3 0 0 1 -3,3 
-    h-32 
+    h32
+    a3,3 0 0 1 3,3
+    v14
+    a3,3 0 0 1 -3,3
+    h-32
     z" fill="#dfb317"/>
 
   <text x="45.5" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">Test coverage</text>

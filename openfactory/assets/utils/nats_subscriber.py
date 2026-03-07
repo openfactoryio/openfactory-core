@@ -121,7 +121,7 @@ class NATSSubscriber:
                 try:
                     await self.sub.unsubscribe()
                 except Exception as e:
-                    print(f"Warning: unsub error: {e}")
+                    print(f"Warning: unsubscribe error: {e}")
             if self.nc:
                 try:
                     await self.nc.close()

@@ -156,6 +156,94 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
 
         self.assertIn("Missing required argument 'y'", str(ctx.exception))
 
+    def test_execute_ofa_method_bool_conversion(self):
+        """ Test that _execute_ofa_method converts boolean arguments correctly """
+
+        class MyApp(OpenFactoryApp):
+            called_args = None
+
+            @ofa_method()
+            def toggle(self, enabled: bool):
+                self.called_args = enabled
+
+        app = MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        test_cases = [
+            ("true", True),
+            ("false", False),
+            ("1", True),
+            ("0", False),
+            ("on", True),
+            ("off", False),
+        ]
+
+        for value, expected in test_cases:
+            with self.subTest(value=value):
+
+                envelope = CommandEnvelope(
+                    header=header,
+                    arguments={"enabled": value}
+                )
+
+                app._execute_ofa_method(app.toggle, envelope)
+
+                self.assertEqual(app.called_args, expected)
+
+    def test_execute_ofa_method_invalid_bool_raises(self):
+        """ Test that _execute_ofa_method raises if bool conversion fails """
+
+        class MyApp(OpenFactoryApp):
+
+            @ofa_method()
+            def toggle(self, enabled: bool):
+                pass
+
+        app = MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        envelope = CommandEnvelope(
+            header=header,
+            arguments={"enabled": "not_bool"}
+        )
+
+        with self.assertRaises(ValueError):
+            app._execute_ofa_method(app.toggle, envelope)
+
+    def test_execute_ofa_method_invalid_argument_type_raises(self):
+        """ Test that _execute_ofa_method raises if argument conversion fails """
+
+        class MyApp(OpenFactoryApp):
+
+            @ofa_method()
+            def move_axis(self, x: int, y: int):
+                pass
+
+        app = MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        envelope = CommandEnvelope(
+            header=header,
+            arguments={
+                "x": "not_an_int",
+                "y": "2"
+            }
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            app._execute_ofa_method(app.move_axis, envelope)
+
+        self.assertIn("Failed to convert argument 'x'", str(ctx.exception))
+
     def test_cmd_attribute_created(self):
         """ Verify CMD attribute is added for decorated methods. """
 
@@ -215,6 +303,25 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
         args = {a["name"]: a for a in contract["arguments"]}
         self.assertEqual(args["x"]["description"], "X coord")
         self.assertEqual(args["y"]["description"], "Y coord")
+
+    def test_register_ofa_method_raises_if_not_decorated(self):
+        """ Test that _register_ofa_method raises if method is not decorated """
+
+        class MyApp(OpenFactoryApp):
+
+            def move_axis(self, x: float, y: float):
+                pass
+
+        app = MyApp(
+            bootstrap_servers='mock_bootstrap',
+            ksqlClient=self.ksql_mock,
+            asset_router_url='mocked_asset_url'
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            app._register_ofa_method(app.move_axis)
+
+        self.assertIn("Method is not decorated with @ofa_method", str(ctx.exception))
 
     def test_annotated_param_description_propagates_to_contract(self):
         """ Verify Annotated descriptions appear in method contract. """

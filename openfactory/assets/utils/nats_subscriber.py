@@ -110,6 +110,7 @@ class NATSSubscriber:
             print(f"❌ Failed to connect to NATS servers {self.servers}: {e}")
         except Exception as e:
             print(f"❌ Unexpected error connecting to NATS: {e}")
+            traceback.print_exception(type(e), e, e.__traceback__)
 
     def stop(self) -> None:
         """ Stops the NATS subscription and closes the connection. """

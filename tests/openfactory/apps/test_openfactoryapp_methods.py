@@ -250,3 +250,51 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
 
         self.assertEqual(args["x"]["description"], "X coord")
         self.assertEqual(args["y"]["description"], "Y coord")
+
+    def test_on_cmd_logs_error_when_validation_fails_real_callback(self):
+        """ Test that on_cmd logs an error if model_validate_json raises """
+        class MyApp(OpenFactoryApp):
+            @ofa_method()
+            def move_axis(self):
+                pass
+
+        app = MyApp(bootstrap_servers='mock_bootstrap', ksqlClient=self.ksql_mock,
+                    asset_router_url='mocked_asset_url')
+
+        args, kwargs = self.mock_subscribe.call_args  # last subscribed method
+        callback = args[1]  # this is the real on_cmd callback created by the class
+
+        # Patch model_validate_json to raise
+        with patch.object(CommandEnvelope, "model_validate_json", side_effect=ValueError("invalid JSON")):
+            # Call the callback with any dummy key and msg_value
+            callback("key", {"VALUE": "{}"})
+
+        # Assert logger.error was called
+        app.logger.error.assert_called()
+        logged_msg = app.logger.error.call_args[0][0]
+        assert "Failed to execute move_axis" in logged_msg
+        assert "ValueError" in logged_msg
+
+    def test_on_cmd_logs_error_when_execution_fails_real_callback(self):
+        """ Test that on_cmd logs an error if _execute_ofa_method raises """
+        class MyApp(OpenFactoryApp):
+            @ofa_method()
+            def move_axis(self):
+                pass
+
+        app = MyApp(bootstrap_servers='mock_bootstrap', ksqlClient=self.ksql_mock,
+                    asset_router_url='mocked_asset_url')
+
+        args, kwargs = self.mock_subscribe.call_args
+        callback = args[1]  # real callback
+
+        # Patch model_validate_json to succeed, _execute_ofa_method to fail
+        with patch.object(CommandEnvelope, "model_validate_json", return_value=MagicMock()), \
+             patch.object(app, "_execute_ofa_method", side_effect=RuntimeError("execution failed")):
+
+            callback("key", {"VALUE": "{}"})
+
+        app.logger.error.assert_called()
+        logged_msg = app.logger.error.call_args[0][0]
+        assert "Failed to execute move_axis" in logged_msg
+        assert "RuntimeError" in logged_msg

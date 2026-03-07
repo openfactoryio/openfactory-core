@@ -2,6 +2,7 @@ import unittest
 import asyncio
 import json
 from unittest.mock import AsyncMock, Mock, patch
+from nats.errors import NoServersError
 from openfactory.assets.utils.async_loop import AsyncLoopThread
 from openfactory.assets.utils.nats_subscriber import NATSSubscriber
 
@@ -49,6 +50,40 @@ class TestNATSSubscriber(unittest.TestCase):
         mock_nc.subscribe.assert_awaited_once()
         self.assertEqual(subscriber.sub, mock_sub)
         self.assertEqual(subscriber.nc, mock_nc)
+
+    @patch("openfactory.assets.utils.nats_subscriber.nats.errors.NoServersError", new=Exception)
+    def test_start_handles_no_servers_error(self):
+        """ Test that start() handles NoServersError and prints expected message """
+
+        subscriber = NATSSubscriber(self.loop_thread, "nats://localhost:4222", "TEST.*", self.mock_callback)
+
+        mock_future = Mock()
+        mock_future.result.side_effect = NoServersError()
+
+        with patch.object(self.loop_thread, "run_coro", return_value=mock_future), \
+             patch("builtins.print") as mock_print:
+
+            subscriber.start()
+
+            mock_print.assert_called()
+            self.assertIn("Failed to connect to NATS servers", mock_print.call_args[0][0])
+
+    def test_start_handles_unexpected_exception_prints_traceback(self):
+        """ Test that start() prints traceback on unexpected exceptions """
+
+        subscriber = NATSSubscriber(self.loop_thread, "nats://localhost:4222", "TEST.*", self.mock_callback)
+
+        mock_future = Mock()
+        mock_future.result.side_effect = RuntimeError("unexpected")
+
+        with patch.object(self.loop_thread, "run_coro", return_value=mock_future), \
+             patch("builtins.print") as mock_print, \
+             patch("traceback.print_exception") as mock_tb:
+
+            subscriber.start()
+
+            mock_print.assert_any_call("❌ Unexpected error connecting to NATS: unexpected")
+            mock_tb.assert_called_once()
 
     @patch("openfactory.assets.utils.nats_subscriber.nats.connect", new_callable=AsyncMock)
     def test_message_handler_invokes_callback(self, mock_nats_connect):

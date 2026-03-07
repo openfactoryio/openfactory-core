@@ -7,6 +7,7 @@ import json
 import inspect
 from types import FrameType
 from typing import Optional
+from pydantic import TypeAdapter
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
@@ -261,7 +262,11 @@ class OpenFactoryApp(Asset):
                 value_str = envelope.arguments[param_name]
                 param_type = param_meta["annotation"]
                 try:
-                    kwargs[param_name] = param_type(value_str)
+                    kwargs[param_name] = TypeAdapter(param_type).validate_python(value_str)
+                except (ValueError, TypeError) as e:
+                    raise ValueError(
+                        f"Failed to convert argument '{param_name}'='{value_str}' to type {param_type}"
+                    ) from e
                 except Exception as e:
                     raise ValueError(
                         f"Failed to convert argument '{param_name}'='{value_str}' "

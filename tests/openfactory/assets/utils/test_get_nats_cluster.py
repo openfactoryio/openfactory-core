@@ -24,6 +24,21 @@ class TestGetNATSClusterURL(unittest.TestCase):
         self.assertEqual(result, "nats://localhost:4222")
 
     @patch("openfactory.assets.utils.get_nats_cluster.requests.get")
+    def test_raises_configuration_exception_when_connection_fails(self, mock_get):
+        """ Test that OFAConfigurationException is raised if connection to router fails """
+
+        mock_get.side_effect = Exception("connection failed")
+
+        asset_uuid = "sensor-123"
+
+        from openfactory.exceptions import OFAConfigurationException
+
+        with self.assertRaises(OFAConfigurationException) as ctx:
+            get_nats_cluster_url(asset_uuid, "http://mock-router")
+
+        self.assertIn("Could not connect to Asset Router", str(ctx.exception))
+
+    @patch("openfactory.assets.utils.get_nats_cluster.requests.get")
     def test_raises_value_error_if_nats_url_missing(self, mock_get):
         """ Test that ValueError is raised when nats_url is missing """
         mock_response = Mock()

@@ -66,7 +66,7 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 
    * The device or application is described in a YAML configuration and stored in the **Registry**.
    * The Registry holds the configurations, device models, application code, and Docker images needed for deployment.
-   * *OpenFactory* automatically deploys the necessary **Adapters**, **Connectors**, and **Supervisors** as Docker Swarm services on the OpenFactory cluster, pulling the required images from the Registry as needed.
+   * *OpenFactory* automatically deploys the necessary **Adapters** and **Connectors** as Docker Swarm services on the OpenFactory cluster, pulling the required images from the Registry as needed.
 
 2. **Data Ingestion**
 
@@ -82,7 +82,7 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 4. **Command Execution**
 
    * **Applications** (or ksqlDB queries) produce command messages.
-   * **Supervisors** receive these commands from Kafka and send them to devices via the proper Connector/Adapter path.
+   * **Connectors** receive these commands from Kafka and send them to devices via the proper Connector/Adapter path.
 
 
 ## **Platform Capabilities**

@@ -75,7 +75,8 @@ class MTConnectConnector(Connector):
 
         # Register device asset
         register_asset(device.uuid, uns=device.uns, asset_type="Device",
-                       ksqlClient=self.ksql, docker_service="")
+                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers,
+                       docker_service="")
 
         # Deploy MTConnect agent (which itself deploys adapter if needed)
         agent_deployer = MTConnectAgentDeployer(device, yaml_config_file,

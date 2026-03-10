@@ -67,6 +67,7 @@ class TestMTConnectConnector(unittest.TestCase):
             uns=self.device.uns,
             asset_type="Device",
             ksqlClient=self.connector.ksql,
+            bootstrap_servers="kafka:9092",
             docker_service=""
         )
 

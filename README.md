@@ -52,8 +52,7 @@ The architecture supporting *OpenFactory* is organized into five distinct layers
 *OpenFactory* employs a microservices architecture orchestrated by Docker Swarm, where various microservices required for device integration are automatically created and deployed based on YAML configurations. Key components include:
 
 * **Adapters**: Ensure data and command compatibility between devices and the platform.
-* **Connectors**: Collect and transmit data from devices to **Kafka**, using Adapters if required.
-* **Supervisors**: Send commands from **Kafka** to devices.
+* **Connectors**: Collect and transmit data and commands from devices to **Kafka**, using Adapters if required.
 * **Applications**: Process data in real time, make decisions, and emit commands.
 * **Kafka**: Serves as the data streaming platform where processed data is sent.
 * **ksqlDB**: Provides real-time stream processing, enabling dynamic querying and transformation of data streams.

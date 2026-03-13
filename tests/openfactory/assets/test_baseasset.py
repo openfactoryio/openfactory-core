@@ -89,6 +89,31 @@ class TestBaseAsset(TestCase):
 
         self.assertIn("ASSET_ROUTER_URL", str(ctx.exception))
 
+    def test_bootstrap_servers_explicit(self, MockAssetProducer):
+        """ Test explicite definition of bootstrap_servers """
+        asset = ValidAsset(
+            "some_id",
+            self.ksql_mock,
+            bootstrap_servers="mocked_kafka_broker"
+        )
+
+        self.assertEqual(asset.bootstrap_servers, "mocked_kafka_broker")
+
+    @patch.dict("os.environ", {"KAFKA_BROKER": "mocked-broker"})
+    def test_bootstrap_servers_from_env(self, MockAssetProducer):
+        """ Test environment variable fallback for bootstrap_servers """
+        asset = ValidAsset("some_id", self.ksql_mock, bootstrap_servers=None)
+
+        self.assertEqual(asset.bootstrap_servers, "mocked-broker")
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_bootstrap_servers_missing_raises(self, MockAssetProducer):
+        """ Test missing bootstrap_servers and missing KAFKA_BROKER env var raises """
+        with self.assertRaises(OFAException) as ctx:
+            ValidAsset("some_id", self.ksql_mock, bootstrap_servers=None)
+
+        self.assertIn("KAFKA_BROKER", str(ctx.exception))
+
     def test_missing_ksql_asset_table(self, MockAssetProducer):
         """ Test missing KSQL_ASSET_TABLE raise error """
         class MissingTable(ValidAsset):

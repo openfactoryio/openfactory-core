@@ -1,6 +1,7 @@
 # OpenFactory
 [![Lint with Flake8](https://github.com/openfactoryio/openfactory-core/actions/workflows/lint.yml/badge.svg)](https://github.com/openfactoryio/openfactory-core/actions/workflows/lint.yml)
 [![Unit tests](https://github.com/openfactoryio/openfactory-core/actions/workflows/unittests.yml/badge.svg)](https://github.com/openfactoryio/openfactory-core/actions/workflows/unittests.yml)
+[![Unit tests - Bleeding Edge](https://github.com/openfactoryio/openfactory-core/actions/workflows/bleeding_edge.yml/badge.svg)](https://github.com/openfactoryio/openfactory-core/actions/workflows/bleeding_edge.yml)
 [![Test coverage](tests/coverage.svg)](tests/coverage.svg)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen)](https://openfactory-doc.readthedocs.io/en/latest/index.html)
 

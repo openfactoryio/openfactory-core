@@ -81,7 +81,8 @@ class Asset(BaseAsset):
 
     def __init__(self, asset_uuid: str,
                  ksqlClient: KSQLDBClient,
-                 bootstrap_servers: str, asset_router_url: str | None = None) -> None:
+                 bootstrap_servers: str | None = None,
+                 asset_router_url: str | None = None) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
@@ -92,12 +93,15 @@ class Asset(BaseAsset):
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
 
         Raises:
+            OFAException: If ``bootstrap_servers`` is not provided and the
+                ``KAFKA_BROKER`` environment variable is not set.
             OFAException: If ``asset_router_url`` is not provided and the
                 ``ASSET_ROUTER_URL`` environment variable is not set.
 
         Note:
+          - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
           - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
-          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variable ``ASSET_ROUTER_URL`` will be set.
+          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
         """
         object.__setattr__(self, 'ASSET_ID', asset_uuid)
         super().__init__(ksqlClient, bootstrap_servers, asset_router_url)

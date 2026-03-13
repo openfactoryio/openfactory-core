@@ -52,13 +52,13 @@ class BaseAsset:
     ASSET_ID = None
     ASSET_CONSUMER_CLASS = None
 
-    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str, asset_router_url: str | None = None) -> None:
+    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str | None = None, asset_router_url: str | None = None) -> None:
         """
         Initializes the Asset with metadata.
 
         Args:
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
-            bootstrap_servers (str): Kafka bootstrap server address.
+            bootstrap_servers (str | None): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
 
         Raises:
@@ -67,12 +67,15 @@ class BaseAsset:
                 are missing or invalid.
             TypeError: If ``ASSET_CONSUMER_CLASS`` is not a subclass of
                 ``KafkaAssetConsumer`` or ``KafkaAssetUNSConsumer``.
+            OFAException: If ``bootstrap_servers`` is not provided and the
+                ``KAFKA_BROKER`` environment variable is not set.
             OFAException: If ``asset_router_url`` is not provided and the
                 ``ASSET_ROUTER_URL`` environment variable is not set.
 
         Note:
+          - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
           - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
-          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variable ``ASSET_ROUTER_URL`` will be set.
+          - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
         """
         if not hasattr(self, 'KSQL_ASSET_TABLE') or self.KSQL_ASSET_TABLE is None:
             raise ValueError("KSQL_ASSET_TABLE must be set before initializing the Asset.")
@@ -86,15 +89,23 @@ class BaseAsset:
             raise TypeError("ASSET_CONSUMER_CLASS must be a subclass of KafkaAssetConsumer or KafkaAssetUNSConsumer.")
 
         super().__setattr__('ksql', ksqlClient)
-        super().__setattr__('bootstrap_servers', bootstrap_servers)
         super().__setattr__('loop_thread', AsyncLoopThread())
         super().__setattr__('subscribers', {})
+
+        if bootstrap_servers is None:
+            bootstrap_servers = os.getenv("KAFKA_BROKER")
+        if not bootstrap_servers:
+            raise OFAException(
+                "OpenFactory BaseAsset requires 'bootstrap_servers' to be provided "
+                "either explicitly or via the KAFKA_BROKER environment variable."
+            )
+        super().__setattr__('bootstrap_servers', bootstrap_servers)
 
         if asset_router_url is None:
             asset_router_url = os.getenv("ASSET_ROUTER_URL")
         if not asset_router_url:
             raise OFAException(
-                "OpenFactory Asset requires 'asset_router_url' to be provided "
+                "OpenFactory BaseAsset requires 'asset_router_url' to be provided "
                 "either explicitly or via the ASSET_ROUTER_URL environment variable."
             )
         super().__setattr__('asset_router_url', asset_router_url)

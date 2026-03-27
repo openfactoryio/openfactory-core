@@ -166,6 +166,22 @@ class OpenFactoryApp(Asset):
                 tag='Application.License'
             )
         )
+        self.add_attribute(
+            asset_attribute=AssetAttribute(
+                id='openfactory_manufacturer',
+                value='OpenFactoryIO',
+                type='Events',
+                tag='License.Manufacturer'
+            )
+        )
+        self.add_attribute(
+            asset_attribute=AssetAttribute(
+                id='openfactory_license',
+                value='Polyform Noncommercial License 1.0.0',
+                type='Events',
+                tag='Library.License'
+            )
+        )
 
         # setup signal handlers
         signal.signal(signal.SIGINT, self.signal_handler)

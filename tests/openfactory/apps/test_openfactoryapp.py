@@ -162,6 +162,14 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(attr.value, 'BSD-3-Clause license', "Value mismatch for application_license")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for application_license")
                 self.assertEqual(attr.tag, 'Application.License', "Tag mismatch for application_license")
+            elif attr.id == 'openfactory_manufacturer':
+                self.assertEqual(attr.value, 'OpenFactoryIO', "Value mismatch for openfactory_manufacturer")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_manufacturer")
+                self.assertEqual(attr.tag, 'License.Manufacturer', "Tag mismatch for openfactory_manufacturer")
+            elif attr.id == 'openfactory_license':
+                self.assertEqual(attr.value, 'Polyform Noncommercial License 1.0.0', "Value mismatch for openfactory_license")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_license")
+                self.assertEqual(attr.tag, 'Library.License', "Tag mismatch for openfactory_license")
 
     @patch('openfactory.apps.ofaapp.configure_prefixed_logger')
     def test_logger_is_configured_correctly(self, mock_configure_logger):

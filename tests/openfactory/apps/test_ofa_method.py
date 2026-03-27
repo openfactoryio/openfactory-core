@@ -8,6 +8,18 @@ class TestOFAMethodDecorator(unittest.TestCase):
     Unit tests for @ofa_method decorator
     """
 
+    def test_rejects_missing_parentheses(self):
+        """ Using @ofa_method without parentheses should raise TypeError. """
+
+        with self.assertRaises(TypeError) as ctx:
+
+            class Dummy:
+                @ofa_method  # missing ()
+                def move(self, x: float):
+                    pass
+
+        self.assertIn("must be called with parentheses", str(ctx.exception))
+
     def test_metadata_is_attached(self):
         """ Decorator should attach _ofa_method_metadata to function. """
 

@@ -73,6 +73,12 @@ def ofa_method(
                 ):
                     ...
     """
+    if callable(name):
+        raise TypeError(
+            "@ofa_method must be called with parentheses. "
+            f"Did you mean '@ofa_method()' on '{name.__name__}'?"
+        )
+
     def decorator(func: Callable) -> Callable:
         sig = inspect.signature(func)
         params = sig.parameters

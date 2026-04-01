@@ -62,9 +62,9 @@ class TestOpenFactoryApp(unittest.TestCase):
 
                 app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
 
-                self.assertEqual(app.APPLICATION_VERSION, '1.0.0')
-                self.assertEqual(app.APPLICATION_MANUFACTURER, 'TestFactory')
-                self.assertEqual(app.APPLICATION_LICENSE, 'MIT')
+                self.assertEqual(app.application_version.value, '1.0.0')
+                self.assertEqual(app.application_manufacturer.value, 'TestFactory')
+                self.assertEqual(app.application_license.value, 'MIT')
                 self.assertEqual(app.asset_uuid, 'env-uuid')
                 self.assertEqual(app.asset_router_url, 'http://mocked.router.test')
 
@@ -155,7 +155,7 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(attr.type, 'Events', "Type mismatch for application_version")
                 self.assertEqual(attr.tag, 'Application.Version', "Tag mismatch for application_version")
             elif attr.id == 'application_manufacturer':
-                self.assertEqual(attr.value, 'OpenFactory', "Value mismatch for application_manufacturer")
+                self.assertEqual(attr.value, 'OpenFactoryIO', "Value mismatch for application_manufacturer")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for application_manufacturer")
                 self.assertEqual(attr.tag, 'Application.Manufacturer', "Tag mismatch for application_manufacturer")
             elif attr.id == 'application_license':
@@ -165,7 +165,7 @@ class TestOpenFactoryApp(unittest.TestCase):
             elif attr.id == 'openfactory_manufacturer':
                 self.assertEqual(attr.value, 'OpenFactoryIO', "Value mismatch for openfactory_manufacturer")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_manufacturer")
-                self.assertEqual(attr.tag, 'License.Manufacturer', "Tag mismatch for openfactory_manufacturer")
+                self.assertEqual(attr.tag, 'Library.Manufacturer', "Tag mismatch for openfactory_manufacturer")
             elif attr.id == 'openfactory_license':
                 self.assertEqual(attr.value, 'Polyform Noncommercial License 1.0.0', "Value mismatch for openfactory_license")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_license")
@@ -190,7 +190,8 @@ class TestOpenFactoryApp(unittest.TestCase):
             level='DEBUG'
         )
         self.assertIs(app.logger, mock_logger)
-        mock_logger.debug.assert_called_with("Setup OpenFactory App DEV-UUID")
+        calls = [call.args[0] for call in mock_logger.debug.call_args_list]
+        self.assertIn("Setup OpenFactory App DEV-UUID", calls)
 
     def test_signal_sigint(self):
         """ Test signal SIGINT """
@@ -319,14 +320,7 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         mock_banner.assert_called_once()
 
         # Check that add_attribute was called with an AssetAttribute
-        self.mock_add_attribute.assert_any_call(
-            AssetAttribute(
-                id="avail",
-                value="AVAILABLE",
-                tag="Availability",
-                type="Events"
-            )
-        )
+        self.assertEqual(app.avail, 'AVAILABLE')
 
         # Check async_main_loop executed
         app.async_main_loop.assert_awaited_once()

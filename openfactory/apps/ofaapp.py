@@ -15,9 +15,10 @@ from openfactory.setup_logging import configure_prefixed_logger
 from openfactory.schemas.filelayer.storage import StorageBackendSchema
 from openfactory.schemas.command_header import CommandEnvelope
 from openfactory.filelayer.backend import FileBackend
+from openfactory.apps.attributefield import OpenFactoryAppMeta, EventAttribute
 
 
-class OpenFactoryApp(Asset):
+class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
     """
     Generic OpenFactory application.
 
@@ -25,9 +26,9 @@ class OpenFactoryApp(Asset):
     logging, and lifecycle management.
 
     Attributes:
-        APPLICATION_VERSION (str): Version string from ``APPLICATION_VERSION`` environment variable or 'latest'.
-        APPLICATION_MANUFACTURER (str): Manufacturer from ``APPLICATION_MANUFACTURER`` environment variable or 'OpenFactory'.
-        APPLICATION_LICENSE (str): License string from ``APPLICATION_LICENSE`` environment variable or 'BSD-3-Clause license'.
+        application_version (AssetAttribute): Version from the ``APPLICATION_VERSION`` environment variable or ``"latest"``.
+        application_manufacturer (AssetAttribute): Manufacturer from the ``APPLICATION_MANUFACTURER`` environment variable or ``"OpenFactoryIO"``.
+        application_license (AssetAttribute): License from the ``APPLICATION_LICENSE`` environment variable or ``"BSD-3-Clause license"``.
         logger (logging.Logger): Prefixed logger instance configured with the app UUID.
         storage (Optional [FileBackend]): Storage backend instance created from the ``STORAGE`` environment variable, or ``None`` if not configured.
 
@@ -37,10 +38,14 @@ class OpenFactoryApp(Asset):
 
             import time
             import os
-            from openfactory.apps import OpenFactoryApp, ofa_method
+            from openfactory.apps import OpenFactoryApp, EventAttribute, SampleAttribute, ofa_method
             from openfactory.kafka import KSQLDBClient
 
             class DemoApp(OpenFactoryApp):
+
+                # Declarative attributes are automatically registered as AssetAttributes
+                status = EventAttribute(value="idle", tag="App.Status")
+                sample_rate = SampleAttribute(value=42, tag="Sample.Rate")
 
                 @ofa_method(description="Move to a given (x, y) position with speed")
                 def move_axis(self, x: float, y: float, speed: int = 100):
@@ -85,9 +90,12 @@ class OpenFactoryApp(Asset):
         - The decorator `@ofa_method <ofa_method.html>`_ can be used to define OpenFactory callable methods.
     """
 
-    APPLICATION_VERSION = os.getenv('APPLICATION_VERSION', 'latest')
-    APPLICATION_MANUFACTURER = os.getenv('APPLICATION_MANUFACTURER', 'OpenFactory')
-    APPLICATION_LICENSE = os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license')
+    avail = EventAttribute(tag="Availability")
+    application_version = EventAttribute(value=os.getenv('APPLICATION_VERSION', 'latest'), tag="Application.Version")
+    application_manufacturer = EventAttribute(value=os.getenv('APPLICATION_MANUFACTURER', 'OpenFactoryIO'), tag="Application.Manufacturer")
+    application_license = EventAttribute(value=os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license'), tag="Application.License")
+    openfactory_manufacturer = EventAttribute(value='OpenFactoryIO', tag="Library.Manufacturer")
+    openfactory_license = EventAttribute(value='Polyform Noncommercial License 1.0.0', tag="Library.License")
 
     def __init__(self,
                  ksqlClient: KSQLDBClient,
@@ -141,47 +149,18 @@ class OpenFactoryApp(Asset):
         # attach decorated methods
         self._subscribe_ofa_methods()
 
-        # attributes of the application
-        self.add_attribute(
-            asset_attribute=AssetAttribute(
-                id='application_version',
-                value=self.APPLICATION_VERSION,
-                type='Events',
-                tag='Application.Version'
+        # register all declarative attributes
+        for attr_name, attr_field in self._declared_attributes.items():
+
+            asset_attr = AssetAttribute(
+                id=attr_name,
+                value=attr_field.value,
+                type=attr_field.type,
+                tag=attr_field.tag
             )
-        )
-        self.add_attribute(
-            asset_attribute=AssetAttribute(
-                id='application_manufacturer',
-                value=self.APPLICATION_MANUFACTURER,
-                type='Events',
-                tag='Application.Manufacturer'
-            )
-        )
-        self.add_attribute(
-            asset_attribute=AssetAttribute(
-                id='application_license',
-                value=self.APPLICATION_LICENSE,
-                type='Events',
-                tag='Application.License'
-            )
-        )
-        self.add_attribute(
-            asset_attribute=AssetAttribute(
-                id='openfactory_manufacturer',
-                value='OpenFactoryIO',
-                type='Events',
-                tag='License.Manufacturer'
-            )
-        )
-        self.add_attribute(
-            asset_attribute=AssetAttribute(
-                id='openfactory_license',
-                value='Polyform Noncommercial License 1.0.0',
-                type='Events',
-                tag='Library.License'
-            )
-        )
+
+            self.add_attribute(asset_attribute=asset_attr)
+            self.logger.debug(f"Adding declarative attribute {asset_attr}")
 
         # setup signal handlers
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -237,7 +216,7 @@ class OpenFactoryApp(Asset):
         if metadata is None:
             raise ValueError("Method is not decorated with @ofa_method")
 
-        self.logger.info(f"Register OpenFactory method '{metadata['method_name']}'")
+        self.logger.debug(f"Register OpenFactory method '{metadata['method_name']}'")
         method_contract = {
             "description": metadata.get("description", "") or "",
             "arguments": []
@@ -245,7 +224,7 @@ class OpenFactoryApp(Asset):
 
         for param_name, param_meta in metadata["parameters"].items():
             desc = param_meta.get("description", "") or ""
-            self.logger.info(f"  {param_name}: {desc}")
+            self.logger.debug(f"  {param_name}: {desc}")
             method_contract["arguments"].append({
                 "name": param_name,
                 "description": desc
@@ -308,9 +287,9 @@ class OpenFactoryApp(Asset):
         print("==============================================================")
         print(f"OpenFactory App {self.asset_uuid}")
         print("--------------------------------------------------------------")
-        print(f"Application version:         {self.APPLICATION_VERSION}")
-        print(f"Application manufacturer:    {self.APPLICATION_MANUFACTURER}")
-        print(f"Application license:         {self.APPLICATION_LICENSE}")
+        print(f"Application version:         {self.application_version.value}")
+        print(f"Application manufacturer:    {self.application_manufacturer.value}")
+        print(f"Application license:         {self.application_license.value}")
         print("==============================================================")
 
     def app_event_loop_stopped(self) -> None:
@@ -378,12 +357,7 @@ class OpenFactoryApp(Asset):
             Exception: If any exception occurs during the execution of the main loop, it is caught and logged, and the app is stopped.
         """
         self.welcome_banner()
-        self.add_attribute(AssetAttribute(
-            id='avail',
-            value='AVAILABLE',
-            tag='Availability',
-            type='Events'
-        ))
+        self.avail = 'AVAILABLE'
         self.logger.info("Starting main loop")
         try:
             self.main_loop()
@@ -432,12 +406,7 @@ class OpenFactoryApp(Asset):
             Exception: Any exception raised by :meth:`async_main_loop` is caught, logged, and triggers a graceful shutdown.
         """
         self.welcome_banner()
-        self.add_attribute(AssetAttribute(
-            id='avail',
-            value='AVAILABLE',
-            tag='Availability',
-            type='Events'
-        ))
+        self.avail = 'AVAILABLE'
         self.logger.info("Starting async main loop")
         try:
             await self.async_main_loop()

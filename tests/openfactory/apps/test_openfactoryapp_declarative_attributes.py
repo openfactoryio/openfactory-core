@@ -42,7 +42,7 @@ class TestDeclarativeAttributes(unittest.TestCase):
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
-        self.app = TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker")
+        self.app = TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker", asset_router_url="mocked_url")
 
     def test_declared_attributes_collection(self):
         """ Check that declarative attributes are collected in _declared_attributes. """
@@ -62,7 +62,7 @@ class TestDeclarativeAttributes(unittest.TestCase):
     def test_add_attribute_called_for_declaratives(self):
         """ Check that add_attribute is called with correct AssetAttribute for each declarative attribute. """
         with patch.object(TestApp, "add_attribute", autospec=True) as mock_add_attr:
-            TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker")
+            TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker", asset_router_url="mocked_url")
 
             # Grab all calls to add_attribute like this: add_attribute(asset_attribute=...)
             calls = [call.kwargs["asset_attribute"] for call in mock_add_attr.mock_calls if "asset_attribute" in call.kwargs]

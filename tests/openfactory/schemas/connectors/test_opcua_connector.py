@@ -681,3 +681,162 @@ class TestOPCUAConnectorSchema(unittest.TestCase):
             OPCUAConnectorSchema(**data)
 
         self.assertIn("Either 'node_id' or 'browse_path' must be provided", str(cm.exception))
+
+    def test_constants_parsing(self):
+        """ Constants are parsed correctly """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "device_name": {"node_id": "ns=2;i=1", "tag": "DeviceName"},
+                "serial": {"browse_path": "0:Root/0:Objects/2:Device/2:Serial", "tag": "Serial"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        self.assertIn("device_name", schema.constants)
+        self.assertIn("serial", schema.constants)
+
+        self.assertEqual(schema.constants["device_name"].node_id, "ns=2;i=1")
+        self.assertEqual(schema.constants["serial"].browse_path, "0:Root/0:Objects/2:Device/2:Serial")
+
+    def test_constant_missing_tag_raises(self):
+        """ Missing tag in constant should raise """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "device_name": {"node_id": "ns=2;i=1"}  # missing tag
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("tag", str(cm.exception))
+
+    def test_constant_with_node_id_and_path_invalid(self):
+        """ Constant cannot have both node_id and browse_path """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "c": {
+                    "node_id": "ns=2;i=1",
+                    "browse_path": "0:Root/0:Objects",
+                    "tag": "X"
+                }
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Provide only one of 'node_id' or 'browse_path'", str(cm.exception))
+
+    def test_constant_missing_node_id_and_path_raises(self):
+        """ Constant must have node_id or browse_path """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "c": {"tag": "X"}
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Either 'node_id' or 'browse_path' must be provided", str(cm.exception))
+
+    def test_duplicate_node_id_within_constants_raises(self):
+        """ Duplicate node_id within constants should raise """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "c1": {"node_id": "ns=2;i=1", "tag": "A"},
+                "c2": {"node_id": "ns=2;i=1", "tag": "B"}  # duplicate
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Duplicate node_id within constants", str(cm.exception))
+
+    def test_duplicate_path_within_constants_raises(self):
+        """ Duplicate path within constants should raise """
+        path_str = "0:Root/0:Objects/2:Device"
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "c1": {"browse_path": path_str, "tag": "A"},
+                "c2": {"browse_path": path_str, "tag": "B"}  # duplicate
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Duplicate path within constants", str(cm.exception))
+
+    def test_key_conflict_between_constants_and_variables(self):
+        """ Same name cannot exist in constants and variables """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "device": {"node_id": "ns=2;i=1", "tag": "Device"}
+            },
+            "variables": {
+                "device": {"node_id": "ns=3;i=2", "tag": "Var"}
+            }
+        }
+        with self.assertRaises(ValidationError) as cm:
+            OPCUAConnectorSchema(**data)
+
+        self.assertIn("Local name conflict", str(cm.exception))
+
+    def test_key_conflict_between_constants_and_events(self):
+        """ Same name cannot exist in constants and events """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "status": {"node_id": "ns=2;i=1", "tag": "Status"}
+            },
+            "events": {
+                "status": {"node_id": "ns=3;i=2"}
+            }
+        }
+        with self.assertRaises(ValidationError):
+            OPCUAConnectorSchema(**data)
+
+    def test_key_conflict_between_constants_and_methods(self):
+        """ Same name cannot exist in constants and methods """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "device": {"node_id": "ns=2;i=1", "tag": "Device"}
+            },
+            "methods": {
+                "device": {"node_id": "ns=3;i=2"}
+            }
+        }
+        with self.assertRaises(ValidationError):
+            OPCUAConnectorSchema(**data)
+
+    def test_constant_and_variable_same_node_allowed(self):
+        """ Constant and variable can reference same node """
+        data = {
+            "type": "opcua",
+            "server": {"uri": "opc.tcp://127.0.0.1:4840/server/"},
+            "constants": {
+                "device_name": {"node_id": "ns=2;i=1", "tag": "DeviceName"}
+            },
+            "variables": {
+                "device_name_var": {"node_id": "ns=2;i=1", "tag": "DeviceNameVar"}
+            }
+        }
+        schema = OPCUAConnectorSchema(**data)
+
+        self.assertEqual(schema.constants["device_name"].node_id, "ns=2;i=1")
+        self.assertEqual(schema.variables["device_name_var"].node_id, "ns=2;i=1")

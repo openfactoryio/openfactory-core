@@ -6,48 +6,68 @@ schemas for OPC UA devices within OpenFactory.
 
 Key Models:
 -----------
-- OPCUAServerConfig:
+- :class:`OPCUAServerConfig`:
+
   Configuration for the OPC UA server, including the endpoint URI and
   optional default subscription parameters.
 
-- OPCUASubscriptionConfig:
-  Optional subscription parameters (publishing interval, queue size,
-  sampling interval). Can be defined at the server level or overridden
-  per variable. If not provided at the server level, default values are
-  applied (publishing_interval=100 ms, queue_size=1, sampling_interval=0 ms).
+- :class:`OPCUASubscriptionConfig`:
 
-- OPCUAVariableConfig:
-  Configuration for a single variable. Contains `node_id` or `browse_path`
-  to identify the OPC UA node and a `tag` used by OpenFactory to label data.
-  Variables may also declare an `access_level` (`ro` or `rw`) describing
+  Optional subscription parameters (``publishing_interval``, ``queue_size``,
+  ``sampling_interval``). Can be defined at the server level or overridden
+  per variable. If not provided at the server level, default values are
+  applied (``publishing_interval=100`` ms, ``queue_size=1``, ``sampling_interval=0`` ms).
+
+- :class:`OPCUAConstantConfig`:
+
+  Configuration for a constant OPC UA value. Contains ``node_id`` or
+  ``browse_path`` to identify the OPC UA node and a ``tag`` used by OpenFactory.
+  Constants are read once at deployment time and are not subscribed.
+
+- :class:`OPCUAVariableConfig`:
+
+  Configuration for a single variable. Contains ``node_id`` or ``browse_path``
+  to identify the OPC UA node and a ``tag`` used by OpenFactory to label data.
+  Variables may also declare an ``access_level`` (``ro`` or ``rw``) describing
   how OpenFactory is allowed to interact with the node.
   Optional overrides for queue size and sampling interval can be provided.
 
-- OPCUAEventConfig:
-  Configuration for an event source. Contains `node_id` or `browse_path`
+- :class:`OPCUAEventConfig`:
+
+  Configuration for an event source. Contains ``node_id`` or ``browse_path``
   identifying the OPC UA node that emits events. Events do not use tags
   or subscription overrides.
 
-- OPCUAMethodConfig:
+- :class:`OPCUAMethodConfig`:
+
   Configuration for a method source. Each entry references an OPC UA node
-  (`node_id` or `browse_path`) from which all available OPC UA methods
+  (``node_id`` or ``browse_path``) from which all available OPC UA methods
   will be discovered at runtime. Methods are not individually declared in
   the schema; instead, the node acts as a method container.
 
-- OPCUAConnectorSchema:
+- :class:`OPCUAConnectorSchema`:
+
   Wrapper schema that encapsulates the server configuration along with
-  variables, events, and method sources. During initialization, all
-  variables, events, and methods are normalized into their respective
-  config models. Server-level subscription defaults are applied to
-  variables where necessary.
+  constants, variables, events, and method sources. During initialization:
+
+  - variables are normalized into :class:`OPCUAVariableConfig` with server-level defaults
+  - constants, events, and methods are validated and normalized
+  - cross-section conflicts are checked
 
 Validation Features:
 --------------------
-- Validates `node_id` format and parses it into namespace_index, identifier_type, and identifier fields.
-- Enforces that exactly one of `node_id` or `browse_path` is provided for variables, events, and methods.
-- Normalizes variables into OPCUAVariableConfig, applying server-level subscription defaults when not overridden. If the server subscription is omitted, default values are applied.
-- Ensures uniqueness of `node_id` and `browse_path` within variables, within events, and within methods.
-- Prevents local name conflicts between variables, events, and methods.
+- Validates ``node_id`` format and parses it into ``namespace_index``,
+  ``identifier_type``, and ``identifier`` fields.
+- Enforces that exactly one of ``node_id`` or ``browse_path`` is provided
+  for constants, variables, events, and methods.
+- Normalizes variables into :class:`OPCUAVariableConfig`, applying server-level
+  subscription defaults when not overridden.
+- Ensures uniqueness of ``node_id`` and ``browse_path`` within each section
+  (constants, variables, events, methods).
+- Prevents local name conflicts across sections (constants, variables,
+  events, methods).
+- Allows reuse of the same OPC UA node across sections (e.g. a variable
+  and an event can reference the same node).
 - Forbids unknown fields to ensure strict schema conformance.
 
 YAML Example:
@@ -63,10 +83,10 @@ YAML Example:
     server:
         uri: opc.tcp://127.0.0.1:4840/freeopcua/server/
 
-        # subscription omitted → defaults will be used:
-        #   publishing_interval: 100
-        #   queue_size: 1
-        #   sampling_interval: 0
+    constants:
+        device_model:
+            node_id: ns=2;i=1001
+            tag: Model
 
     variables:
         temp:
@@ -100,6 +120,11 @@ YAML Example:
             publishing_interval: 200
             queue_size: 10
             sampling_interval: 25
+
+    constants:
+        serial:
+            browse_path: 0:Root/0:Objects/2:Device/2:SerialNumber
+            tag: SerialNumber
 
     variables:
         temp:
@@ -141,7 +166,12 @@ class OPCUASubscriptionConfig(BaseModel):
 
 
 class OPCUANodeConfig(BaseModel):
-    """ Base class for configs that can have node_id or path to identify an OPC UA node. """
+    """
+    Base configuration for OPC UA nodes identified by either a ``node_id``
+    or a ``browse_path``.
+
+    Exactly one of ``node_id`` or ``browse_path`` must be provided.
+    """
     node_id: Optional[str] = Field(
         default=None,
         description="NodeId of the object, e.g., 'ns=3;i=1050'.",
@@ -159,12 +189,41 @@ class OPCUANodeConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    def model_dump(self, *args, **kwargs):
+    def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """
+        Serialize the model while excluding fields with ``None`` values.
+
+        Args:
+            *args: Positional arguments forwarded to ``BaseModel.model_dump``.
+            **kwargs: Keyword arguments forwarded to ``BaseModel.model_dump``.
+
+        Returns:
+            Serialized model dictionary with ``None`` fields excluded.
+        """
         kwargs.setdefault("exclude_none", True)
         return super().model_dump(*args, **kwargs)
 
     @model_validator(mode="before")
-    def validate_browse_path_format(cls, values: dict) -> dict:
+    def validate_browse_path_format(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate the format of ``browse_path``.
+
+        Ensures:
+            - Path starts with ``"0:Root"``.
+            - Each segment follows ``ns_index:identifier`` format.
+            - No leading/trailing whitespace.
+            - Namespace index is numeric.
+            - Identifier is non-empty.
+
+        Args:
+            values: Raw input values.
+
+        Returns:
+            Validated values.
+
+        Raises:
+            ValueError: If the browse path format is invalid.
+        """
         path = values.get("browse_path")
         if path:
             segments = path.split('/')
@@ -208,7 +267,19 @@ class OPCUANodeConfig(BaseModel):
         return values
 
     @model_validator(mode="before")
-    def validate_node_id_or_browse_path(cls, values: dict) -> dict:
+    def validate_node_id_or_browse_path(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ensure exactly one of ``node_id`` or ``browse_path`` is provided.
+
+        Args:
+            values: Raw input values.
+
+        Returns:
+            Validated values.
+
+        Raises:
+            ValueError: If neither or both fields are provided.
+        """
         node_id, browse_path = values.get("node_id"), values.get("browse_path")
         if not (node_id or browse_path):
             raise ValueError("Either 'node_id' or 'browse_path' must be provided.")
@@ -217,7 +288,24 @@ class OPCUANodeConfig(BaseModel):
         return values
 
     @model_validator(mode="before")
-    def validate_and_parse_node_id(cls, values: dict) -> dict:
+    def validate_and_parse_node_id(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate and parse ``node_id`` into structured components.
+
+        Extracts:
+            - ``namespace_index``
+            - ``identifier_type``
+            - ``identifier``
+
+        Args:
+            values: Raw input values.
+
+        Returns:
+            Updated values including parsed fields.
+
+        Raises:
+            ValueError: If ``node_id`` format is invalid.
+        """
         node_id = values.get("node_id")
         if not node_id:
             return values  # skip if using path
@@ -233,6 +321,12 @@ class OPCUANodeConfig(BaseModel):
         values["identifier_type"] = id_type
         values["identifier"] = identifier
         return values
+
+
+class OPCUAConstantConfig(OPCUANodeConfig):
+    """ Configuration for a constant OPC UA value (read once at deployment). """
+
+    tag: str = Field(..., description="Tag used by OpenFactory to label the variable's data.")
 
 
 AccessLevel = Literal["ro", "rw"]
@@ -284,28 +378,36 @@ class OPCUAConnectorSchema(BaseModel):
     """
     OPC UA Connector schema wrapping the server configuration.
 
-    During initialization, all variables are normalized into `OPCUAVariableConfig` instances,
+    During initialization, all variables are normalized into :class:`OPCUAVariableConfig` instances,
     inheriting server-level subscription defaults where no overrides are given.
 
-    The `type` field is a discriminator for Pydantic to select this schema.
+    The ``type`` field is a discriminator for Pydantic to select this schema.
 
     .. seealso::
 
-       The runtime class of the class OPCUAConnectorSchema schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
+       The runtime class of the :class:`OPCUAConnectorSchema` schema is :class:`openfactory.connectors.opcua.opcua_connector.OPCUAConnector`.
     """
     type: Literal['opcua'] = Field(
         ...,  # no default, means required
         description="Discriminator field to identify OPC UA connector type."
     )
     server: OPCUAServerConfig = Field(..., description="OPC UA server configuration.")
+
+    constants: Optional[Dict[str, OPCUAConstantConfig]] = Field(
+        default=None,
+        description="Mapping of named constants read once from OPC UA at deployment."
+    )
+
     variables: Optional[Dict[str, OPCUAVariableConfig]] = Field(
         default=None,
         description="Mapping of local variable names to their configurations."
     )
+
     events: Optional[Dict[str, OPCUAEventConfig]] = Field(
         default=None,
         description="Mapping of named event sources."
     )
+
     methods: Optional[Dict[str, OPCUAMethodConfig]] = Field(
         default=None,
         description="Mapping of named OPC UA nodes from which methods will be discovered."
@@ -314,7 +416,24 @@ class OPCUAConnectorSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     def model_post_init(self, __context: Any) -> None:
-        """ Normalize all server variables with subscription defaults and enforce unique keys. """
+        """
+        Normalize configuration sections and enforce uniqueness constraints.
+
+        Ensures:
+            - Unique local names within each section.
+            - No cross-section name conflicts.
+            - No duplicate node identifiers (node_id or browse_path).
+            - Variables inherit server-level subscription defaults.
+
+        Args:
+            __context: Pydantic initialization context.
+
+        Raises:
+            ValueError: If uniqueness or validation constraints are violated.
+        """
+
+        # IMPORTANT: normalization order matters for cross-section validation
+        # Order: variables → constants → events → methods
 
         if self.variables:
             server_sub = self.server.subscription or OPCUASubscriptionConfig()
@@ -354,6 +473,46 @@ class OPCUAConnectorSchema(BaseModel):
                 )
             self.variables = normalized_vars
 
+        if self.constants:
+            normalized_constants = {}
+            seen_ids_constants = set()
+
+            for local_name, const_cfg in self.constants.items():
+                # Local name uniqueness
+                if local_name in normalized_constants:
+                    raise ValueError(f"Duplicate constant local name: {local_name}")
+
+                # Name conflicts with variables
+                if self.variables and local_name in self.variables:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both variables and constants"
+                    )
+
+                # Name conflicts with events
+                if self.events and local_name in self.events:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both constants and events"
+                    )
+
+                # Name conflicts with methods
+                if self.methods and local_name in self.methods:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both constants and methods"
+                    )
+
+                # Determine unique key for uniqueness check
+                unique_key = const_cfg.node_id or const_cfg.browse_path
+                if unique_key in seen_ids_constants:
+                    if const_cfg.node_id:
+                        raise ValueError(f"Duplicate node_id within constants: {const_cfg.node_id}")
+                    else:
+                        raise ValueError(f"Duplicate path within constants: {const_cfg.browse_path}")
+                seen_ids_constants.add(unique_key)
+
+                normalized_constants[local_name] = const_cfg
+
+            self.constants = normalized_constants
+
         if self.events:
             normalized_events = {}
             seen_ids_events = set()
@@ -366,6 +525,11 @@ class OPCUAConnectorSchema(BaseModel):
                 if self.variables and local_name in self.variables:
                     raise ValueError(
                         f"Local name conflict: '{local_name}' exists in both variables and events"
+                    )
+                # Local name conflict with constants
+                if self.constants and local_name in self.constants:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both events and constants"
                     )
 
                 # Determine unique key for uniqueness check
@@ -389,7 +553,11 @@ class OPCUAConnectorSchema(BaseModel):
                 if local_name in normalized_methods:
                     raise ValueError(f"Duplicate method source local name: {local_name}")
 
-                # Name conflicts with variables or events
+                # Name conflicts with constants, variables or events
+                if self.constants and local_name in self.constants:
+                    raise ValueError(
+                        f"Local name conflict: '{local_name}' exists in both methods and constants"
+                    )
                 if self.variables and local_name in self.variables:
                     raise ValueError(
                         f"Local name conflict: '{local_name}' exists in both variables and methods"

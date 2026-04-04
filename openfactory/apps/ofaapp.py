@@ -8,6 +8,7 @@ import inspect
 from types import FrameType
 from typing import Optional
 from pydantic import TypeAdapter
+from openfactory import __version__
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
@@ -29,6 +30,9 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         application_version (AssetAttribute): Version from the ``APPLICATION_VERSION`` environment variable or ``"latest"``.
         application_manufacturer (AssetAttribute): Manufacturer from the ``APPLICATION_MANUFACTURER`` environment variable or ``"OpenFactoryIO"``.
         application_license (AssetAttribute): License from the ``APPLICATION_LICENSE`` environment variable or ``"BSD-3-Clause license"``.
+        openfactory_manufacturer (AssetAttribute): OpenFacotory vendor (``"OpenFactoryIO"``)
+        openfactory_license (AssetAttribute): OpenFacotory license (``"Polyform Noncommercial License 1.0.0"``)
+        openfactory_version (AssetAttribute): OpenFactory version
         logger (logging.Logger): Prefixed logger instance configured with the app UUID.
         storage (Optional [FileBackend]): Storage backend instance created from the ``STORAGE`` environment variable, or ``None`` if not configured.
 
@@ -96,6 +100,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
     application_license = EventAttribute(value=os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license'), tag="Application.License")
     openfactory_manufacturer = EventAttribute(value='OpenFactoryIO', tag="Library.Manufacturer")
     openfactory_license = EventAttribute(value='Polyform Noncommercial License 1.0.0', tag="Library.License")
+    openfactory_version = EventAttribute(value=__version__, tag="Library.Version")
 
     def __init__(self,
                  ksqlClient: KSQLDBClient,

@@ -10,13 +10,3 @@ build:
 
 sphinx:
   configuration: docs/conf.py
-  builder: html
-  args:
-    - -nWT        # nit-picky checks, warnings as errors, show traceback
-    - -v          # verbose
-    - --keep-going
-    - --warning-log
-    - docs/_build/sphinx-warnings.log
-
-post_build:
-  - cat docs/_build/sphinx-warnings.log

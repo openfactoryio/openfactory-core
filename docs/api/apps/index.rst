@@ -127,7 +127,7 @@ When an app is instantiated:
 
          @ofa_method()
          def ping(self):
-               \"""Simple health check.\"""
+               """Simple health check."""
                self.logger.info("pong")
 
          def main_loop(self):

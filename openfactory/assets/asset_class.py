@@ -89,7 +89,7 @@ class Asset(BaseAsset):
         Args:
             asset_uuid (str): UUID identifier of the asset.
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
-            bootstrap_servers (str): Kafka bootstrap server address.
+            bootstrap_servers (str | None): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
 
         Raises:
@@ -102,6 +102,9 @@ class Asset(BaseAsset):
           - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
           - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
           - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
+
+        .. tip::
+           The environment variables ``KSQLDB_URL``, ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set when deployed on the OpenFactory Cluster.
         """
         object.__setattr__(self, 'ASSET_ID', asset_uuid)
         super().__init__(ksqlClient, bootstrap_servers, asset_router_url)

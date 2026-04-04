@@ -10,3 +10,9 @@ build:
 
 sphinx:
   configuration: docs/conf.py
+  builder: html
+  extra_args:
+    - -nWT
+    - -v
+    - --keep-going
+    - --warning-log docs/_build/sphinx-warnings.log

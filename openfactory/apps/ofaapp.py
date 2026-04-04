@@ -99,7 +99,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
     def __init__(self,
                  ksqlClient: KSQLDBClient,
-                 bootstrap_servers: str,
+                 bootstrap_servers: str | None = None,
                  asset_router_url: str | None = None,
                  loglevel: str = 'INFO'):
         """
@@ -112,11 +112,12 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
         Args:
             ksqlClient (KSQLDBClient): The KSQL client instance.
-            bootstrap_servers (str): Kafka bootstrap servers URL.
+            bootstrap_servers (str | None): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
             loglevel (str): Logging level for the app (e.g., ``INFO``, ``DEBUG``). Defaults to ``INFO``.
 
         Note:
+            - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
             - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
             - Configures logging with the application UUID as prefix.
             - Mounts a storage backend if the ``STORAGE`` environment variable is set.

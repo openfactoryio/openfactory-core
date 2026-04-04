@@ -4,6 +4,7 @@ import signal
 import os
 import json
 from datetime import datetime
+from openfactory import __version__
 from openfactory.exceptions import OFAException
 from openfactory.apps import OpenFactoryApp
 from openfactory.assets import AssetAttribute
@@ -170,6 +171,10 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(attr.value, 'Polyform Noncommercial License 1.0.0', "Value mismatch for openfactory_license")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_license")
                 self.assertEqual(attr.tag, 'Library.License', "Tag mismatch for openfactory_license")
+            elif attr.id == 'openfactory_version':
+                self.assertEqual(attr.value, __version__, "Value mismatch for openfactory_version")
+                self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_version")
+                self.assertEqual(attr.tag, 'Library.Version', "Tag mismatch for openfactory_version")
 
     @patch('openfactory.apps.ofaapp.configure_prefixed_logger')
     def test_logger_is_configured_correctly(self, mock_configure_logger):

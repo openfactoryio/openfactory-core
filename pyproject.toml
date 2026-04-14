@@ -9,7 +9,7 @@ dependencies = [
     # Core utilities
     "click>=8.3,<9.0",
     "rich>=14.1,<15.0",
-    "pydantic>=2.11,<3.0",
+    "pydantic>=2.13.0,<3.0",
     "pyyaml>=6.0,<7.0",
     "python-dotenv>=1.1,<2.0",
     "uvloop>=0.21,<1.0",

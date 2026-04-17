@@ -20,5 +20,5 @@
     z" fill="#dfb317"/>
 
   <text x="45.5" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">Test coverage</text>
-  <text x="108.5" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">84%</text>
+  <text x="108.5" y="14" fill="#fff" font-family="Verdana" font-size="11" text-anchor="middle">85%</text>
 </svg>

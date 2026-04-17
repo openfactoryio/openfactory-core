@@ -106,7 +106,8 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                  ksqlClient: KSQLDBClient,
                  bootstrap_servers: str | None = None,
                  asset_router_url: str | None = None,
-                 loglevel: str = 'INFO'):
+                 loglevel: str = 'INFO',
+                 test_mode: bool = False):
         """
         Initializes the OpenFactory application.
 
@@ -120,6 +121,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             bootstrap_servers (str | None): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
             loglevel (str): Logging level for the app (e.g., ``INFO``, ``DEBUG``). Defaults to ``INFO``.
+            test_mode (bool): If True, disables live Kafka/ksql interaction (useful for unit tests).
 
         Note:
             - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
@@ -134,7 +136,8 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         # get APP-UUID from environment (set during deployement by ofa deployment tool)
         app_uuid = os.getenv('APP_UUID', 'DEV-UUID')
         super().__init__(asset_uuid=app_uuid, ksqlClient=ksqlClient,
-                         bootstrap_servers=bootstrap_servers, asset_router_url=asset_router_url)
+                         bootstrap_servers=bootstrap_servers, asset_router_url=asset_router_url,
+                         test_mode=test_mode)
 
         # setup logging
         self.logger = configure_prefixed_logger(
@@ -206,7 +209,8 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                     )
                 )
 
-                self.subscribe_to_attribute(cmd_attribute, make_callback(method))
+                if not self._test_mode:
+                    self.subscribe_to_attribute(cmd_attribute, make_callback(method))
 
     def _register_ofa_method(self, method) -> None:
         """

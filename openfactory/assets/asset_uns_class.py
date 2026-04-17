@@ -87,7 +87,8 @@ class AssetUNS(BaseAsset):
     def __init__(self, uns_id: str,
                  ksqlClient: KSQLDBClient,
                  bootstrap_servers: str | None = None,
-                 asset_router_url: str | None = None) -> None:
+                 asset_router_url: str | None = None,
+                 test_mode: bool = False) -> None:
         """
         Initializes the Asset with metadata and a Kafka producer.
 
@@ -96,6 +97,7 @@ class AssetUNS(BaseAsset):
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
             bootstrap_servers (str): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+            test_mode (bool): If True, disables live Kafka/ksql interaction (useful for unit tests).
 
         Raises:
             OFAException: If ``bootstrap_servers`` is not provided and the
@@ -109,7 +111,10 @@ class AssetUNS(BaseAsset):
           - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
         """
         object.__setattr__(self, 'ASSET_ID', uns_id)
-        super().__init__(ksqlClient, bootstrap_servers, asset_router_url)
+        super().__init__(ksqlClient=ksqlClient,
+                         bootstrap_servers=bootstrap_servers,
+                         asset_router_url=asset_router_url,
+                         test_mode=test_mode)
 
     @property
     def asset_uuid(self) -> str:

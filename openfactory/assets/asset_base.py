@@ -52,7 +52,13 @@ class BaseAsset:
     ASSET_ID = None
     ASSET_CONSUMER_CLASS = None
 
-    def __init__(self, ksqlClient: KSQLDBClient, bootstrap_servers: str | None = None, asset_router_url: str | None = None) -> None:
+    def __init__(
+            self,
+            ksqlClient: KSQLDBClient,
+            bootstrap_servers: str | None = None,
+            asset_router_url: str | None = None,
+            test_mode: bool = False
+            ) -> None:
         """
         Initializes the Asset with metadata.
 
@@ -60,6 +66,7 @@ class BaseAsset:
             ksqlClient (KSQLDBClient): Client for interacting with ksqlDB.
             bootstrap_servers (str | None): Kafka bootstrap server address.
             asset_router_url (str | None): Asset Router URL from the OpenFactory Fan-Out-Layer.
+            test_mode (bool): If True, disables live Kafka/ksql interaction (useful for unit tests).
 
         Raises:
             ValueError: If any of the class-level attributes
@@ -77,6 +84,19 @@ class BaseAsset:
           - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
           - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
         """
+        super().__setattr__("_test_mode", test_mode)
+
+        # If in test mode, skip all runtime checks and producer setup
+        if test_mode:
+            super().__setattr__("_mocked_attributes", [])
+            super().__setattr__("ksql", ksqlClient)
+            super().__setattr__("loop_thread", None)
+            super().__setattr__("subscribers", {})
+            super().__setattr__("bootstrap_servers", bootstrap_servers)
+            super().__setattr__("asset_router_url", asset_router_url)
+            super().__setattr__("producer", None)
+            return
+
         if not hasattr(self, 'KSQL_ASSET_TABLE') or self.KSQL_ASSET_TABLE is None:
             raise ValueError("KSQL_ASSET_TABLE must be set before initializing the Asset.")
         if not hasattr(self, 'KSQL_ASSET_ID') or self.KSQL_ASSET_ID is None:
@@ -154,6 +174,22 @@ class BaseAsset:
         # Stop the AsyncLoopThread
         self.loop_thread.stop()
 
+    def _get_mocked_attribute_by_id(self, target_id: str) -> AssetAttribute | None:
+        """
+        Retrieve a mocked AssetAttribute by its ID.
+
+        Args:
+            target_id (str): The ID of the AssetAttribute to retrieve.
+
+        Returns:
+            AssetAttribute | None: The matching AssetAttribute if found,
+            otherwise None.
+        """
+        return next(
+            (attr for attr in self._mocked_attributes if attr.id == target_id),
+            None
+        )
+
     @property
     def asset_uuid(self) -> str:
         """
@@ -198,6 +234,11 @@ class BaseAsset:
         Returns:
             List[str]: A list of attribute IDs.
         """
+        # return internal mock list in test_mode
+        if getattr(self, "_test_mode", False):
+            return [attr.id for attr in self._mocked_attributes]
+
+        # in production query ksqlDB
         query = f"SELECT ID FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE != 'Method';"
         result = self.ksql.query(query)
         return [row['ID'] for row in result]
@@ -212,6 +253,17 @@ class BaseAsset:
         Returns:
             List[Dict]: A list of dictionaries containing 'ID', 'VALUE', and cleaned 'TAG'.
         """
+        if getattr(self, "_test_mode", False):
+            return [
+                {
+                    "ID": attr.id,
+                    "VALUE": attr.value,
+                    "TAG": attr.tag,
+                }
+                for attr in self._mocked_attributes
+                if attr.type == attr_type
+            ]
+
         query = f"SELECT ID, VALUE, TAG, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='{attr_type}';"
         result = self.ksql.query(query)
         return [
@@ -389,6 +441,9 @@ class BaseAsset:
                 - If the attribute is a sample, event, or condition, returns an AssetAttribute.
                 - If the attribute is a method, returns a callable method caller function.
         """
+        if getattr(self, "_test_mode", False):
+            return self._get_mocked_attribute_by_id(attribute_id)
+
         query = f"SELECT VALUE, TYPE, TAG, TIMESTAMP FROM {self.KSQL_ASSET_TABLE} WHERE key='{self.ASSET_ID}|{attribute_id}';"
         result = self.ksql.query(query)
 
@@ -479,8 +534,15 @@ class BaseAsset:
             self.producer.send_asset_attribute(self.asset_uuid, value)
             return
 
-        # send kafka message
+        # get the current AssetAttribute
         attr = self.__getattr__(name)
+
+        if getattr(self, "_test_mode", False):
+            # update its value
+            attr.value = value
+            return
+
+        # send kafka message
         self.producer.send_asset_attribute(
             self.asset_uuid,
             AssetAttribute(
@@ -497,6 +559,10 @@ class BaseAsset:
         Args:
             asset_attribute (AssetAttribute): The attribute to be added.
         """
+        if getattr(self, "_test_mode", False):
+            # add to internal mock list
+            self._mocked_attributes.append(asset_attribute)
+            return
         self.producer.send_asset_attribute(self.asset_uuid, asset_attribute)
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[str | Self]:

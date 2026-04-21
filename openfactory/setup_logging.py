@@ -19,8 +19,9 @@ class PrefixFormatter(logging.Formatter):
             fmt (str): The format string for the log message.
             datefmt (str): The format string for the date/time.
         """
-        full_fmt = f"[{prefix}] {fmt or '%(levelname)s:%(name)s: %(message)s'}"
-        super().__init__(full_fmt, datefmt)
+        base_fmt = fmt or "(%(asctime)s) %(levelname)s %(message)s"
+        full_fmt = f"[{prefix}] {base_fmt}"
+        super().__init__(full_fmt, datefmt or "%Y-%m-%d %H:%M:%S")
 
 
 def configure_prefixed_logger(name: str, level=logging.INFO, prefix="APP") -> logging.Logger:

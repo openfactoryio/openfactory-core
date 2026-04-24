@@ -43,6 +43,8 @@ nitpick_ignore = [
     ('py:class', "pydantic.root_model.RootModel[Dict[str, Union[str, list[str]]]]"),
     ('py:exc', 'pydantic.ValidationError'), 
     ('py:class', '_asyncio.Future'),
+    ('py:class', 'FieldInfo'),
+    ('py:class', 'NoneType'),
 ]
 
 templates_path = ['_templates']
@@ -92,4 +94,25 @@ autodoc_default_options = {
 autodoc_type_aliases = {
     "LocalBackend": "openfactory.filelayer.local_backend.LocalBackend",
     "NFSBackend": "openfactory.filelayer.nfs_backend.NFSBackend",
+    "JsonValue": "typing.Any",
+    "ConfigDict": "pydantic.config.ConfigDict",
+    "FieldInfo": "pydantic.fields.FieldInfo",
 }
+
+suppress_warnings = [
+    "sphinx_autodoc_typehints.guarded_import",
+]
+
+
+def setup(app):
+    from sphinx.domains.python import PythonDomain
+
+    original = PythonDomain.resolve_xref
+
+    def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
+        # ONLY ignore builtin 'type' as OpenFactory has mutliple 'type' redefined (discriminnators and others)
+        if target == "type" and typ in ("class", "obj"):
+            return None
+        return original(self, env, fromdocname, builder, typ, target, node, contnode)
+
+    PythonDomain.resolve_xref = resolve_xref

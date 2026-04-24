@@ -403,6 +403,7 @@ class BaseAsset:
             method (str): Name of the method to be executed.
             sender_uuid (str): Asset UUID of the asset sending the request.
             args (Optional[List[Tuple[str, str]]]): List of (argument_name, value) pairs.
+
                 All values must be strings. Defaults to empty list if not provided.
 
         Returns:

@@ -194,8 +194,8 @@ class OPCUANodeConfig(BaseModel):
         Serialize the model while excluding fields with ``None`` values.
 
         Args:
-            *args: Positional arguments forwarded to ``BaseModel.model_dump``.
-            **kwargs: Keyword arguments forwarded to ``BaseModel.model_dump``.
+            ``*args``: Positional arguments forwarded to ``BaseModel.model_dump``.
+            ``**kwargs``: Keyword arguments forwarded to ``BaseModel.model_dump``.
 
         Returns:
             Serialized model dictionary with ``None`` fields excluded.

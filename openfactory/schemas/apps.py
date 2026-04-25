@@ -26,6 +26,9 @@ Features
   - ``NFSBackend``: Mount an NFS share into containers with configurable mount options.
 
 - Supports connecting containers to multiple Docker networks.
+- Supports application exposure via Traefik using host-based routing.
+  Routing configuration allows defining an internal port and optional hostname.
+  Canonical and optional alias hostnames are generated automatically.
 - Provides utilities to load application configs from YAML with user-friendly
   error handling and notifications.
 - Ensures validated and enriched applications are returned as plain dictionaries.
@@ -59,6 +62,11 @@ configuration YAML file, with automatic UNS enrichment.
             mount_options:
               - ro
 
+          routing:
+            expose: true
+            port: 8000
+            hostname: dashboard
+
           networks:
             - factory-net
             - monitoring-net
@@ -82,6 +90,7 @@ Note:
     - **Networks**: All network names must exist in Docker before deployment.
     - **UNS metadata**: Must match the ``UNSSchema`` used in the environment for semantic consistency.
     - **Storage backends**: Will be extended in future to support more types.
+    - **Routing**: Hostnames are normalized and validated to comply with DNS constraints.
     - Use the ``apps_dict`` property to access validated apps in runtime code.
 
 .. seealso::
@@ -89,6 +98,8 @@ Note:
    The runtime class of OpenFactory Apps is :class:`openfactory.apps.ofaapp.OpenFactoryApp`.
 """
 
+import re
+import openfactory.config as Config
 from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator
 from typing import List, Dict, Optional, Any
 from openfactory.config import load_yaml
@@ -96,6 +107,134 @@ from openfactory.models.user_notifications import user_notify
 from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
 from openfactory.schemas.filelayer.types import StorageBackend
 from openfactory.schemas.common import Deploy
+
+
+class RoutingError(ValueError):
+    """ Raised when routing configuration is invalid. """
+
+
+def normalize_name(value: str) -> str:
+    """
+    Normalize a string to be DNS-compatible.
+
+    This function transforms an arbitrary string into a valid DNS label by:
+    - converting to lowercase
+    - replacing underscores with hyphens
+    - replacing invalid characters with hyphens
+    - collapsing consecutive hyphens
+    - stripping leading and trailing hyphens
+
+    Args:
+        value (str): Input string to normalize.
+
+    Returns:
+        str: Normalized string suitable for use in DNS labels.
+
+    Note:
+        This function does not enforce DNS length constraints (e.g. 63 characters per label).
+        Length validation must be handled by the caller.
+    """
+    value = value.lower()
+    value = value.replace("_", "-")
+    value = re.sub(r"[^a-z0-9-]", "-", value)
+    value = re.sub(r"-+", "-", value)
+    return value.strip("-")
+
+
+class Routing(BaseModel):
+    """
+    Routing configuration for exposing an OpenFactory application via Traefik.
+
+    This schema defines whether an application should be exposed externally,
+    which internal port should be used, and optionally a desired hostname.
+
+    During enrichment, canonical and optional alias hostnames are generated
+    based on the application name, UUID, and base domain.
+
+    Raises:
+        RoutingError: If generated hostname labels exceed DNS limits.
+
+    .. admonition:: YAML example
+
+        .. code-block:: yaml
+
+            routing:
+                expose: true
+                port: 8000
+                hostname: dashboard
+    """
+
+    expose: bool = Field(
+        default=False,
+        description="Whether the application should be exposed via Traefik"
+    )
+
+    port: Optional[int] = Field(
+        default=None,
+        description="Internal container port to expose via Traefik"
+    )
+
+    hostname: Optional[str] = Field(
+        default=None,
+        description="Optional desired hostname (alias) for the application"
+    )
+
+    # --- normalized fields (computed) ---
+    canonical_hostname: Optional[str] = None
+    alias_hostname: Optional[str] = None
+
+    def build_hostnames(self, app_name: str, app_uuid: str, base_domain: str) -> None:
+        """
+        Generate canonical and optional alias hostnames for the application.
+
+        The canonical hostname is always generated and guarantees uniqueness by
+        combining the normalized application name with a short UUID suffix.
+
+        The alias hostname is optional and derived from the user-provided hostname
+        field if present.
+
+        All hostnames are normalized to be DNS-compliant:
+        - lowercase
+        - invalid characters replaced
+        - maximum label length enforced (63 characters)
+
+        Args:
+            app_name (str): Name of the application (key in config).
+            app_uuid (str): Unique identifier of the application.
+            base_domain (str): Base domain used for hostname generation.
+
+        Raises:
+            RoutingError: If generated hostname labels exceed DNS limits.
+        """
+        short_uuid = normalize_name(app_uuid)[:4]
+        norm_name = normalize_name(app_name)
+
+        suffix = f"-{short_uuid}"
+        label = f"{norm_name}{suffix}"
+
+        # enforce DNS label length
+        MAX_LABEL = 63
+        if len(label) > MAX_LABEL:
+            raise RoutingError(
+                f"Canonical hostname label too long: '{label}' ({len(label)} > {MAX_LABEL}). "
+                f"Shorten app name '{app_name}'."
+            )
+
+        self.canonical_hostname = f"{label}.{base_domain}"
+
+        # optional alias
+        if self.hostname:
+            alias = normalize_name(self.hostname)
+
+            if len(alias) > MAX_LABEL:
+                raise RoutingError(
+                    f"Alias hostname label too long: '{alias}' ({len(alias)} > {MAX_LABEL}). "
+                    f"Shorten hostname '{self.hostname}'."
+                )
+
+            self.alias_hostname = f"{alias}.{base_domain}"
+        else:
+            self.alias_hostname = None
 
 
 class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
@@ -116,6 +255,11 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     storage: Optional[StorageBackend] = Field(
         default=None,
         description="Optional storage backend for the application"
+    )
+
+    routing: Optional[Routing] = Field(
+        default=None,
+        description="Optional routing configuration to expose the application via Traefik (host-based routing)"
     )
 
     networks: Optional[List[str]] = Field(
@@ -207,5 +351,12 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
         except Exception as e:
             user_notify.fail(f"App '{app_name}': UNS validation failed: {e}")
             return None
+
+        if app.routing and app.routing.expose:
+            app.routing.build_hostnames(
+                app_name=app_name,
+                app_uuid=app.uuid,
+                base_domain=Config.OPENFACTORY_BASE_DOMAIN,
+            )
 
     return apps

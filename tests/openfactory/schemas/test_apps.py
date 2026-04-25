@@ -4,7 +4,7 @@ import yaml
 from unittest.mock import patch
 from pydantic import ValidationError
 from tempfile import NamedTemporaryFile
-from openfactory.schemas.apps import OpenFactoryAppsConfig, get_apps_from_config_file
+from openfactory.schemas.apps import OpenFactoryAppsConfig, RoutingError, get_apps_from_config_file
 from openfactory.schemas.uns import UNSSchema
 
 
@@ -32,6 +32,14 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         # Load actual UNSSchema instance
         self.uns_schema = UNSSchema(schema_yaml_file=self.uns_schema_file.name)
+
+        # --- patch base domain
+        self.base_domain_patcher = patch(
+            "openfactory.schemas.apps.Config.OPENFACTORY_BASE_DOMAIN",
+            "example.com",
+            create=True
+        )
+        self.base_domain_patcher.start()
 
     def tearDown(self):
         os.remove(self.uns_schema_file.name)
@@ -374,3 +382,142 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         self.assertEqual(deploy.replicas, 3)
         self.assertEqual(deploy.resources.reservations.cpus, 0.5)
         self.assertEqual(deploy.placement.constraints, ["node.labels.zone == WC2"])
+
+    def test_optional_routing(self):
+        """ routing field is optional """
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1"
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+        self.assertIsNone(config.apps["demo1"].routing)
+
+    def test_routing_basic(self):
+        """ routing field is parsed correctly """
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "routing": {
+                        "expose": True,
+                        "port": 8000
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+        routing = config.apps["demo1"].routing
+
+        self.assertTrue(routing.expose)
+        self.assertEqual(routing.port, 8000)
+        self.assertIsNone(routing.hostname)
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_routing_hostname_generation(self, mock_load_yaml):
+        """ canonical and alias hostnames are generated correctly """
+        mock_load_yaml.return_value = {
+            "apps": {
+                "My_App": {
+                    "uuid": "ABCD1234",
+                    "image": "demo",
+                    "routing": {
+                        "expose": True,
+                        "port": 8000,
+                        "hostname": "My_Dashboard!!"
+                    }
+                }
+            }
+        }
+
+        result = get_apps_from_config_file("dummy.yaml", self.uns_schema)
+        app = result["My_App"]
+        routing = app.routing
+
+        self.assertEqual(
+            routing.canonical_hostname,
+            "my-app-abcd.example.com"
+        )
+        self.assertEqual(
+            routing.alias_hostname,
+            "my-dashboard.example.com"
+        )
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_routing_no_alias(self, mock_load_yaml):
+        """ alias is None if hostname not provided """
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "ABCD1234",
+                    "image": "demo",
+                    "routing": {
+                        "expose": True,
+                        "port": 8000
+                    }
+                }
+            }
+        }
+
+        result = get_apps_from_config_file("dummy.yaml", self.uns_schema)
+        routing = result["demo1"].routing
+
+        self.assertIsNotNone(routing.canonical_hostname)
+        self.assertIsNone(routing.alias_hostname)
+
+    def test_routing_hostname_too_long(self):
+        """ too long hostname should raise error """
+        long_name = "a" * 70
+
+        config_data = {
+            "apps": {
+                long_name: {
+                    "uuid": "ABCD1234",
+                    "image": "demo",
+                    "routing": {
+                        "expose": True,
+                        "port": 8000
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+
+        with self.assertRaises(RoutingError):
+            config.apps[long_name].routing.build_hostnames(
+                app_name=long_name,
+                app_uuid="ABCD1234",
+                base_domain="example.com"
+            )
+
+    def test_routing_alias_too_long(self):
+        """ too long alias should raise error """
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "ABCD1234",
+                    "image": "demo",
+                    "routing": {
+                        "expose": True,
+                        "port": 8000,
+                        "hostname": "a" * 70
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+
+        with self.assertRaises(RoutingError):
+            config.apps["demo1"].routing.build_hostnames(
+                app_name="demo1",
+                app_uuid="ABCD1234",
+                base_domain="example.com"
+            )

@@ -33,4 +33,5 @@ API Reference
 
    about
    architecture
+   guide
    api/index

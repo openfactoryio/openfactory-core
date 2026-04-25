@@ -24,7 +24,7 @@ dependencies = [
     "docker>=7.1,<8.0",
     "fsspec>=2026.3.0,<2027.0",
     "PyGithub>=2.8,<3.0",
-    "nats-py>=2.11,<3.0",
+    "nats-py>=2.14.0,<3.0",
 
     # Custom Git dependency (pinned to commit)
     "mtc2kafka @ git+https://github.com/rwuthric/python-mtc2kafka.git@03a99e32b0bd4d4929e9d81b753868fee88cfa4d",

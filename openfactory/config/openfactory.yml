@@ -38,7 +38,7 @@ OPENFACTORY_MANAGER_NODE_DOCKER_URL: unix:///var/run/docker.sock
 OPENFACTORY_NETWORK: factory-net
 
 # Traefik configurations
-OPENFACTORY_DOMAIN: ${OPENFACTORY_DOMAIN}
+OPENFACTORY_BASE_DOMAIN: ${OPENFACTORY_BASE_DOMAIN}
 
 # ---------------------------------------------------------------------------
 # Kafka related configurations

@@ -97,6 +97,102 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.assertIn("must inherit from OpenFactoryServiceDeploymentStrategy", str(ctx.exception))
 
+    def test_build_traefik_labels_no_routing(self):
+        """ No routing defined should return empty labels """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing=None
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+        self.assertEqual(labels, {})
+
+    def test_build_traefik_labels_not_exposed(self):
+        """ Routing not exposed should return empty labels """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={"expose": False}
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+        self.assertEqual(labels, {})
+
+    def test_build_traefik_labels_canonical_only(self):
+        """ Canonical hostname should generate correct labels """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app123.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+
+        expected_name = "ofa-app123"
+
+        self.assertEqual(labels["traefik.enable"], "true")
+        self.assertEqual(
+            labels[f"traefik.http.routers.{expected_name}.rule"],
+            "Host(`app123.example.com`)"
+        )
+        self.assertEqual(
+            labels[f"traefik.http.routers.{expected_name}.service"],
+            expected_name
+        )
+        self.assertEqual(
+            labels[f"traefik.http.services.{expected_name}.loadbalancer.server.port"],
+            "8000"
+        )
+
+    def test_build_traefik_labels_with_alias(self):
+        """ Alias hostname should be included in rule """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app123.example.com",
+                "alias_hostname": "dashboard.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+
+        expected_rule = (
+            "Host(`app123.example.com`) || Host(`dashboard.example.com`)"
+        )
+
+        self.assertEqual(
+            labels["traefik.http.routers.ofa-app123.rule"],
+            expected_rule
+        )
+
+    def test_build_traefik_labels_uuid_normalization(self):
+        """ UUID should be normalized in router/service name """
+        app = OpenFactoryAppSchema(
+            uuid="My_App_123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "my-app.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+
+        # normalize_name("My_App_123") -> "my-app-123"
+        expected_name = "ofa-my-app-123"
+
+        self.assertIn(f"traefik.http.routers.{expected_name}.rule", labels)
+        self.assertIn(f"traefik.http.services.{expected_name}.loadbalancer.server.port", labels)
+
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
@@ -128,17 +224,22 @@ class TestOpenFactoryManager(unittest.TestCase):
             "KSQLDB_LOG_LEVEL=INFO"
         ]
 
-        # deployment_strategy.deploy call check
-        self.manager.deployment_strategy.deploy.assert_called_once_with(
-            image="app_image",
-            name="app123",
-            mode={"Replicated": {"Replicas": 1}},
-            env=expected_env,
-            resources=None,
-            constraints=None,
-            networks=None,
-            mounts=[]
-        )
+        # extract call
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertEqual(kwargs["image"], "app_image")
+        self.assertEqual(kwargs["name"], "app123")
+        self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 1}})
+        self.assertEqual(kwargs["env"], expected_env)
+        self.assertIsNone(kwargs["resources"])
+        self.assertIsNone(kwargs["constraints"])
+        self.assertIsNone(kwargs["networks"])
+        self.assertEqual(kwargs["mounts"], [])
+
+        # labels should be present (empty because no routing)
+        self.assertIn("labels", kwargs)
+        self.assertEqual(kwargs["labels"], {})
 
         # register_asset call check
         mock_register_asset.assert_called_once_with(
@@ -305,6 +406,62 @@ class TestOpenFactoryManager(unittest.TestCase):
             deploy_kwargs = self.manager.deployment_strategy.deploy.call_args.kwargs
             self.assertIn("mounts", deploy_kwargs)
             self.assertIn(mount_spec, deploy_kwargs["mounts"])
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_includes_traefik_labels(self, mock_user_notify, mock_register_asset):
+        """ Test that Traefik labels are generated and passed to deploy when routing is enabled """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "hostname": "dashboard"
+            }
+        )
+
+        # simulate enrichment step (normally done in get_apps_from_config_file)
+        app.routing.build_hostnames(
+            app_name="My_App",
+            app_uuid=app.uuid,
+            base_domain="example.com"
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        labels = deploy_call.kwargs["labels"]
+
+        expected_name = "ofa-app123"
+
+        self.assertEqual(labels["traefik.enable"], "true")
+        self.assertEqual(
+            labels[f"traefik.http.routers.{expected_name}.service"],
+            expected_name
+        )
+        self.assertEqual(
+            labels[f"traefik.http.routers.{expected_name}.entrypoints"],
+            "web"
+        )
+        self.assertEqual(
+            labels[f"traefik.http.services.{expected_name}.loadbalancer.server.port"],
+            "8000"
+        )
+
+        # rule should include BOTH canonical and alias
+        canonical = app.routing.canonical_hostname
+        alias = app.routing.alias_hostname
+
+        expected_rule = f"Host(`{canonical}`)"
+        if alias:
+            expected_rule += f" || Host(`{alias}`)"
+
+        self.assertEqual(
+            labels[f"traefik.http.routers.{expected_name}.rule"],
+            expected_rule
+        )
 
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")

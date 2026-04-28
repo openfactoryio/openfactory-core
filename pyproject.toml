@@ -7,7 +7,7 @@ name = "openfactory"
 version = "0.5.3"
 dependencies = [
     # Core utilities
-    "click>=8.3,<9.0",
+    "click>=8.3.3,<9.0",
     "rich>=15.0.0,<16.0",
     "pydantic>=2.13.0,<3.0",
     "pyyaml>=6.0.3,<7.0",

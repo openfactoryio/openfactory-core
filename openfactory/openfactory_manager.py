@@ -45,7 +45,7 @@ import json
 import openfactory.config as config
 from openfactory import OpenFactory
 from openfactory.schemas.devices import get_devices_from_config_file
-from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file
+from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file, normalize_name
 from openfactory.schemas.uns import UNSSchema
 from openfactory.schemas.common import constraints, resources
 from openfactory.assets import Asset
@@ -105,6 +105,51 @@ class OpenFactoryManager(OpenFactory):
         self.deployment_strategy: OpenFactoryServiceDeploymentStrategy = platform_cls()
         self.deployment_strategy = platform_cls()
 
+    def _build_traefik_labels(self, application: OpenFactoryAppSchema) -> dict[str, str]:
+        """
+        Build Traefik labels for exposing an OpenFactory application.
+
+        This method generates the set of Docker labels required by Traefik to route
+        HTTP traffic to the given application based on its routing configuration.
+        Routing is performed using host-based rules derived from the application's
+        canonical hostname and optional alias hostname.
+
+        If routing is not defined or not exposed, no labels are generated.
+
+        Args:
+            application (OpenFactoryAppSchema): The application configuration containing
+                routing information and metadata.
+
+        Returns:
+            dict[str, str]: A dictionary of Traefik labels to be applied to the container
+            or service. Returns an empty dictionary if routing is disabled.
+
+        Notes:
+            - Routing uses host-based rules only (no path-based routing).
+            - The canonical hostname is always included.
+            - If an alias hostname is defined, it is added as an alternative rule.
+            - The router and service names are derived from the normalized application UUID.
+        """
+        routing = application.routing
+
+        if not routing or not routing.expose:
+            return {}
+
+        name = f"ofa-{normalize_name(application.uuid)}"
+
+        # build rule
+        rule = f"Host(`{routing.canonical_hostname}`)"
+        if routing.alias_hostname:
+            rule += f" || Host(`{routing.alias_hostname}`)"
+
+        return {
+            "traefik.enable": "true",
+            f"traefik.http.routers.{name}.service": name,
+            f"traefik.http.routers.{name}.rule": rule,
+            f"traefik.http.routers.{name}.entrypoints": "web",
+            f"traefik.http.services.{name}.loadbalancer.server.port": str(routing.port),
+        }
+
     def deploy_openfactory_application(self, application: OpenFactoryAppSchema) -> None:
         """
         Deploy an OpenFactory application.
@@ -157,7 +202,8 @@ class OpenFactoryManager(OpenFactory):
                 resources=resources(application.deploy),
                 constraints=constraints(application.deploy),
                 networks=application.networks,
-                mounts=mounts
+                mounts=mounts,
+                labels=self._build_traefik_labels(application),
             )
         except docker.errors.APIError as err:
             user_notify.fail(f"Application {application.uuid} could not be deployed\n{err}")

@@ -21,7 +21,7 @@ dependencies = [
     # Infrastructure / Integration
     "docker>=7.1,<8.0",
     "fsspec>=2026.3.0,<2027.0",
-    "PyGithub>=2.8,<3.0",
+    "PyGithub>=2.9.1,<3.0",
     "nats-py>=2.14.0,<3.0",
 
     # Custom Git dependency (pinned to commit)

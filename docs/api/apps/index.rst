@@ -160,3 +160,4 @@ See Also
    ofa_app
    ofa_attributes
    ofa_method
+   ofa_fastapi_app

@@ -167,6 +167,21 @@ class OpenFactoryManager(OpenFactory):
                f"ASSET_ROUTER_URL={config.ASSET_ROUTER_URL}",
                f"DOCKER_SERVICE={application.uuid.lower()}"]
 
+        # if routing section is defined export PORT variable
+        routing = application.routing
+        if routing:
+            # check conflict
+            if application.environment:
+                for item in application.environment:
+                    var, _ = item.split("=", 1)
+                    if var.strip() == "PORT":
+                        user_notify.fail(
+                            f"Application {application.uuid}: "
+                            "PORT must not be defined in 'environment' when routing is enabled. "
+                            "It is managed automatically by OpenFactory.")
+                        return
+            env.append(f"PORT={routing.port}")
+
         # Add STORAGE only if not None
         if application.storage is not None:
             # Serialize storage config as JSON

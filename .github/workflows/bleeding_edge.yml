@@ -30,7 +30,7 @@ jobs:
       - name: Install latest dependencies (bleeding edge)
         run: |
           # Install latest versions ignoring upper bounds
-          pip install --upgrade --upgrade-strategy eager .[dev]
+          pip install --upgrade --upgrade-strategy eager ".[fastapi,dev]"
 
       - name: Test with unittest
         run: python tests/run_unit_tests.py

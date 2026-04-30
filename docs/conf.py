@@ -27,6 +27,7 @@ intersphinx_mapping = {
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
     'fsspec': ('https://filesystem-spec.readthedocs.io/en/latest/', None),
     'requests': ('https://requests.readthedocs.io/en/latest/', None),
+    "fastapi": ("https://fastapi.tiangolo.com/", None),
 }
 
 nitpick_ignore = [

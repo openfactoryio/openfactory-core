@@ -193,6 +193,80 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.assertIn(f"traefik.http.routers.{expected_name}.rule", labels)
         self.assertIn(f"traefik.http.services.{expected_name}.loadbalancer.server.port", labels)
 
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_sets_port_from_routing(self, mock_user_notify, mock_register_asset):
+        """ PORT should be injected when routing is enabled """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_PORT",
+            image="app_image",
+            environment=["FOO=bar"],
+            routing={
+                "expose": True,
+                "port": 8123,
+                "canonical_hostname": "app.example.com"
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env = deploy_call.kwargs["env"]
+
+        self.assertIn("PORT=8123", env)
+
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_port_conflict(self, mock_user_notify):
+        """ User-defined PORT should cause deployment to fail when routing is enabled """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_PORT_CONFLICT",
+            image="app_image",
+            environment=["PORT=9999"],
+            routing={
+                "expose": True,
+                "port": 8123
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        # deployment should NOT happen
+        self.manager.deployment_strategy.deploy.assert_not_called()
+
+        # failure must be reported
+        mock_user_notify.fail.assert_called_once()
+        msg = mock_user_notify.fail.call_args[0][0]
+
+        self.assertIn("PORT must not be defined", msg)
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_sets_port_when_routing_not_exposed(self, mock_user_notify, mock_register_asset):
+        """ PORT must be set from routing even if expose=False """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_PORT_NO_EXPOSE",
+            image="app_image",
+            environment=["FOO=bar"],
+            routing={
+                "expose": False,
+                "port": 8123
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        # ensure deployment happened
+        self.manager.deployment_strategy.deploy.assert_called_once()
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env = deploy_call.kwargs["env"]
+
+        self.assertIn("PORT=8123", env)
+        self.assertIn("FOO=bar", env)
+
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")

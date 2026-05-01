@@ -193,6 +193,65 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.assertIn(f"traefik.http.routers.{expected_name}.rule", labels)
         self.assertIn(f"traefik.http.services.{expected_name}.loadbalancer.server.port", labels)
 
+    @patch.dict("os.environ", {"OPENFACTORY_ENV": "dev"})
+    def test_build_traefik_labels_dev_mode_adds_path_prefix(self):
+        """ Test that _build_traefik_labels adds path prefixes in dev environment """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+
+        name = "ofa-app123"
+        path_prefix = "/app123"
+
+        # external router exists
+        self.assertIn(f"traefik.http.routers.{name}-external.rule", labels)
+
+        self.assertEqual(
+            labels[f"traefik.http.routers.{name}-external.rule"],
+            f"Host(`localhost`) && PathPrefix(`{path_prefix}`)"
+        )
+
+        # middleware chain
+        self.assertIn(
+            f"traefik.http.routers.{name}-external.middlewares",
+            labels
+        )
+
+        # strip prefix middleware
+        self.assertEqual(
+            labels[f"traefik.http.middlewares.{name}-strip.stripprefix.prefixes"],
+            path_prefix
+        )
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_build_traefik_labels_no_dev_mode_no_path_prefix(self):
+        """ Test that _build_traefik_labels does not add path prefixes when not in dev environment """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+
+        # external router must NOT exist
+        self.assertNotIn(
+            "traefik.http.routers.ofa-app123-external.rule",
+            labels
+        )
+
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_sets_port_from_routing(self, mock_user_notify, mock_register_asset):
@@ -266,6 +325,52 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.assertIn("PORT=8123", env)
         self.assertIn("FOO=bar", env)
+
+    @patch.dict("os.environ", {"OPENFACTORY_ENV": "dev"})
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_sets_openfactory_root_path_in_dev(self, mock_user_notify, mock_register_asset):
+        """ Test that deploy_openfactory_application sets OPENFACTORY_ROOT_PATH in dev environment """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app.example.com"
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env = deploy_call.kwargs["env"]
+
+        self.assertIn("OPENFACTORY_ROOT_PATH=/app123", env)
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_does_not_set_openfactory_root_path_outside_dev(self, mock_user_notify, mock_register_asset):
+        """ Test that deploy_openfactory_application does not set OPENFACTORY_ROOT_PATH when not in dev environment """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app.example.com"
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env = deploy_call.kwargs["env"]
+
+        self.assertFalse(
+            any(e.startswith("OPENFACTORY_ROOT_PATH=") for e in env)
+        )
 
     @patch("openfactory.openfactory_manager.config")
     @patch("openfactory.openfactory_manager.register_asset")

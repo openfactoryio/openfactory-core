@@ -2,9 +2,16 @@ import asyncio
 import os
 import uvicorn
 import logging
-from fastapi import FastAPI
 from openfactory.kafka import KSQLDBClient
 from openfactory.apps import OpenFactoryApp
+
+try:
+    from fastapi import FastAPI
+except ImportError as e:
+    raise ImportError(
+        "FastAPI is required for OpenFactoryFastAPIApp. "
+        "Install with: pip install openfactory[fastapi]"
+    ) from e
 
 
 class OpenFactoryFastAPIApp(OpenFactoryApp):

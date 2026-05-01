@@ -174,7 +174,33 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
                          test_mode=test_mode)
 
         self._shutdown_event = asyncio.Event()
-        self.api = FastAPI()
+
+        # OPENFACTORY_ROOT_PATH is set by the OpenFactory deployment tool when the app is
+        # exposed behind a path prefix (e.g. via Traefik PathPrefix routing such as
+        # http://localhost/<app-name> in devcontainers).
+        #
+        # In that case, FastAPI must be aware of this prefix to correctly generate
+        # URLs for OpenAPI/Swagger and any relative paths. This is done via `root_path`.
+        #
+        # Example:
+        #   External URL: http://localhost/demo-fastapi-app/docs
+        #   → OPENFACTORY_ROOT_PATH=/demo-fastapi-app
+        #
+        # When the app is accessed via host-based routing (e.g.
+        # http://myapp.openfactory.local), no prefix is used and this value is empty.
+        #
+        # `root_path_in_servers=True` ensures that the OpenAPI schema (used by Swagger UI)
+        # includes the correct base path automatically.
+        #
+        # Important:
+        # - This must match the Traefik PathPrefix configuration.
+        # - It should NOT be set for pure host-based routing.
+        #
+        root_path = os.getenv("OPENFACTORY_ROOT_PATH", "")
+        self.api = FastAPI(
+            root_path=root_path,
+            root_path_in_servers=True,
+        )
         self.configure_routes()
 
     def configure_routes(self) -> None:

@@ -40,6 +40,7 @@ Important:
     User requires Docker access on the OpenFactory cluster.
 """
 
+import os
 import docker
 import json
 import openfactory.config as config
@@ -142,13 +143,45 @@ class OpenFactoryManager(OpenFactory):
         if routing.alias_hostname:
             rule += f" || Host(`{routing.alias_hostname}`)"
 
-        return {
+        labels = {
             "traefik.enable": "true",
             f"traefik.http.routers.{name}.service": name,
             f"traefik.http.routers.{name}.rule": rule,
             f"traefik.http.routers.{name}.entrypoints": "web",
             f"traefik.http.services.{name}.loadbalancer.server.port": str(routing.port),
         }
+
+        # in development environment add localhost + path-based access
+        if os.environ.get("OPENFACTORY_ENV") == "dev":
+            path_prefix = f"/{normalize_name(application.uuid)}"
+
+            external_router = f"{name}-external"
+            middleware = f"{name}-strip"
+            redirect_middleware = f"{name}-slash"
+
+            labels.update({
+                # external router (localhost + path)
+                f"traefik.http.routers.{external_router}.rule":
+                    f"Host(`localhost`) && PathPrefix(`{path_prefix}`)",
+                f"traefik.http.routers.{external_router}.entrypoints": "web",
+                f"traefik.http.routers.{external_router}.service": name,
+
+                # redirect first, then strip
+                f"traefik.http.routers.{external_router}.middlewares":
+                    f"{redirect_middleware},{middleware}",
+
+                # strip prefix middleware
+                f"traefik.http.middlewares.{middleware}.stripprefix.prefixes":
+                    path_prefix,
+
+                # trailing slash redirect middleware
+                f"traefik.http.middlewares.{redirect_middleware}.redirectregex.regex":
+                    f"^({path_prefix})(\\?.*)?$",
+                f"traefik.http.middlewares.{redirect_middleware}.redirectregex.replacement":
+                    "${1}/${2}",
+            })
+
+        return labels
 
     def deploy_openfactory_application(self, application: OpenFactoryAppSchema) -> None:
         """
@@ -181,6 +214,20 @@ class OpenFactoryManager(OpenFactory):
                             "It is managed automatically by OpenFactory.")
                         return
             env.append(f"PORT={routing.port}")
+
+            # In dev environment, apps are exposed via a path prefix on localhost
+            # (e.g. http://localhost/<app-uuid> using Traefik PathPrefix routing).
+            # To work correctly behind such a prefix, applications must be aware of
+            # their external base path when generating URLs (e.g. links, redirects, API docs, static assets).
+            #
+            # OpenFactory provides this information via OPENFACTORY_ROOT_PATH.
+            # Framework-specific examples:
+            #  - FastAPI:     FastAPI(root_path=...)
+            #  - Flask:       APPLICATION_ROOT / SCRIPT_NAME
+            #  - Django:      FORCE_SCRIPT_NAME
+            #  - WSGI apps:   SCRIPT_NAME
+            if os.environ.get("OPENFACTORY_ENV") == "dev":
+                env.append(f"OPENFACTORY_ROOT_PATH=/{normalize_name(application.uuid)}")
 
         # Add STORAGE only if not None
         if application.storage is not None:

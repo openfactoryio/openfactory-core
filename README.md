@@ -122,7 +122,7 @@ This project is licensed under the [Polyform Noncommercial License 1.0.0](LICENS
 Use, modification, and distribution of this software are permitted for **academic, research, and personal purposes**, provided that such use is **non-commercial** in nature.
 
 ### **Commercial Use**
-Commercial use—including use in any paid product, service, or Software-as-a-Service (SaaS) offering—**requires a separate commercial license**. Interested parties must contact the project maintainer to obtain explicit written permission. Licensing discussions and agreements are managed in coordination with the Concorida Univerity technology transfer office.
+Commercial use—including use in any paid product, service, or Software-as-a-Service (SaaS) offering—**requires a separate commercial license**. Interested parties must contact the project maintainer to obtain explicit written permission. Licensing discussions and agreements are managed in coordination with the Concordia Univerity technology transfer office.
 
 For licensing inquiries, please contact: [rolf.wuthrich@concordia.ca]
 

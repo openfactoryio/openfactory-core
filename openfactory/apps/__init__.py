@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from openfactory.apps.ofa_fastapi_app import OpenFactoryFastAPIApp
+    from openfactory.apps.ofa_flask_app import OpenFactoryFlaskApp
 
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "EventAttribute",
     "SampleAttribute",
     "OpenFactoryFastAPIApp",
+    "OpenFactoryFlaskApp",
 ]
 
 
@@ -32,5 +34,17 @@ def __getattr__(name):
 
         globals()[name] = OpenFactoryFastAPIApp  # cache it
         return OpenFactoryFastAPIApp
+    
+    if name == "OpenFactoryFlaskApp":
+        try:
+            from openfactory.apps.ofa_flask_app import OpenFactoryFlaskApp
+        except ImportError as e:
+            raise ImportError(
+                "OpenFactoryFlaskApp requires optional dependencies. "
+                "Install it with `pip install openfactory[flask]`."
+            ) from e
+
+        globals()[name] = OpenFactoryFlaskApp
+        return OpenFactoryFlaskApp
 
     raise AttributeError(f"module {__name__} has no attribute {name}")

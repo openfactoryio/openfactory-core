@@ -28,6 +28,7 @@ intersphinx_mapping = {
     'fsspec': ('https://filesystem-spec.readthedocs.io/en/latest/', None),
     'requests': ('https://requests.readthedocs.io/en/latest/', None),
     "fastapi": ("https://fastapi.tiangolo.com/", None),
+    "flask": ("https://flask.palletsprojects.com/en/stable/", None),
 }
 
 nitpick_ignore = [

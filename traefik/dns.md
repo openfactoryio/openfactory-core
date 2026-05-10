@@ -53,15 +53,7 @@ host-record=factory.local,<TRAefik-IP>
 
 ---
 
-## 3. Restart dnsmasq
-
-```bash
-sudo systemctl restart dnsmasq
-```
-
----
-
-## 4. Configure systemd-resolved (Ubuntu)
+## 3. Configure systemd-resolved (Ubuntu)
 
 Create:
 
@@ -74,14 +66,20 @@ Add:
 
 ```text
 [Resolve]
+DNSStubListener=no
 DNS=127.0.0.1
 Domains=~factory.local
 ```
+
+> dnsmasq will resolve *.factory.local locally and forward all other DNS requests to the configured upstream DNS servers (typically corporate DNS servers provided by DHCP/VPN).
+
+## 4. Restart services
 
 Restart:
 
 ```bash
 sudo systemctl restart systemd-resolved
+sudo systemctl restart dnsmasq
 ```
 
 Verify:
@@ -101,47 +99,13 @@ nslookup demo.factory.local 127.0.0.1
 Expected result:
 
 ```text
-demo.factory.local → <TRAefik-IP>
+Name:    demo.factory.local
+Address: <TRAefik-IP>
 ```
 
 ---
 
-## 6. Ensure DNS listens on network (important)
-
-Check:
-
-```bash
-sudo ss -lntup | grep :53
-```
-
-You should see dnsmasq listening on:
-
-```text
-0.0.0.0:53
-```
-
-If not, edit:
-
-```bash
-sudo nano /etc/dnsmasq.conf
-```
-
-Ensure:
-
-```text
-listen-address=0.0.0.0
-bind-interfaces
-```
-
-Then restart:
-
-```bash
-sudo systemctl restart dnsmasq
-```
-
----
-
-## 7. Open firewall (if needed)
+## 6. Open firewall (if needed)
 
 ```bash
 sudo ufw allow 53
@@ -149,7 +113,7 @@ sudo ufw allow 53
 
 ---
 
-## 8. Test from another machine
+## 7. Test from another machine
 
 From any machine on the network:
 

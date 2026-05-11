@@ -163,7 +163,7 @@ class MTConnectAgentDeployer:
 
         labels = {
             "traefik.enable": "true",
-            f"traefik.http.routers.{service_name}.rule": f"Host(`{self.device.uuid.lower()}.agent.{config.OPENFACTORY_DOMAIN}`)",
+            f"traefik.http.routers.{service_name}.rule": f"Host(`{self.device.uuid.lower()}.agent.{config.OPENFACTORY_BASE_DOMAIN}`)",
             f"traefik.http.routers.{service_name}.entrypoints": "web",
             f"traefik.http.services.{service_name}.loadbalancer.server.port": "5000",
         }

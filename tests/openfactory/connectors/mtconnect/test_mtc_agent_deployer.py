@@ -201,7 +201,7 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
         """ Test deploy_service """
         mock_config.MTCONNECT_AGENT_IMAGE = "agent-image"
         mock_config.OPENFACTORY_NETWORK = "ofa-network"
-        mock_config.OPENFACTORY_DOMAIN = "openfactory.local"
+        mock_config.OPENFACTORY_BASE_DOMAIN = "openfactory.local"
 
         self.device.connector.agent.port = 5000
         self.device.connector.agent.deploy = Deploy()

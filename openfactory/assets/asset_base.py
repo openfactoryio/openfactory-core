@@ -791,7 +791,8 @@ class BaseAsset:
         subject = f"{self.asset_uuid.upper()}.*"
 
         def _filter_samples(msg_subject: str, msg_value: dict):
-            if msg_value.get("TYPE") == "Samples":
+            msg_value = CaseInsensitiveDict(msg_value)
+            if msg_value.get("TYPE").upper() == "SAMPLES":
                 on_sample(msg_subject, msg_value)
 
         self.__start_nats_consumer(subject, _filter_samples, sub_key="samples")
@@ -810,7 +811,8 @@ class BaseAsset:
         subject = f"{self.asset_uuid.upper()}.*"
 
         def _filter_events(msg_subject: str, msg_value: dict):
-            if msg_value.get("TYPE") == "Events":
+            msg_value = CaseInsensitiveDict(msg_value)
+            if msg_value.get("TYPE").upper() == "EVENTS":
                 on_event(msg_subject, msg_value)
 
         self.__start_nats_consumer(subject, _filter_events, sub_key="events")
@@ -829,7 +831,8 @@ class BaseAsset:
         subject = f"{self.asset_uuid.upper()}.*"
 
         def _filter_conditions(msg_subject: str, msg_value: dict):
-            if msg_value.get("TYPE") == "Condition":
+            msg_value = CaseInsensitiveDict(msg_value)
+            if msg_value.get("TYPE").upper() == "CONDITION":
                 on_condition(msg_subject, msg_value)
 
         self.__start_nats_consumer(subject, _filter_conditions, sub_key="conditions")

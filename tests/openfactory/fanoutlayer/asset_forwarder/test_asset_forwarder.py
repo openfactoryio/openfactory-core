@@ -72,6 +72,94 @@ class TestAssetForwarder(unittest.IsolatedAsyncioTestCase):
         # that call returns a coroutine (not awaited). Check it was at least called:
         self.assertTrue(self.forwarder.consumer.store_offsets.called)
 
+    async def test_worker_accepts_case_insensitive_id(self):
+        """ Test that worker accepts ID keys in any casing. """
+        value = {"Id": "msg1", "foo": "bar"}
+
+        envelope = {
+            "topic": "ofa_assets",
+            "partition": 0,
+            "msg_offset": 1,
+            "key": b"asset123",
+            "value": value,
+            "enqueue_ts": time.perf_counter(),
+        }
+
+        await self.forwarder.queue.put(envelope)
+        await self.forwarder.queue.put(None)
+
+        worker_task = asyncio.create_task(self.forwarder._worker(0))
+
+        try:
+            await self.forwarder.queue.join()
+        finally:
+            worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker_task
+
+        cluster_name = self.forwarder.hash_ring.get(envelope["key"])
+
+        expected_subject = "asset123.msg1"
+        expected_payload = json.dumps({"foo": "bar"}).encode()
+
+        cluster_mock = self.forwarder.nats_clusters[cluster_name]
+
+        cluster_mock.publish.assert_awaited_once_with(
+            expected_subject,
+            expected_payload,
+        )
+
+        # Ensure the original mixed-case key was removed from payload
+        published_payload = json.loads(
+            cluster_mock.publish.await_args[0][1].decode()
+        )
+
+        self.assertNotIn("Id", published_payload)
+
+    async def test_worker_logs_warning_when_id_missing_in_any_case(self):
+        """ Test worker logs warning and skips publish when no ID field exists. """
+
+        value = {
+            "foo": "bar",
+            "identifier": "not-valid",
+            "message_id": "also-not-valid",
+        }
+
+        envelope = {
+            "topic": "ofa_assets",
+            "partition": 0,
+            "msg_offset": 1,
+            "key": b"asset123",
+            "value": value,
+            "enqueue_ts": time.perf_counter(),
+        }
+
+        await self.forwarder.queue.put(envelope)
+        await self.forwarder.queue.put(None)
+
+        with patch(
+            "openfactory.fanoutlayer.asset_forwarder.asset_forwarder.logger.warning"
+        ) as mock_warning:
+
+            worker_task = asyncio.create_task(self.forwarder._worker(0))
+
+            try:
+                await self.forwarder.queue.join()
+            finally:
+                worker_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await worker_task
+
+        # Ensure warning was logged
+        mock_warning.assert_called()
+
+        warning_msg = mock_warning.call_args[0][0]
+        self.assertIn("ID missing", warning_msg)
+
+        # Ensure nothing was published
+        for cluster in self.forwarder.nats_clusters.values():
+            cluster.publish.assert_not_awaited()
+
     async def test_worker_skips_message_without_key(self):
         """ Test worker skips messages without a key. """
         envelope = {

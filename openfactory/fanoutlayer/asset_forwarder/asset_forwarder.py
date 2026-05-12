@@ -368,7 +368,8 @@ class AssetForwarder:
             cluster = self.nats_clusters[cluster_name]
 
             # Extract and remove ID safely
-            message_id = value.pop("ID", None)
+            id_key = next((k for k in value.keys() if k.lower() == "id"), None)
+            message_id = value.pop(id_key, None) if id_key else None
             if not message_id:
                 logger.warning(f"[{worker_id}] ID missing in {value}")
                 self.queue.task_done()
@@ -382,15 +383,16 @@ class AssetForwarder:
 
             # Publish with retry
             ok = await self._publish_with_retry(cluster, subject, payload_bytes)
-            logger.debug(f"Worker[{worker_id}] Published msg (partition={envelope['partition']}, offset={envelope['msg_offset']}) to {cluster_name} in subject {subject}")
 
             if ok:
                 forwarder_metrics.NATS_MESSAGES_PUBLISHED.labels(cluster=cluster_name).inc()
                 # mark message as processed
                 tp = TopicPartition(envelope["topic"], envelope["partition"], envelope["msg_offset"] + 1)
                 self.consumer.store_offsets(offsets=[tp])
+                logger.debug(f"Worker[{worker_id}] Published msg {json.dumps(value)} (partition={envelope['partition']}, offset={envelope['msg_offset']}) to {cluster_name} in subject {subject}")
             else:
                 forwarder_metrics.NATS_PUBLISH_FAILURES.labels(cluster=cluster_name).inc()
+                logger.warning(f"Worker[{worker_id}] NATS cluster failed to accept msg ({json.dumps(value)}) to {cluster_name} in subject {subject}")
 
             duration = time.perf_counter() - start_time
             forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(forwarder=self.forwarder_id).observe(duration)

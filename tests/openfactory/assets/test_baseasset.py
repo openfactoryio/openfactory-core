@@ -922,7 +922,7 @@ class TestBaseAsset(TestCase):
             filter = args[1]
 
             # Should call callback for TYPE == 'Samples'
-            sample_msg = {"TYPE": "Samples", "VALUE": 123}
+            sample_msg = {"tYpe": "SampleS", "VALUE": 123}
             filter("subject.test", sample_msg)
             callback.assert_called_once_with("subject.test", sample_msg)
 
@@ -959,7 +959,7 @@ class TestBaseAsset(TestCase):
             filter_fn = args[1]
 
             # Should call callback for TYPE == 'Events'
-            event_msg = {"TYPE": "Events", "VALUE": 123}
+            event_msg = {"TYpe": "EvEnts", "VALUE": 123}
             filter_fn("subject.test", event_msg)
             callback.assert_called_once_with("subject.test", event_msg)
 
@@ -998,7 +998,7 @@ class TestBaseAsset(TestCase):
             filter_fn = args[1]
 
             # Should call callback for TYPE == 'Condition'
-            condition_msg = {"TYPE": "Condition", "VALUE": 123}
+            condition_msg = {"tyPE": "CondiTion", "VALUE": 123}
             filter_fn("subject.test", condition_msg)
             callback.assert_called_once_with("subject.test", condition_msg)
 

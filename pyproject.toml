@@ -50,7 +50,7 @@ docs = [
     "pydata-sphinx-theme==0.17.1",
     "sphinx-autodoc-typehints==3.10.2",
     "sphinx-design==0.7.0",
-    "sphinxcontrib-mermaid==2.0.1",
+    "sphinxcontrib-mermaid==2.0.2",
 ]
 
 [tool.setuptools]

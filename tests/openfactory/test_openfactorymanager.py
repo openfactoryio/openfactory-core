@@ -435,6 +435,42 @@ class TestOpenFactoryManager(unittest.TestCase):
 
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_runtime_user(self, mock_user_notify, mock_register_asset):
+        """ runtime UID/GID should be passed to deployment strategy """
+        app = OpenFactoryAppSchema(
+            uuid="APP_RUNTIME_USER",
+            image="app_image",
+            runtime_uid=1234,
+            runtime_gid=5678
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("user", kwargs)
+        self.assertEqual(kwargs["user"], "1234:5678")
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_no_runtime_user(self, mock_user_notify, mock_register_asset):
+        """ user should be None when runtime UID/GID are omitted """
+        app = OpenFactoryAppSchema(
+            uuid="APP_NO_RUNTIME_USER",
+            image="app_image"
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("user", kwargs)
+        self.assertIsNone(kwargs["user"])
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_includes_resources(self, mock_user_notify, mock_register_asset):
         """ Test that resources() result is passed to deploy when Deploy has limits and reservations. """
         res = Resources(

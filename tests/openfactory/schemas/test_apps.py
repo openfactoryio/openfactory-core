@@ -121,6 +121,135 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         self.assertIn("apps", str(context.exception))
 
+    def test_runtime_uid_gid_valid(self):
+        """ runtime_uid and runtime_gid are parsed correctly """
+
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "runtime_uid": 1234,
+                    "runtime_gid": 5678
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+
+        app = config.apps["demo1"]
+
+        self.assertEqual(app.runtime_uid, 1234)
+        self.assertEqual(app.runtime_gid, 5678)
+
+    def test_runtime_uid_without_gid_invalid(self):
+        """ runtime_uid without runtime_gid should raise ValidationError """
+
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "runtime_uid": 1234
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn(
+            "runtime_uid and runtime_gid must either both be defined or both be omitted",
+            str(cm.exception)
+        )
+
+    def test_runtime_gid_without_uid_invalid(self):
+        """ runtime_gid without runtime_uid should raise ValidationError """
+
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "runtime_gid": 5678
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn(
+            "runtime_uid and runtime_gid must either both be defined or both be omitted",
+            str(cm.exception)
+        )
+
+    def test_runtime_uid_zero_invalid(self):
+        """ runtime_uid must be >= 1 """
+
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "runtime_uid": 0,
+                    "runtime_gid": 5678
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn("greater than or equal to 1", str(cm.exception))
+
+    def test_runtime_gid_zero_invalid(self):
+        """ runtime_gid must be >= 1 """
+
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "runtime_uid": 1234,
+                    "runtime_gid": 0
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn("greater than or equal to 1", str(cm.exception))
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_runtime_uid_gid_integration_with_get_apps_from_config_file(self, mock_load_yaml):
+        """ runtime_uid and runtime_gid are correctly parsed from YAML """
+
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "uns": {"workcenter": "WC2"},
+                    "image": "demofact/demo1",
+                    "runtime_uid": 1234,
+                    "runtime_gid": 5678
+                }
+            }
+        }
+
+        result = get_apps_from_config_file(
+            "dummy.yaml",
+            self.uns_schema
+        )
+
+        self.assertIsNotNone(result)
+
+        app = result["demo1"]
+
+        self.assertEqual(app.runtime_uid, 1234)
+        self.assertEqual(app.runtime_gid, 5678)
+
     def test_invalid_environment_type(self):
         """ Test invalid environment type (string instead of list) """
         invalid_config = {

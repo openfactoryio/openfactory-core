@@ -46,6 +46,8 @@ configuration YAML file, with automatic UNS enrichment.
         scheduler:
           uuid: "app-scheduler"
           image: ghcr.io/openfactoryio/scheduler:v1.0.0
+          runtime_uid: 1234
+          runtime_gid: 5678
 
           uns:
             location: building-a
@@ -100,7 +102,7 @@ Note:
 
 import re
 import openfactory.config as Config
-from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator, model_validator
 from typing import List, Dict, Optional, Any
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
@@ -248,6 +250,18 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
 
     image: str = Field(..., description="Docker image for the app")
 
+    runtime_uid: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional runtime UID used to run the container process"
+    )
+
+    runtime_gid: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional runtime GID used to run the container process"
+    )
+
     environment: Optional[List[str]] = Field(
         default=None, description="List of environment variables"
     )
@@ -282,6 +296,14 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
                 if not name.strip():
                     raise ValueError("Network names must not be empty")
         return v
+
+    @model_validator(mode="after")
+    def validate_runtime_user(self):
+        if (self.runtime_uid is None) != (self.runtime_gid is None):
+            raise ValueError(
+                "runtime_uid and runtime_gid must either both be defined or both be omitted"
+            )
+        return self
 
 
 class OpenFactoryAppsConfig(BaseModel):

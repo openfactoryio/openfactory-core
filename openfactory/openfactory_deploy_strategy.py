@@ -17,6 +17,8 @@ Key Components:
 Features:
 ---------
 - Unified interface for deploying and removing OpenFactory services.
+- Supports optional runtime UID/GID configuration for compatibility with shared
+  filesystems such as NFS.
 - Supports environment variables, container commands, labels, ports, networks,
   constraints, resource limits, and Docker mounts.
 - Converts backend mount specifications (Local, NFS, Volume) into Docker-compatible mounts.
@@ -32,6 +34,7 @@ Usage Example:
     local_strategy.deploy(
         image="ghcr.io/openfactoryio/scheduler:v1.0.0",
         name="scheduler",
+        user="1234:5678",
         env=["ENV=production"],
         mounts=[{
             "Type": "bind",
@@ -46,6 +49,7 @@ Usage Example:
     swarm_strategy.deploy(
         image="ghcr.io/openfactoryio/reporter:v1.0.0",
         name="reporter",
+        user="1234:5678",
         env=["LOG_LEVEL=info"],
         mounts=[{
             "Type": "nfs",
@@ -75,6 +79,7 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
     @abstractmethod
     def deploy(self, *,
                image: str,
+               user: Optional[str] = None,
                name: str,
                env: List[str],
                labels: Optional[Dict[str, str]] = None,
@@ -90,6 +95,7 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
 
         Args:
             image (str): Docker image to deploy.
+            user (Optional[str]): Runtime user in Docker format ``UID:GID``.
             name (str): Name of the service or container.
             env (List[str]): Environment variables in `KEY=VALUE` format.
             labels (Optional[Dict[str, str]]): Metadata labels (Swarm only).
@@ -119,6 +125,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
     def deploy(self, *,
                image: str,
+               user: Optional[str] = None,
                name: str,
                env: List[str],
                labels: Optional[Dict[str, str]] = None,
@@ -136,6 +143,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         """
         dal.docker_client.services.create(
             image=image,
+            user=user,
             name=name,
             env=env,
             labels=labels,
@@ -198,6 +206,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
     def deploy(self, *,
                image: str,
+               user: Optional[str] = None,
                name: str,
                env: List[str],
                labels: Optional[Dict[str, str]] = None,
@@ -234,6 +243,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         container = client.containers.run(
             image=image,
+            user=user,
             name=name,
             environment=env,
             command=command,

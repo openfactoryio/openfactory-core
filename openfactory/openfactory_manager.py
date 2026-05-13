@@ -193,6 +193,14 @@ class OpenFactoryManager(OpenFactory):
         Raises:
             OFAException: If the application cannot be deployed.
         """
+        # runtime user override
+        runtime_user = None
+
+        if application.runtime_uid is not None:
+            runtime_user = (
+                f"{application.runtime_uid}:{application.runtime_gid}"
+            )
+
         # build environment variables
         env = [f"APP_UUID={application.uuid}",
                f"KAFKA_BROKER={self.bootstrap_servers}",
@@ -258,6 +266,7 @@ class OpenFactoryManager(OpenFactory):
         try:
             self.deployment_strategy.deploy(
                 image=application.image,
+                user=runtime_user,
                 name=application.uuid.lower(),
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,

@@ -41,6 +41,29 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
         self.assertEqual(kwargs["resources"]["Limits"]["NanoCPUs"], 500000000)
         self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 2}})
 
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_with_runtime_user(self, mock_docker_client):
+        """ Test Docker Swarm deploy with runtime user """
+
+        mock_create = MagicMock()
+        mock_docker_client.services.create = mock_create
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-service",
+            env=["ENV=prod"],
+            user="1234:5678"
+        )
+
+        mock_create.assert_called_once()
+
+        _, kwargs = mock_create.call_args
+
+        self.assertIn("user", kwargs)
+        self.assertEqual(kwargs["user"], "1234:5678")
+
     @patch("openfactory.openfactory_deploy_strategy.docker.types.Mount")
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_deploy_with_mounts(self, mock_docker_client, mock_mount_class):
@@ -127,6 +150,32 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertEqual(kwargs["network"], "bridge")
         self.assertEqual(kwargs["labels"], {"type": "api"})
         self.assertEqual(kwargs["nano_cpus"], 1000000000)
+
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_with_runtime_user(self, mock_from_env):
+        """ Test local Docker deploy with runtime user """
+
+        mock_client = MagicMock()
+        mock_run = MagicMock()
+
+        mock_client.containers.run = mock_run
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-container",
+            env=["ENV=dev"],
+            user="1234:5678"
+        )
+
+        mock_run.assert_called_once()
+
+        _, kwargs = mock_run.call_args
+
+        self.assertIn("user", kwargs)
+        self.assertEqual(kwargs["user"], "1234:5678")
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     def test_local_remove(self, mock_from_env):

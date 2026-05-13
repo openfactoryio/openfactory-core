@@ -44,6 +44,23 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
         self.assertIsInstance(app.app, Flask)
 
+    def test_create_flask_app_called(self):
+        """ Test initialization calls create_flask_app """
+
+        class App(OpenFactoryFlaskApp):
+
+            def create_flask_app(self):
+                self.called = True
+                return Flask(__name__)
+
+        app = App(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        self.assertTrue(hasattr(app, "called"))
+
     def test_configure_routes_called(self):
         """ Test initialization calls configure_routes """
 

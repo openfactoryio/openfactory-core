@@ -51,7 +51,6 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             import os
             import asyncio
             from flask import current_app
-
             from openfactory.apps import OpenFactoryFlaskApp, EventAttribute, ofa_method
             from openfactory.kafka import KSQLDBClient
 
@@ -93,10 +92,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             # main.py
             import os
             import asyncio
-
             from openfactory.apps import OpenFactoryFlaskApp
             from openfactory.kafka import KSQLDBClient
-
             from routes.root import root_bp
 
             class DemoFlaskApp(OpenFactoryFlaskApp):
@@ -128,6 +125,42 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
                 return {
                     "availability": ofa_app.avail.value
                 }
+
+    For applications requiring additional Flask configuration or extension setup,
+    the Flask application instance can also be customized using the application
+    factory pattern:
+
+    .. admonition:: Using a Flask application factory
+
+        .. code-block:: python
+
+            import os
+            import asyncio
+            from flask import Flask
+            from openfactory.apps import OpenFactoryFlaskApp
+            from openfactory.kafka import KSQLDBClient
+
+            class DemoFlaskApp(OpenFactoryFlaskApp):
+
+                def create_flask_app(self):
+                    app = Flask(__name__)
+                    app.config["SECRET_KEY"] = "my-secret-key"
+                    return app
+
+                def configure_routes(self):
+
+                    @self.app.route("/")
+                    def root():
+                        return {
+                            "message": "Hello Flask"
+                        }
+
+            app = DemoFlaskApp(
+                ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL", "http://localhost:8088")),
+                bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092"),
+            )
+
+            app.run()
 
     Note:
       - The Flask application is accessible via :attr:`app` and behaves like a standard Flask instance.
@@ -190,7 +223,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         )
 
         # Flask application
-        self.app = Flask(__name__)
+        self.app = self.create_flask_app()
 
         # expose OpenFactory app inside Flask
         self.app.ofa_app = self
@@ -200,6 +233,49 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         self._thread_exception = None
 
         self.configure_routes()
+
+    def create_flask_app(self) -> Flask:
+        """
+        Create and configure the Flask application instance.
+
+        This method is called during initialization to create the
+        :class:`flask.Flask` application attached to the OpenFactory runtime.
+
+        Subclasses may override this method to customize the Flask application
+        before routes are registered via :meth:`configure_routes`.
+
+        Typical use cases include:
+            - Loading Flask configuration
+            - Initializing Flask extensions
+            - Enabling middleware
+            - Customizing template or static paths
+            - Applying testing configuration
+
+        Returns:
+            flask.Flask: Configured Flask application instance.
+
+        .. admonition:: Example
+
+            .. code-block:: python
+
+                class DemoFlaskApp(OpenFactoryFlaskApp):
+
+                    def create_flask_app(self):
+                        app = Flask(__name__)
+                        app.config["SECRET_KEY"] = "my-secret"
+                        return app
+
+        Note:
+            The returned Flask application is automatically exposed through:
+
+            .. code-block:: python
+
+                self.app
+
+            allowing subclasses to configure routes, Blueprints,
+            extensions, and Flask application settings
+        """
+        return Flask(__name__)
 
     def configure_routes(self):
         """

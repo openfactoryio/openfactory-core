@@ -88,3 +88,22 @@ class TestOpenFactoryFlaskAppHTTP(unittest.TestCase):
         response = self.client.get("/unknown")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_forwarded_prefix_applies_to_redirects(self):
+        """ ProxyFix should apply forwarded prefix to redirects. """
+
+        @self.app.app.route("/redirect")
+        def redirect_route():
+            from flask import redirect, url_for
+            return redirect(url_for("root"))
+
+        response = self.client.get(
+            "/redirect",
+            headers={
+                "X-Forwarded-Prefix": "/my-app"
+            },
+            follow_redirects=False
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/my-app/")

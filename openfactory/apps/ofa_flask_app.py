@@ -10,6 +10,7 @@ import os
 import asyncio
 import threading
 from werkzeug.serving import make_server
+from werkzeug.middleware.proxy_fix import ProxyFix
 from openfactory.apps import OpenFactoryApp
 from openfactory.kafka import KSQLDBClient
 
@@ -224,6 +225,24 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
 
         # Flask application
         self.app = self.create_flask_app()
+
+        # Trust reverse proxy forwarded headers.
+        #
+        # Required for correct URL generation and redirects when
+        # applications are exposed behind a path prefix through
+        # the OpenFactory Traefik development gateway:
+        #
+        #   http://localhost/<app-name>/
+        #
+        # Traefik StripPrefix forwards the original external
+        # prefix via X-Forwarded-Prefix, which Werkzeug maps
+        # to SCRIPT_NAME through ProxyFix.
+        self.app.wsgi_app = ProxyFix(
+            self.app.wsgi_app,
+            x_prefix=1,
+            x_host=1,
+            x_proto=1,
+        )
 
         # expose OpenFactory app inside Flask
         self.app.ofa_app = self

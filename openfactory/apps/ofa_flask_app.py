@@ -173,6 +173,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
       - OpenFactory features such as attributes, methods, and asset communication remain unchanged.
       - When deployed on the OpenFactory platform, the ``PORT`` environment variable is set automatically
         by the deployment tool.
+      - OpenFactory automatically enables Werkzeug ProxyFix to support reverse-proxy deployments through
+        the OpenFactory Traefik routing gateway, including localhost path-prefix routing in development mode.
 
     .. seealso::
         - :class:`openfactory.apps.ofaapp.OpenFactoryApp`

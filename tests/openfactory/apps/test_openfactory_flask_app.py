@@ -61,6 +61,33 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
         self.assertTrue(hasattr(app, "called"))
 
+    def test_proxyfix_enabled(self):
+        """ Flask app should enable ProxyFix middleware """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        self.assertIsInstance(app.app.wsgi_app, ProxyFix)
+
+    def test_proxyfix_configuration(self):
+        """ Flask app should configure ProxyFix correctly """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        self.assertIsInstance(app.app.wsgi_app, ProxyFix)
+        self.assertEqual(app.app.wsgi_app.x_prefix, 1)
+        self.assertEqual(app.app.wsgi_app.x_host, 1)
+        self.assertEqual(app.app.wsgi_app.x_proto, 1)
+
     def test_configure_routes_called(self):
         """ Test initialization calls configure_routes """
 

@@ -202,7 +202,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
             root_path_in_servers=True,
             version=self.application_version.value,
             title=self.asset_uuid,
-            license_info={"name": self.application_license},
+            license_info={"name": self.application_license.value},
         )
         self.configure_routes()
 

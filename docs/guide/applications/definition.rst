@@ -123,7 +123,7 @@ When routing is enabled, OpenFactory generates:
 
   .. code-block:: text
 
-      <app-name>-<uuid>.<base-domain>
+      <uuid>.<base-domain>
 
 - an optional **alias hostname** (if available):
 

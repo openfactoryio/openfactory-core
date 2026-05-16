@@ -163,15 +163,14 @@ class TestOpenFactoryManager(unittest.TestCase):
         )
 
         labels = self.manager._build_traefik_labels(app)
-
         expected_rule = (
             "Host(`app123.example.com`) || Host(`dashboard.example.com`)"
         )
+        rule = labels["traefik.http.routers.ofa-app123.rule"]
+        self.assertEqual(rule, expected_rule)
 
-        self.assertEqual(
-            labels["traefik.http.routers.ofa-app123.rule"],
-            expected_rule
-        )
+        # ensure no duplicate host rules are generated
+        self.assertEqual(rule.count("Host("), 2)
 
     def test_build_traefik_labels_uuid_normalization(self):
         """ UUID should be normalized in router/service name """
@@ -192,6 +191,27 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.assertIn(f"traefik.http.routers.{expected_name}.rule", labels)
         self.assertIn(f"traefik.http.services.{expected_name}.loadbalancer.server.port", labels)
+
+    def test_build_traefik_labels_with_same_alias_as_canonical(self):
+        """ Alias identical to canonical hostname should not duplicate Host rule """
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="demo",
+            routing={
+                "expose": True,
+                "port": 8000,
+                "canonical_hostname": "app123.example.com",
+                "alias_hostname": "app123.example.com"
+            }
+        )
+
+        labels = self.manager._build_traefik_labels(app)
+        expected_rule = "Host(`app123.example.com`)"
+
+        self.assertEqual(
+            labels["traefik.http.routers.ofa-app123.rule"],
+            expected_rule
+        )
 
     @patch.dict("os.environ", {"OPENFACTORY_ENV": "dev"})
     def test_build_traefik_labels_dev_mode_adds_path_prefix(self):
@@ -639,7 +659,6 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # simulate enrichment step (normally done in get_apps_from_config_file)
         app.routing.build_hostnames(
-            app_name="My_App",
             app_uuid=app.uuid,
             base_domain="example.com"
         )

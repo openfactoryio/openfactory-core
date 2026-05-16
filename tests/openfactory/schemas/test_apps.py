@@ -571,7 +571,7 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         self.assertEqual(
             routing.canonical_hostname,
-            "my-app-abcd.example.com"
+            "abcd1234.example.com"
         )
         self.assertEqual(
             routing.alias_hostname,
@@ -606,8 +606,8 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         config_data = {
             "apps": {
-                long_name: {
-                    "uuid": "ABCD1234",
+                "test_app": {
+                    "uuid": long_name,
                     "image": "demo",
                     "routing": {
                         "expose": True,
@@ -620,9 +620,8 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         config = OpenFactoryAppsConfig(**config_data)
 
         with self.assertRaises(RoutingError):
-            config.apps[long_name].routing.build_hostnames(
-                app_name=long_name,
-                app_uuid="ABCD1234",
+            config.apps["test_app"].routing.build_hostnames(
+                app_uuid=long_name,
                 base_domain="example.com"
             )
 
@@ -646,7 +645,6 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         with self.assertRaises(RoutingError):
             config.apps["demo1"].routing.build_hostnames(
-                app_name="demo1",
                 app_uuid="ABCD1234",
                 base_domain="example.com"
             )

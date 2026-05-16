@@ -141,7 +141,8 @@ class OpenFactoryManager(OpenFactory):
         # build rule
         rule = f"Host(`{routing.canonical_hostname}`)"
         if routing.alias_hostname:
-            rule += f" || Host(`{routing.alias_hostname}`)"
+            if routing.alias_hostname != routing.canonical_hostname:
+                rule += f" || Host(`{routing.alias_hostname}`)"
 
         labels = {
             "traefik.enable": "true",

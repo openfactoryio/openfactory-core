@@ -185,12 +185,11 @@ class Routing(BaseModel):
     canonical_hostname: Optional[str] = None
     alias_hostname: Optional[str] = None
 
-    def build_hostnames(self, app_name: str, app_uuid: str, base_domain: str) -> None:
+    def build_hostnames(self, app_uuid: str, base_domain: str) -> None:
         """
         Generate canonical and optional alias hostnames for the application.
 
-        The canonical hostname is always generated and guarantees uniqueness by
-        combining the normalized application name with a short UUID suffix.
+        The canonical hostname is always generated using the App UUID.
 
         The alias hostname is optional and derived from the user-provided hostname
         field if present.
@@ -201,25 +200,20 @@ class Routing(BaseModel):
         - maximum label length enforced (63 characters)
 
         Args:
-            app_name (str): Name of the application (key in config).
             app_uuid (str): Unique identifier of the application.
             base_domain (str): Base domain used for hostname generation.
 
         Raises:
             RoutingError: If generated hostname labels exceed DNS limits.
         """
-        short_uuid = normalize_name(app_uuid)[:4]
-        norm_name = normalize_name(app_name)
-
-        suffix = f"-{short_uuid}"
-        label = f"{norm_name}{suffix}"
+        label = normalize_name(app_uuid)
 
         # enforce DNS label length
         MAX_LABEL = 63
         if len(label) > MAX_LABEL:
             raise RoutingError(
                 f"Canonical hostname label too long: '{label}' ({len(label)} > {MAX_LABEL}). "
-                f"Shorten app name '{app_name}'."
+                f"Shorten app UUID '{app_uuid}'."
             )
 
         self.canonical_hostname = f"{label}.{base_domain}"
@@ -376,7 +370,6 @@ def get_apps_from_config_file(apps_yaml_config_file: str, uns_schema: UNSSchema)
 
         if app.routing and app.routing.expose:
             app.routing.build_hostnames(
-                app_name=app_name,
                 app_uuid=app.uuid,
                 base_domain=Config.OPENFACTORY_BASE_DOMAIN,
             )

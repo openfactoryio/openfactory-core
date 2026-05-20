@@ -240,8 +240,11 @@ class OpenFactoryManager(OpenFactory):
 
         # Add STORAGE only if not None
         if application.storage is not None:
-            # Serialize storage config as JSON
-            storage_dict = application.storage.model_dump(exclude_none=True)
+            # Serialize named storage backends
+            storage_dict = {
+                name: storage.model_dump(exclude_none=True)
+                for name, storage in application.storage.items()
+            }
             env.append(f"STORAGE={json.dumps(storage_dict)}")
 
         if application.environment is not None:
@@ -253,16 +256,20 @@ class OpenFactoryManager(OpenFactory):
         if not any(var.startswith("KSQLDB_LOG_LEVEL=") for var in env):
             env.append(f"KSQLDB_LOG_LEVEL={config.KSQLDB_LOG_LEVEL}")
 
-        # add storage
+        # add storage mounts
         mounts = []
         if application.storage:
-            backend_instance = application.storage.create_backend_instance()
-            if isinstance(self.deployment_strategy, SwarmDeploymentStrategy):
-                if not backend_instance.compatible_with_swarm():
-                    raise ValueError(f"{type(backend_instance).__name__} cannot be used with SwarmDeploymentStrategy")
-            mount_spec = backend_instance.get_mount_spec()
-            if mount_spec:
-                mounts.append(mount_spec)
+            for storage_name, storage_cfg in application.storage.items():
+                backend_instance = storage_cfg.create_backend_instance()
+                if isinstance(self.deployment_strategy, SwarmDeploymentStrategy):
+                    if not backend_instance.compatible_with_swarm():
+                        raise ValueError(
+                            f"{type(backend_instance).__name__} "
+                            "cannot be used with SwarmDeploymentStrategy"
+                        )
+                mount_spec = backend_instance.get_mount_spec()
+                if mount_spec:
+                    mounts.append(mount_spec)
 
         try:
             self.deployment_strategy.deploy(

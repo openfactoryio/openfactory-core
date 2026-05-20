@@ -10,7 +10,7 @@ ensure application configurations are consistent, valid, and semantically enrich
 Key Components
 --------------
 - :class:`OpenFactoryAppSchema`: Defines a single application including its UUID, Docker image,
-  environment variables, UNS metadata, storage backend, and container networks.
+  environment variables, UNS metadata, named storage backend, and container networks.
 - :class:`OpenFactoryAppsConfig`: Validates a dictionary of application entries and ensures
   correct schema structure.
 - :meth:`get_apps_from_config_file`: Loads, validates, and enriches applications from a
@@ -20,7 +20,7 @@ Features
 --------
 - Supports UNS (Unified Namespace) enrichment through the ``AttachUNSMixin``.
 - Restricts configuration fields with `extra="forbid"` to ensure strict schema conformance.
-- Supports storage backends, including:
+- Supports multiple named storage backends, including:
 
   - ``LocalBackend``: Bind-mount a local host directory into containers (for development).
   - ``NFSBackend``: Mount an NFS share into containers with configurable mount options.
@@ -57,12 +57,17 @@ configuration YAML file, with automatic UNS enrichment.
            - ENV=production
 
           storage:
-            type: nfs
-            server: deskfab.openfactory.com
-            remote_path: /nfs/deskfab
-            mount_point: /mnt
-            mount_options:
-              - ro
+            data:
+              type: nfs
+              server: deskfab.openfactory.com
+              remote_path: /nfs/deskfab
+              mount_point: /mnt
+              mount_options:
+                - ro
+            cache:
+              type: local
+              local_path: ./cache
+              mount_point: /cache
 
           routing:
             expose: true
@@ -260,7 +265,7 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
         default=None, description="List of environment variables"
     )
 
-    storage: Optional[StorageBackend] = Field(
+    storage: Optional[Dict[str, StorageBackend]] = Field(
         default=None,
         description="Optional storage backend for the application"
     )
@@ -280,7 +285,27 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
         description="Deployment configuration including resources and placement."
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_assignment=True
+    )
+
+    @field_validator("storage")
+    @classmethod
+    def validate_storage_names(cls, v):
+        if v:
+            for name in v.keys():
+                if not name.strip():
+                    raise ValueError(
+                        "Storage names must not be empty"
+                    )
+                if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+                    raise ValueError(
+                        f"Invalid storage name '{name}'. "
+                        "Only letters, digits, underscores, and hyphens are allowed."
+                    )
+
+        return v
 
     @field_validator("networks")
     @classmethod

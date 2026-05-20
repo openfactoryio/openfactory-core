@@ -30,11 +30,11 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         application_version (AssetAttribute): Version from the ``APPLICATION_VERSION`` environment variable or ``"latest"``.
         application_manufacturer (AssetAttribute): Manufacturer from the ``APPLICATION_MANUFACTURER`` environment variable or ``"OpenFactoryIO"``.
         application_license (AssetAttribute): License from the ``APPLICATION_LICENSE`` environment variable or ``"BSD-3-Clause license"``.
-        openfactory_manufacturer (AssetAttribute): OpenFacotory vendor (``"OpenFactoryIO"``)
-        openfactory_license (AssetAttribute): OpenFacotory license (``"Polyform Noncommercial License 1.0.0"``)
+        openfactory_manufacturer (AssetAttribute): OpenFactory vendor (``"OpenFactoryIO"``)
+        openfactory_license (AssetAttribute): OpenFactory license (``"Polyform Noncommercial License 1.0.0"``)
         openfactory_version (AssetAttribute): OpenFactory version
         logger (logging.Logger): Prefixed logger instance configured with the app UUID.
-        storage (Optional [FileBackend]): Storage backend instance created from the ``STORAGE`` environment variable, or ``None`` if not configured.
+        storage (dict[str, FileBackend]): Dictionary mapping storage names to initialized FileBackend instances created from the ``STORAGE`` environment variable. Empty if no storage is configured.
 
     .. admonition:: Usage Example
 
@@ -62,13 +62,24 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                     self.logger.info("Stopping all axis")
 
                 def main_loop(self):
-                    # For actual use case, add here your logic of the app
-                    self.logger.info("I don't do anything useful in this example.")
                     counter = 1
-                    while True:
-                        self.logger.info(f"Counter: {counter}")
-                        counter += 1
-                        time.sleep(2)
+
+                    # Access mounted storage backend
+                    data_storage = self.storage.get("data")
+                    if data_storage is None:
+                        raise RuntimeError("Required storage backend 'data' is not configured")
+
+                    # Open file inside mounted storage
+                    with data_storage.open("counter.txt", "w") as counter_file:
+
+                        while True:
+                            self.logger.info(f"Counter: {counter}")
+
+                            # Persist counter value to storage
+                            counter_file.write(str(counter))
+
+                            counter += 1
+                            time.sleep(2)
 
                 def app_event_loop_stopped(self):
                     # Optional as it is already done by the `KSQLDBClient` class
@@ -111,7 +122,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         """
         Initializes the OpenFactory application.
 
-        Sets up the application UUID, storage backend (if configured), standard
+        Sets up the application UUID, configured storage backends, standard
         attributes (version, manufacturer, license), a prefixed logger, and
         termination signal handlers, and automatically registers all methods decorated with
         `@ofa_method <ofa_method.html>`_ decorator.
@@ -127,7 +138,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
             - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
             - Configures logging with the application UUID as prefix.
-            - Mounts a storage backend if the ``STORAGE`` environment variable is set.
+            - Mounts configured storage backends from the ``STORAGE`` environment variable.
             - Registers signal handlers for ``SIGINT`` and ``SIGTERM``.
 
         .. tip::
@@ -148,12 +159,15 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
         # attach storage
         storage_env = os.environ.get("STORAGE")
-        self.storage: FileBackend | None = None
+        self.storage: dict[str, FileBackend] = {}
         if storage_env:
-            schema = StorageBackendSchema(storage=json.loads(storage_env))
-            self.storage = schema.storage.create_backend_instance()
-            self.logger.debug(f"Adding storage of type {self.storage.config.type}")
-            self.logger.debug(json.dumps(self.storage.get_mount_spec(), indent=2))
+            storage_configs = json.loads(storage_env)
+            for storage_name, storage_cfg in storage_configs.items():
+                schema = StorageBackendSchema(storage=storage_cfg)
+                backend = schema.storage.create_backend_instance()
+                self.storage[storage_name] = backend
+                self.logger.debug(f"Adding storage '{storage_name}' of type {backend.config.type}")
+                self.logger.debug(json.dumps(backend.get_mount_spec(), indent=2))
 
         # attach decorated methods
         self._subscribe_ofa_methods()

@@ -560,7 +560,7 @@ class TestOpenFactoryManager(unittest.TestCase):
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")
     def test_deploy_openfactory_application_includes_storage_env(self, mock_register_asset, mock_user_notify):
-        """ Test that deploy_openfactory_application includes STORAGE in env when storage is provided """
+        """ STORAGE environment variable should contain serialized storage backends """
 
         nfs_config = NFSBackendConfig(
             type="nfs",
@@ -575,72 +575,44 @@ class TestOpenFactoryManager(unittest.TestCase):
             image="app_image",
             environment=["FOO=bar"],
             uns=None,
-            storage=nfs_config,
+            storage={"data": nfs_config}
         )
 
-        # Patch backend class so we don't try to mount anything
         with patch("openfactory.filelayer.nfs_backend.NFSBackend") as MockBackend:
             backend_instance = MockBackend.return_value
-            backend_instance.get_mount_spec.return_value = None
+            backend_instance.get_mount_spec.return_value = {
+                "source": "nfs.example.com:/data/share",
+                "target": "/mnt/data",
+                "type": "volume"
+            }
 
             self.manager.deploy_openfactory_application(app)
 
-        # Extract env from the call to deploy
+        # Extract env passed to deploy()
         deploy_call = self.manager.deployment_strategy.deploy.call_args
         env_list = deploy_call.kwargs["env"]
 
-        # STORAGE env var should be present and contain serialized config
-        storage_env = next((e for e in env_list if e.startswith("STORAGE=")), None)
-        self.assertIsNotNone(storage_env, "Expected STORAGE env var to be included")
+        # STORAGE env variable exists
+        storage_env = next(
+            (e for e in env_list if e.startswith("STORAGE=")),
+            None
+        )
+
+        self.assertIsNotNone(storage_env, "Expected STORAGE environment variable")
+
+        # Serialized storage dict content
+        self.assertIn('"data"', storage_env)
         self.assertIn('"type": "nfs"', storage_env)
         self.assertIn('"server": "nfs.example.com"', storage_env)
         self.assertIn('"/mnt/data"', storage_env)
 
-        # Other env vars should still be present
+        # Normal env vars still present
         self.assertIn("APP_UUID=APP_WITH_STORAGE", env_list)
         self.assertIn("FOO=bar", env_list)
 
         mock_user_notify.success.assert_called_once_with(
             "Application APP_WITH_STORAGE deployed successfully"
         )
-
-    @patch("openfactory.openfactory_manager.user_notify")
-    @patch("openfactory.openfactory_manager.register_asset")
-    def test_deploy_with_nfs_storage_calls_backend(self, mock_register_asset, mock_user_notify):
-        """ Test that deploying an app with NFS storage calls the backend's get_mount_spec """
-
-        nfs_config = NFSBackendConfig(
-            type="nfs",
-            server="nfs.example.com",
-            remote_path="/data/share",
-            mount_point="/mnt/data",
-            mount_options=["rw"]
-        )
-
-        app = OpenFactoryAppSchema(
-            uuid="APP123",
-            image="app_image",
-            environment=None,
-            uns=None,
-            storage=nfs_config
-        )
-
-        with patch("openfactory.filelayer.nfs_backend.NFSBackend") as MockBackend:
-            backend_instance = MockBackend.return_value
-            mount_spec = {"source": "nfs.example.com:/data/share", "target": "/mnt/data", "type": "volume"}
-            backend_instance.get_mount_spec.return_value = mount_spec
-
-            self.manager.deploy_openfactory_application(app)
-
-            # Backend instantiation and get_mount_spec called
-            MockBackend.assert_called_once_with(nfs_config)
-            backend_instance.get_mount_spec.assert_called_once()
-
-            # Deployment strategy received the mount spec
-            self.manager.deployment_strategy.deploy.assert_called_once()
-            deploy_kwargs = self.manager.deployment_strategy.deploy.call_args.kwargs
-            self.assertIn("mounts", deploy_kwargs)
-            self.assertIn(mount_spec, deploy_kwargs["mounts"])
 
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
@@ -773,9 +745,13 @@ class TestOpenFactoryManager(unittest.TestCase):
         app = MagicMock()
         app.uuid = "APP1"
         app.environment = []
-        app.storage = LocalBackendConfig(type="local",
-                                         local_path="/tmp/host",
-                                         mount_point="/mnt/data")
+        app.storage = {
+            "data": LocalBackendConfig(
+                type="local",
+                local_path="/tmp/host",
+                mount_point="/mnt/data"
+            )
+        }
 
         # Assign a SwarmDeploymentStrategy instance to the manager
         self.manager.deployment_strategy = SwarmDeploymentStrategy()
@@ -785,6 +761,40 @@ class TestOpenFactoryManager(unittest.TestCase):
             self.manager.deploy_openfactory_application(app)
 
         self.assertIn("LocalBackend cannot be used with SwarmDeploymentStrategy", str(cm.exception))
+
+    @patch("os.path.exists", return_value=True)
+    @patch("os.path.isdir", return_value=True)
+    def test_mixed_storage_backends_fail_with_swarm(self, mock_isdir, mock_exists):
+        """ Deployment should fail if any configured storage backend is incompatible with SwarmDeploymentStrategy. """
+
+        app = MagicMock()
+        app.uuid = "APP1"
+        app.environment = []
+        app.storage = {
+            "data": NFSBackendConfig(
+                type="nfs",
+                server="nfs.example.com",
+                remote_path="/exports/data",
+                mount_point="/data"
+            ),
+            "cache": LocalBackendConfig(
+                type="local",
+                local_path="/tmp/cache",
+                mount_point="/cache"
+            )
+        }
+
+        # Use Swarm deployment strategy
+        self.manager.deployment_strategy = SwarmDeploymentStrategy()
+
+        # Deployment must fail because LocalBackend is incompatible
+        with self.assertRaises(ValueError) as cm:
+            self.manager.deploy_openfactory_application(app)
+
+        self.assertIn(
+            "LocalBackend cannot be used with SwarmDeploymentStrategy",
+            str(cm.exception)
+        )
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')

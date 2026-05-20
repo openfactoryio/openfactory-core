@@ -328,20 +328,25 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
                     "uuid": "DEMO-APP",
                     "image": "demofact/demo1",
                     "storage": {
-                        "type": "nfs",
-                        "server": "192.168.1.10",
-                        "remote_path": "/exports/data",
-                        "mount_point": "/mnt/data",
-                        "mount_options": ["rw", "vers=4.1", "noatime"]
+                        "data": {
+                            "type": "nfs",
+                            "server": "192.168.1.10",
+                            "remote_path": "/exports/data",
+                            "mount_point": "/mnt/data",
+                            "mount_options": ["rw", "vers=4.1", "noatime"]
+                        }
                     }
                 }
             }
         }
         config = OpenFactoryAppsConfig(**app_config)
         storage = config.apps["demo1"].storage
-        self.assertEqual(storage.type, "nfs")
-        self.assertEqual(storage.server, "192.168.1.10")
-        self.assertEqual(storage.mount_point, "/mnt/data")
+        self.assertIn("data", storage)
+
+        data_storage = storage["data"]
+        self.assertEqual(data_storage.type, "nfs")
+        self.assertEqual(data_storage.server, "192.168.1.10")
+        self.assertEqual(data_storage.mount_point, "/mnt/data")
 
     def test_invalid_storage_type(self):
         """ Test that unknown storage backend type triggers ValidationError with correct message """
@@ -352,8 +357,10 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
                     "uuid": "DEMO-APP",
                     "image": "demofact/demo1",
                     "storage": {
-                        "type": "unknown",
-                        "foo": "bar"
+                        "data": {
+                            "type": "unknown",
+                            "foo": "bar"
+                        }
                     }
                 }
             }
@@ -367,10 +374,72 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         # There should be a union_tag_invalid error for 'storage'
         storage_error = [
             e for e in errors
-            if e['loc'][-1] == 'storage' and e['type'] == 'union_tag_invalid'
+            if 'storage' in e['loc']
+            and e['type'] == 'union_tag_invalid'
         ]
 
         self.assertTrue(storage_error, "ValidationError should include 'union_tag_invalid' for 'storage' field")
+
+    def test_invalid_storage_name(self):
+        """ Invalid storage names should raise ValidationError """
+
+        invalid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "storage": {
+                        "invalid name!": {
+                            "type": "nfs",
+                            "server": "192.168.1.10",
+                            "remote_path": "/exports/data",
+                            "mount_point": "/mnt/data"
+                        }
+                    }
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**invalid_config)
+
+        self.assertIn("Invalid storage name", str(cm.exception))
+
+    def test_multiple_storage_backends(self):
+        """ Multiple storage backends are parsed correctly """
+
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "storage": {
+                        "data": {
+                            "type": "nfs",
+                            "server": "192.168.1.10",
+                            "remote_path": "/exports/data",
+                            "mount_point": "/mnt/data"
+                        },
+                        "cache": {
+                            "type": "nfs",
+                            "server": "192.168.1.10",
+                            "remote_path": "/exports/cache",
+                            "mount_point": "/mnt/cache"
+                        }
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+
+        storage = config.apps["demo1"].storage
+
+        self.assertIn("data", storage)
+        self.assertIn("cache", storage)
+
+        self.assertEqual(storage["data"].type, "nfs")
+        self.assertEqual(storage["cache"].type, "nfs")
 
     def test_optional_networks(self):
         """ networks field is optional """

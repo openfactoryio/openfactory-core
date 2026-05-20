@@ -95,37 +95,105 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     @patch("openfactory.apps.ofaapp.StorageBackendSchema")
     def test_storage_initialization(self, MockStorageSchema):
-        """ Test that storage JSON is parsed and runtime backend instance is created """
+        """ Test that storage JSON is parsed and runtime backend instances are created """
 
-        # Mock the StorageBackendSchema instance
-        mock_schema_instance = MockStorageSchema.return_value
+        # Mock backend instance
         mock_backend_instance = MagicMock(spec=FileBackend)
         mock_backend_instance.config = MagicMock()
         mock_backend_instance.config.type = "nfs"
+        mock_backend_instance.get_mount_spec.return_value = {}
+
+        # Mock schema instance
+        mock_schema_instance = MagicMock()
         mock_schema_instance.storage.create_backend_instance.return_value = mock_backend_instance
 
-        # Make get_mount_spec return a dict so json.dumps() works in code under test
-        mock_backend_instance.get_mount_spec.return_value = {}
+        # Every StorageBackendSchema(...) returns same mock schema
+        MockStorageSchema.return_value = mock_schema_instance
 
         # Example storage JSON
         storage_json = json.dumps({
-            "type": "nfs",
-            "server": "10.0.5.2",
-            "remote_path": "/nfs/data",
-            "mount_point": "/mnt",
-            "mount_options": ["rw", "noatime"]
+            "data": {
+                "type": "nfs",
+                "server": "10.0.5.2",
+                "remote_path": "/nfs/data",
+                "mount_point": "/mnt",
+                "mount_options": ["rw", "noatime"]
+            }
         })
 
         with patch.dict("os.environ", {"STORAGE": storage_json}):
-            app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
-                                 ksqlClient=self.ksql_mock)
+            app = OpenFactoryApp(
+                bootstrap_servers='mocked_broker',
+                asset_router_url='mocked_asset_url',
+                ksqlClient=self.ksql_mock
+            )
 
-        # Assert StorageBackendSchema was called with parsed JSON
-        MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json))
-        # Assert create_backend_instance() was called
+        # Assert StorageBackendSchema called correctly
+        MockStorageSchema.assert_called_once_with(storage=json.loads(storage_json)["data"])
+
+        # Assert backend instance creation
         mock_schema_instance.storage.create_backend_instance.assert_called_once()
-        # Assert self.storage is set to the backend instance
-        self.assertIs(app.storage, mock_backend_instance)
+
+        # Assert storage dictionary exists
+        self.assertIn("data", app.storage)
+
+        # Assert backend stored correctly
+        self.assertIs(app.storage["data"], mock_backend_instance)
+
+    @patch("openfactory.apps.ofaapp.StorageBackendSchema")
+    def test_multiple_storage_initialization(self, MockStorageSchema):
+        """ Multiple storage backends are initialized correctly """
+
+        # Backend mocks
+        mock_data_backend = MagicMock(spec=FileBackend)
+        mock_data_backend.config = MagicMock()
+        mock_data_backend.config.type = "nfs"
+        mock_data_backend.get_mount_spec.return_value = {}
+
+        mock_cache_backend = MagicMock(spec=FileBackend)
+        mock_cache_backend.config = MagicMock()
+        mock_cache_backend.config.type = "local"
+        mock_cache_backend.get_mount_spec.return_value = {}
+
+        # Schema mocks
+        mock_schema_1 = MagicMock()
+        mock_schema_1.storage.create_backend_instance.return_value = mock_data_backend
+
+        mock_schema_2 = MagicMock()
+        mock_schema_2.storage.create_backend_instance.return_value = mock_cache_backend
+
+        MockStorageSchema.side_effect = [
+            mock_schema_1,
+            mock_schema_2
+        ]
+
+        storage_json = json.dumps({
+            "data": {
+                "type": "nfs",
+                "server": "10.0.5.2",
+                "remote_path": "/nfs/data",
+                "mount_point": "/mnt"
+            },
+            "cache": {
+                "type": "local",
+                "local_path": "/tmp/cache",
+                "mount_point": "/cache"
+            }
+        })
+
+        with patch.dict("os.environ", {"STORAGE": storage_json}):
+
+            app = OpenFactoryApp(
+                bootstrap_servers='mocked_broker',
+                asset_router_url='mocked_asset_url',
+                ksqlClient=self.ksql_mock
+            )
+
+        self.assertIn("data", app.storage)
+        self.assertIn("cache", app.storage)
+
+        self.assertIs(app.storage["data"], mock_data_backend)
+        self.assertIs(app.storage["cache"], mock_cache_backend)
 
     def test_attributes_added(self):
         """ Test if attributes are added correctly to the app """

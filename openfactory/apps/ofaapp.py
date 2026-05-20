@@ -76,7 +76,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                             self.logger.info(f"Counter: {counter}")
 
                             # Persist counter value to storage
-                            counter_file.write(str(counter))
+                            counter_file.write(f"{counter}\n")
 
                             counter += 1
                             time.sleep(2)

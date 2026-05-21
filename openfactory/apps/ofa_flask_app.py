@@ -246,6 +246,11 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             x_proto=1,
         )
 
+        # set root path if deployed on OpenFactory cluster
+        root_path = os.environ.get("OPENFACTORY_ROOT_PATH")
+        if (root_path and self.app.config.get("APPLICATION_ROOT") == "/"):
+            self.app.config["APPLICATION_ROOT"] = root_path
+
         # expose OpenFactory app inside Flask
         self.app.ofa_app = self
 

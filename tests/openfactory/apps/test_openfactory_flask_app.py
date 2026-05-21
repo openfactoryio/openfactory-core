@@ -44,6 +44,63 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
         self.assertIsInstance(app.app, Flask)
 
+    def test_application_root_not_set_when_env_missing(self):
+        """ Should not inject APPLICATION_ROOT if env var is absent """
+
+        with patch.dict("os.environ", {}, clear=True):
+
+            app = OpenFactoryFlaskApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock"
+            )
+
+            self.assertEqual(app.app.config["APPLICATION_ROOT"], "/")
+
+    def test_application_root_loaded_from_env(self):
+        """ Should configure APPLICATION_ROOT from env var """
+
+        with patch.dict(
+            "os.environ",
+            {"OPENFACTORY_ROOT_PATH": "/my-app"},
+            clear=True
+        ):
+
+            app = OpenFactoryFlaskApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock"
+            )
+
+            self.assertEqual(
+                app.app.config["APPLICATION_ROOT"],
+                "/my-app"
+            )
+
+    def test_application_root_user_override_preserved(self):
+        """ User-defined APPLICATION_ROOT should not be overwritten """
+
+        class App(OpenFactoryFlaskApp):
+
+            def create_flask_app(self):
+                app = Flask(__name__)
+                app.config["APPLICATION_ROOT"] = "/user-defined"
+                return app
+
+        with patch.dict(
+            "os.environ",
+            {"OPENFACTORY_ROOT_PATH": "/framework-defined"},
+            clear=True
+        ):
+
+            app = App(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock"
+            )
+
+            self.assertEqual(app.app.config["APPLICATION_ROOT"], "/user-defined")
+
     def test_create_flask_app_called(self):
         """ Test initialization calls create_flask_app """
 

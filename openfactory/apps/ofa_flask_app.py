@@ -175,6 +175,11 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         by the deployment tool.
       - OpenFactory automatically enables Werkzeug ProxyFix to support reverse-proxy deployments through
         the OpenFactory Traefik routing gateway, including localhost path-prefix routing in development mode.
+      - When deployed on OpenFactory, ``APPLICATION_ROOT`` is automatically configured from the
+        ``OPENFACTORY_ROOT_PATH`` environment variable injected by the OpenFactory deployment tool,
+        unless explicitly defined by the child class in :meth:`create_flask_app`.
+        This ensures correct Flask behavior for redirects, URL generation, Blueprint routing, and
+        session cookie handling under path-prefix deployments.
 
     .. seealso::
         - :class:`openfactory.apps.ofaapp.OpenFactoryApp`

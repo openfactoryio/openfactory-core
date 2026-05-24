@@ -30,10 +30,12 @@ class AssetProducer(Producer):
 
         # Use Java-compatible murmur2_random partitioning (Kafka Streams / ksqlDB interoperability)
         # Required so identical keys map to identical partitions across Python and Java producers.
-        super().__init__({
+        self.producer_config = {
             'bootstrap.servers': bootstrap_servers,
             'partitioner': 'murmur2_random'
-            })
+        }
+
+        super().__init__(self.producer_config)
         self.ksql = ksqlClient
         self.topic = self.ksql.get_kafka_topic('ASSETS_STREAM')
 

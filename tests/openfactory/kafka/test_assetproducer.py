@@ -1,6 +1,6 @@
 import unittest
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from openfactory.kafka import AssetProducer
 
 
@@ -33,8 +33,23 @@ class TestAssetProducer(unittest.TestCase):
         self.assertEqual(producer.ksql, mock_ksql)
         self.assertEqual(producer.topic, expected_topic)
 
+    def test_asset_producer_sets_bootstrap_servers(self):
+        """ Ensure producer stores configured bootstrap servers. """
+
+        mock_ksql = MagicMock()
+        mock_ksql.get_kafka_topic.return_value = "ASSETS_STREAM"
+        producer = AssetProducer(
+            mock_ksql,
+            bootstrap_servers="test-broker:9092"
+        )
+
+        self.assertEqual(
+            producer.producer_config['bootstrap.servers'],
+            'test-broker:9092'
+        )
+
     def test_asset_producer_uses_java_compatible_partitioner(self):
-        """Ensure producer uses Java-compatible partitioning."""
+        """ Ensure producer uses Java-compatible partitioning. """
 
         mock_ksql = MagicMock()
         mock_ksql.get_kafka_topic.return_value = "ASSETS_STREAM"

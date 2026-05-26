@@ -111,6 +111,34 @@ class OpenFactory:
         query = "SELECT * FROM assets_avail;"
         return self.ksql.query(query)
 
+    def available_assets_uuid(self) -> list[dict]:
+        """
+        Get UUIDs of all deployed assets that are AVAILABLE.
+
+        Returns:
+            list[str]: UUIDs of all deployed assets that are available.
+        """
+        query = "SELECT ASSET_UUID FROM assets_avail WHERE AVAILABILITY='AVAILABLE';"
+        unavailable_assets = self.ksql.query(query)
+        return [
+            asset['ASSET_UUID']
+            for asset in unavailable_assets
+        ]
+
+    def unavailable_assets_uuid(self) -> list[dict]:
+        """
+        Get UUIDs of all deployed assets that are UNAVAILABLE.
+
+        Returns:
+            list[str]: UUIDs of all deployed assets that are not available.
+        """
+        query = "SELECT ASSET_UUID FROM assets_avail WHERE AVAILABILITY='UNAVAILABLE';"
+        unavailable_assets = self.ksql.query(query)
+        return [
+            asset['ASSET_UUID']
+            for asset in unavailable_assets
+        ]
+
     def assets_docker_services(self) -> list[dict]:
         """
         Get Docker services associated with all deployed assets.

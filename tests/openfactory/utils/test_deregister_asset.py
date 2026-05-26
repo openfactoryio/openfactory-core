@@ -19,33 +19,52 @@ class TestDeregisterAsset(unittest.TestCase):
 
         # Inputs
         asset_uuid = "5678-EFGH"
-        mock_ksql_client = MagicMock()
-        mock_ksql_client.get_kafka_topic.side_effect = lambda table: f"topic_for_{table}"
         bootstrap_servers = "kafka-broker:9092"
 
-        # Call the function
+        mock_ksql_client = MagicMock()
+        mock_ksql_client.get_kafka_topic.side_effect = (
+            lambda table: f"topic_for_{table}"
+        )
+
+        # Mock polling loop response
+        mock_ksql_client.query.return_value = [
+            {"AVAILABILITY": "REMOVED"}
+        ]
+
+        # Call function
         deregister_asset(asset_uuid, mock_ksql_client, bootstrap_servers)
 
-        # Check instantiation
-        MockAssetProducer.assert_called_once_with(mock_ksql_client, bootstrap_servers)
+        # Check producer instantiation
+        MockAssetProducer.assert_called_once_with(
+            mock_ksql_client,
+            bootstrap_servers
+        )
 
         # Check send_asset_attribute calls
         calls = mock_producer_instance.send_asset_attribute.call_args_list
+
+        # 1 REMOVED + 2 reference removals
         self.assertEqual(len(calls), 3)
 
-        # Check first call: UNAVAILABLE message
-        self.assertEqual(calls[0][0][0], "5678-EFGH")
+        # First call: REMOVED event
+        self.assertEqual(calls[0][0][0], asset_uuid)
         self.assertIsInstance(calls[0][0][1], AssetAttribute)
         self.assertEqual(calls[0][0][1].id, "avail")
-        self.assertEqual(calls[0][0][1].value, "UNAVAILABLE")
+        self.assertEqual(calls[0][0][1].value, "REMOVED")
         self.assertEqual(calls[0][0][1].type, "Events")
         self.assertEqual(calls[0][0][1].tag, "Availability")
 
-        # Check reference removal messages
+        # Verify polling query happened
+        mock_ksql_client.query.assert_called_once_with(
+            f"SELECT AVAILABILITY FROM assets_avail "
+            f"WHERE ASSET_UUID='{asset_uuid}';"
+        )
+
+        # Reference cleanup messages
         expected_ids = ["references_below", "references_above"]
         for i, ref_id in enumerate(expected_ids, start=1):
             call = calls[i]
-            self.assertEqual(call[0][0], "5678-EFGH")
+            self.assertEqual(call[0][0], asset_uuid)
             self.assertIsInstance(call[0][1], AssetAttribute)
             self.assertEqual(call[0][1].id, ref_id)
             self.assertEqual(call[0][1].value, "")
@@ -53,15 +72,22 @@ class TestDeregisterAsset(unittest.TestCase):
             self.assertEqual(call[0][1].tag, "AssetsReferences")
 
         # Check produce tombstone messages
-        expected_topics = ["assets_type", "docker_services"]
+        expected_topics = [
+            "assets_type",
+            "assets_avail",
+            "docker_services",
+        ]
+
         for topic in expected_topics:
             mock_ksql_client.get_kafka_topic.assert_any_call(topic)
             mock_producer_instance.produce.assert_any_call(
-                topic=f"topic_for_{topic}", key=asset_uuid, value=None
+                topic=f"topic_for_{topic}",
+                key=asset_uuid,
+                value=None,
             )
 
         # Ensure flush was called
-        mock_producer_instance.flush.assert_called_once()
+        self.assertEqual(mock_producer_instance.flush.call_count, 2)
 
     @patch("openfactory.utils.assets.AssetProducer")
     @patch("openfactory.utils.assets.now_iso_to_epoch_millis")
@@ -70,7 +96,7 @@ class TestDeregisterAsset(unittest.TestCase):
         mock_producer_instance = MagicMock()
         MockAssetProducer.return_value = mock_producer_instance
 
-        # Mocked timestamp
+        # Mock timestamp
         mock_now.return_value = 1720000000000
 
         asset_uuid = "mocked-uuid"
@@ -79,13 +105,18 @@ class TestDeregisterAsset(unittest.TestCase):
         mock_ksql_client = MagicMock()
         mock_ksql_client.get_kafka_topic.return_value = expected_topic
 
+        # Mock polling loop response
+        mock_ksql_client.query.return_value = [
+            {"AVAILABILITY": "REMOVED"}
+        ]
+
         # Call function
         deregister_asset(asset_uuid, bootstrap_servers="kafka-broker:9092", ksqlClient=mock_ksql_client)
 
         # Assert get_kafka_topic was called correctly
         mock_ksql_client.get_kafka_topic.assert_any_call("asset_to_uns_map_raw")
 
-        # Assert UNS map removal message was produced
+        # Verify UNS cleanup message
         mock_producer_instance.produce.assert_any_call(
             topic=expected_topic,
             key=asset_uuid,

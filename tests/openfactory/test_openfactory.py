@@ -108,6 +108,78 @@ class TestOpenFactory(TestCase):
         # Assert that the return value matches the mock objects
         self.assertEqual(result, mock_asset_instances)
 
+    def test_available_assets_uuid(self):
+        """ Test available_assets_uuid() """
+        mock_ksql = MagicMock()
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid1"},
+            {"ASSET_UUID": "uuid2"}
+        ]
+
+        ofa = OpenFactory(
+            ksqlClient=mock_ksql,
+            bootstrap_servers="MockedBroker"
+        )
+
+        result = ofa.available_assets_uuid()
+
+        # Ensure the function returns the expected result
+        assert result == ["uuid1", "uuid2"]
+
+        # Verify the correct query was executed
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_avail WHERE AVAILABILITY='AVAILABLE';"
+        )
+
+    def test_unavailable_assets_uuid(self):
+        """ Test unavailable_assets_uuid() """
+        mock_ksql = MagicMock()
+        mock_ksql.query.return_value = [
+            {"ASSET_UUID": "uuid3"},
+            {"ASSET_UUID": "uuid4"}
+        ]
+
+        ofa = OpenFactory(
+            ksqlClient=mock_ksql,
+            bootstrap_servers="MockedBroker"
+        )
+
+        result = ofa.unavailable_assets_uuid()
+
+        # Ensure the function returns the expected result
+        assert result == ["uuid3", "uuid4"]
+
+        # Verify the correct query was executed
+        mock_ksql.query.assert_called_once_with(
+            "SELECT ASSET_UUID FROM assets_avail WHERE AVAILABILITY='UNAVAILABLE';"
+        )
+
+    def test_available_assets_uuid_empty(self):
+        """ Test available_assets_uuid() when no assets exist """
+        mock_ksql = MagicMock()
+        mock_ksql.query.return_value = []
+
+        ofa = OpenFactory(
+            ksqlClient=mock_ksql,
+            bootstrap_servers="MockedBroker"
+        )
+
+        result = ofa.available_assets_uuid()
+        assert result == []
+
+    def test_unavailable_assets_uuid_empty(self):
+        """ Test unavailable_assets_uuid() when no assets exist """
+        mock_ksql = MagicMock()
+        mock_ksql.query.return_value = []
+
+        ofa = OpenFactory(
+            ksqlClient=mock_ksql,
+            bootstrap_servers="MockedBroker"
+        )
+
+        result = ofa.unavailable_assets_uuid()
+        assert result == []
+
     def test_assets_docker_services(self):
         """ Test assets_docker_services() """
         # Mock query result as list of dicts

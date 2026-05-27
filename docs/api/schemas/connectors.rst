@@ -23,3 +23,4 @@ Submodules
    connectors.types
    connectors.mtconnect
    connectors.opcua
+   connectors.shdr

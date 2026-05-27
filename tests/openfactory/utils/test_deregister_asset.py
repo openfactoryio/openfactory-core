@@ -127,3 +127,28 @@ class TestDeregisterAsset(unittest.TestCase):
                 "updated_at": 1720000000000
             })
         )
+
+    @patch("openfactory.utils.assets.AssetProducer")
+    def test_deregister_asset_waits_until_removed_state(self, MockAssetProducer):
+        """ Should keep polling until asset availability becomes REMOVED. """
+
+        mock_producer_instance = MagicMock()
+        MockAssetProducer.return_value = mock_producer_instance
+
+        asset_uuid = "5678-EFGH"
+        bootstrap_servers = "kafka-broker:9092"
+
+        mock_ksql_client = MagicMock()
+        mock_ksql_client.query.side_effect = [
+            [],
+            [],
+            [{"AVAILABILITY": "REMOVED"}]
+        ]
+
+        deregister_asset(
+            asset_uuid,
+            mock_ksql_client,
+            bootstrap_servers
+        )
+
+        self.assertEqual(mock_ksql_client.query.call_count, 3)

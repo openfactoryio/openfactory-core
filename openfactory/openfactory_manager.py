@@ -483,7 +483,7 @@ class OpenFactoryManager(OpenFactory):
 
         for app_name, app in apps.items():
             user_notify.info(f"{app_name}:")
-            if app.uuid not in self.applications_uuid():
+            if app.uuid not in self.assets_uuid():
                 user_notify.info(f"No application {app.uuid} deployed in OpenFactory")
                 continue
 

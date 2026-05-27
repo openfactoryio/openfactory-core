@@ -1417,7 +1417,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         ksqlMock = MagicMock()
         ksqlMock.ksqldb_url = "mock_ksqldb_url"
         manager = OpenFactoryManager(ksqlClient=ksqlMock, bootstrap_servers='mokded_bootstrap_servers')
-        manager.applications_uuid = MagicMock(return_value=['app-uuid-1', 'app-uuid-2'])
+        manager.assets_uuid = MagicMock(return_value=['app-uuid-1', 'app-uuid-2'])
         manager.tear_down_application = MagicMock()
 
         # Mock the YAML config file content

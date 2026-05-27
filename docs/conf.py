@@ -39,6 +39,7 @@ nitpick_ignore = [
     ('py:class', 'asyncua.Client'),
     ('py:class', 'cimpl.Producer'),
     ('py:class', 'pydantic.main.BaseModel'),
+    ("py:class", "pydantic.networks.IPvAnyAddress"),
     ('py:class', 'pydantic.root_model.RootModel[Dict[str, Node]]'),
     ('py:class', 'pydantic.root_model.RootModel[Dict[str, Union[Volume, NoneType]]]'),
     ('py:class', 'pydantic.root_model.RootModel[Dict[str, Optional[Volume]]]'),

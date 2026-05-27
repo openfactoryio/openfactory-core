@@ -104,8 +104,10 @@ def deregister_asset(asset_uuid: str,
     while True:
         query = f"SELECT AVAILABILITY FROM assets_avail WHERE ASSET_UUID='{asset_uuid}';"
         res = ksqlClient.query(query)
-        if res[0]['AVAILABILITY'] == "REMOVED":
-            break
+        # res could be empty in case a none existing asset is deregistered
+        if res:
+            if res[0]['AVAILABILITY'] == "REMOVED":
+                break
 
     # remove references
     for ref_id in ["references_below", "references_above"]:

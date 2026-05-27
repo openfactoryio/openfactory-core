@@ -108,7 +108,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
     avail = EventAttribute(tag="Availability")
     application_version = EventAttribute(value=os.getenv('APPLICATION_VERSION', 'latest'), tag="Application.Version")
     application_manufacturer = EventAttribute(value=os.getenv('APPLICATION_MANUFACTURER', 'OpenFactoryIO'), tag="Application.Manufacturer")
-    application_license = EventAttribute(value=os.getenv('APPLICATION_LICENSE', 'BSD-3-Clause license'), tag="Application.License")
+    application_license = EventAttribute(value=os.getenv('APPLICATION_LICENSE', 'Polyform Noncommercial License 1.0.0'), tag="Application.License")
     openfactory_manufacturer = EventAttribute(value='OpenFactoryIO', tag="Library.Manufacturer")
     openfactory_license = EventAttribute(value='Polyform Noncommercial License 1.0.0', tag="Library.License")
     openfactory_version = EventAttribute(value=__version__, tag="Library.Version")

@@ -191,40 +191,41 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
     def _subscribe_ofa_methods(self):
         """ Scan decorated methods and subscribe to their CMD attributes. """
-        # Iterate over class attributes
-        for attr_name, attr in type(self).__dict__.items():
-            if hasattr(attr, "_ofa_method_metadata") and inspect.isfunction(attr):
-                # attr is the original function (safe to access __name__)
-                method = getattr(self, attr_name)       # bind to self for execution
-                cmd_attribute = f"{attr.__name__}_CMD"  # use unbound function's __name__
+        # Scan decorated methods across the full class inheritance chain (MRO)
+        for cls in reversed(type(self).mro()):
+            for attr_name, attr in cls.__dict__.items():
+                if hasattr(attr, "_ofa_method_metadata") and inspect.isfunction(attr):
+                    # attr is the original function (safe to access __name__)
+                    method = getattr(self, attr_name)       # bind to self for execution
+                    cmd_attribute = f"{attr.__name__}_CMD"  # use unbound function's __name__
 
-                # Build callback closure
-                def make_callback(meth):
-                    def on_cmd(msg_key, msg_value):
-                        try:
-                            envelope = CommandEnvelope.model_validate_json(msg_value['VALUE'])
-                            # execute method with envelope arguments
-                            self._execute_ofa_method(meth, envelope)
-                        except Exception as e:
-                            self.logger.error(
-                                f"[{self.asset_uuid}] Failed to execute {meth.__name__}: {type(e).__name__}: {e}",
-                                exc_info=True
-                            )
-                    return on_cmd
+                    # Build callback closure
+                    def make_callback(meth):
+                        def on_cmd(msg_key, msg_value):
+                            try:
+                                envelope = CommandEnvelope.model_validate_json(msg_value['VALUE'])
+                                # execute method with envelope arguments
+                                self._execute_ofa_method(meth, envelope)
+                            except Exception as e:
+                                self.logger.error(
+                                    f"[{self.asset_uuid}] Failed to execute {meth.__name__}: {type(e).__name__}: {e}",
+                                    exc_info=True
+                                )
+                        return on_cmd
 
-                # Register command as asset attributes
-                self._register_ofa_method(method)
-                self.add_attribute(
-                    asset_attribute=AssetAttribute(
-                        id=cmd_attribute,
-                        value="",
-                        type='OpenFactory',
-                        tag='Method.Command'
+                    # Register command as asset attributes
+                    self._register_ofa_method(method)
+                    self.add_attribute(
+                        asset_attribute=AssetAttribute(
+                            id=cmd_attribute,
+                            value="",
+                            type='OpenFactory',
+                            tag='Method.Command'
+                        )
                     )
-                )
 
-                if not self._test_mode:
-                    self.subscribe_to_attribute(cmd_attribute, make_callback(method))
+                    if not self._test_mode:
+                        self.subscribe_to_attribute(cmd_attribute, make_callback(method))
 
     def _register_ofa_method(self, method) -> None:
         """

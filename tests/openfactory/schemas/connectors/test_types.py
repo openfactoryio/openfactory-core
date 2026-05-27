@@ -3,6 +3,7 @@ from pydantic import ValidationError, BaseModel, TypeAdapter
 from openfactory.schemas.connectors.types import Connector
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema, OPCUAVariableConfig
+from openfactory.schemas.connectors.shdr import SHDRDataPointSchema, SHDRConnectorSchema
 
 
 class TestConnectorUnion(unittest.TestCase):
@@ -70,6 +71,46 @@ class TestConnectorUnion(unittest.TestCase):
         # Defaults applied
         self.assertEqual(hum_var.queue_size, 1)
         self.assertEqual(hum_var.sampling_interval, 0)
+
+    def test_valid_shdr_connector(self):
+        """ Test valid SHDR connector configuration is parsed correctly. """
+        data = {
+            "type": "shdr",
+            "host": "127.0.0.1",
+            "port": 7878,
+            "data": {
+                "temp": {
+                    "tag": "Temperature",
+                    "type": "Samples"
+                },
+                "model": {
+                    "tag": "SensorModel",
+                    "type": "Events"
+                }
+            }
+        }
+
+        connector = TypeAdapter(Connector).validate_python(data)
+
+        self.assertIsInstance(connector, SHDRConnectorSchema)
+        self.assertEqual(connector.type, "shdr")
+        self.assertEqual(str(connector.host), "127.0.0.1")
+        self.assertEqual(connector.port, 7878)
+
+        self.assertIn("temp", connector.data)
+        self.assertIn("model", connector.data)
+
+        temp = connector.data["temp"]
+        humi = connector.data["model"]
+
+        self.assertIsInstance(temp, SHDRDataPointSchema)
+        self.assertIsInstance(humi, SHDRDataPointSchema)
+
+        self.assertEqual(temp.tag, "Temperature")
+        self.assertEqual(temp.type, "Samples")
+
+        self.assertEqual(humi.tag, "SensorModel")
+        self.assertEqual(humi.type, "Events")
 
     def test_unknown_type_discriminator(self):
         """ Test validation error when unknown connector type is used. """

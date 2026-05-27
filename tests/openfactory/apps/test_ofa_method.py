@@ -240,3 +240,39 @@ class TestOFAMethodDecorator(unittest.TestCase):
 
         metadata = Dummy.move._ofa_method_metadata
         self.assertEqual(metadata["description"], "Some spaces to remove.")
+
+    def test_inherited_ofa_methods_are_registered(self):
+        """ Decorated methods inherited from parent classes should also be registered. """
+
+        from openfactory.apps import OpenFactoryApp
+        from openfactory.kafka import KSQLDBClient
+
+        class BaseApp(OpenFactoryApp):
+
+            @ofa_method()
+            def parent_method(self):
+                pass
+
+        class ChildApp(BaseApp):
+
+            @ofa_method()
+            def child_method(self):
+                pass
+
+        class GrandChildApp(ChildApp):
+
+            @ofa_method()
+            def grandchild_method(self):
+                pass
+
+        app = GrandChildApp(
+            ksqlClient=KSQLDBClient("http://localhost:8088"),
+            bootstrap_servers="localhost:9092",
+            test_mode=True
+        )
+
+        attribute_ids = app.attributes()
+
+        self.assertIn("parent_method", attribute_ids)
+        self.assertIn("child_method", attribute_ids)
+        self.assertIn("grandchild_method", attribute_ids)

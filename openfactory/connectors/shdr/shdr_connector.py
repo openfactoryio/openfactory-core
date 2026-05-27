@@ -41,6 +41,8 @@ class SHDRConnector(Connector):
        The schema of the SHDRConnector is :class:`openfactory.schemas.connectors.shdr.SHDRConnectorSchema`.
     """
 
+    COORDINATOR_UUID = "SHDR-COORDINATOR"
+
     def __init__(self,
                  deployment_strategy: OpenFactoryServiceDeploymentStrategy,
                  ksqlClient: KSQLDBClient,
@@ -67,12 +69,9 @@ class SHDRConnector(Connector):
         Raises:
             OFAException: If the SHDR coordinator is not configured or unavailable.
         """
-        if not hasattr(config, "SHDR_CONNECTOR_COORDINATOR"):
-            raise OFAException("SHDR_CONNECTOR_COORDINATOR is not configured")
-
-        coordinator = Asset(asset_uuid=config.SHDR_CONNECTOR_COORDINATOR, ksqlClient=self.ksql)
+        coordinator = Asset(asset_uuid=self.COORDINATOR_UUID, ksqlClient=self.ksql)
         if coordinator.avail.value != "AVAILABLE":
-            raise OFAException(f"SHDR Coordinator {config.SHDR_CONNECTOR_COORDINATOR} is not deployed")
+            raise OFAException(f"SHDR Coordinator '{self.COORDINATOR_UUID}' is not deployed")
 
         return coordinator
 
@@ -95,7 +94,7 @@ class SHDRConnector(Connector):
         try:
             coordinator.register_device(sender_uuid='shdr-connector', device_config=str(device.model_dump_json()))
         except TypeError:
-            raise OFAException(f"Asset '{config.SHDR_CONNECTOR_COORDINATOR}' does not appear to be a valid SHDR coordinator.")
+            raise OFAException(f"Asset '{self.COORDINATOR_UUID}' does not appear to be a valid SHDR coordinator.")
 
         user_notify.success(f"SHDR device {device.uuid} registered successfully")
 
@@ -123,7 +122,7 @@ class SHDRConnector(Connector):
         try:
             coordinator.deregister_device(sender_uuid='shdr-connector', device_uuid=device_uuid)
         except TypeError:
-            raise OFAException(f"Asset {config.SHDR_CONNECTOR_COORDINATOR} does not appear to be a valid SHDR coordinator")
+            raise OFAException(f"Asset {self.COORDINATOR_UUID} does not appear to be a valid SHDR coordinator")
         user_notify.success(f"SHDR device {device_uuid} deregistered successfully")
 
         # De-register device asset

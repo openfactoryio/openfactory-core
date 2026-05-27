@@ -20,10 +20,11 @@ from typing import Annotated
 from pydantic import Field
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema
+from openfactory.schemas.connectors.shdr import SHDRConnectorSchema
 
 
 Connector = Annotated[
-    MTConnectConnectorSchema | OPCUAConnectorSchema,  # Add other connector models here as needed
+    MTConnectConnectorSchema | OPCUAConnectorSchema | SHDRConnectorSchema,  # Add other connector models here as needed
     Field(
         discriminator='type',
         description="Discriminator field to select the correct connector schema based on the 'type' value."

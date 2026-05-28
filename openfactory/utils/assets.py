@@ -108,6 +108,13 @@ def deregister_asset(asset_uuid: str,
         if res:
             if res[0]['AVAILABILITY'] == "REMOVED":
                 break
+            if res[0]['AVAILABILITY'] == "UNAVAILABLE":
+                # some assets may send UNAVAILABLE
+                producer.send_asset_attribute(
+                    asset_uuid,
+                    AssetAttribute(id="avail", value="REMOVED", type="Events", tag="Availability")
+                )
+                producer.flush()
 
     # remove references
     for ref_id in ["references_below", "references_above"]:

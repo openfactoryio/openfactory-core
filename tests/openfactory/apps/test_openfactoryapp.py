@@ -228,7 +228,7 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(attr.type, 'Events', "Type mismatch for application_manufacturer")
                 self.assertEqual(attr.tag, 'Application.Manufacturer', "Tag mismatch for application_manufacturer")
             elif attr.id == 'application_license':
-                self.assertEqual(attr.value, 'BSD-3-Clause license', "Value mismatch for application_license")
+                self.assertEqual(attr.value, 'Polyform Noncommercial License 1.0.0', "Value mismatch for application_license")
                 self.assertEqual(attr.type, 'Events', "Type mismatch for application_license")
                 self.assertEqual(attr.tag, 'Application.License', "Tag mismatch for application_license")
             elif attr.id == 'openfactory_manufacturer':

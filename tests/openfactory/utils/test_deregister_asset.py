@@ -152,3 +152,63 @@ class TestDeregisterAsset(unittest.TestCase):
         )
 
         self.assertEqual(mock_ksql_client.query.call_count, 3)
+
+    @patch("openfactory.utils.assets.AssetProducer")
+    def test_deregister_asset_resends_removed_when_unavailable(self, MockAssetProducer):
+        """
+        If asset reports UNAVAILABLE during deregistration,
+        deregister_asset should resend REMOVED until state becomes REMOVED.
+        """
+
+        mock_producer_instance = MagicMock()
+        MockAssetProducer.return_value = mock_producer_instance
+
+        asset_uuid = "5678-EFGH"
+        bootstrap_servers = "kafka-broker:9092"
+
+        mock_ksql_client = MagicMock()
+
+        # First poll returns UNAVAILABLE
+        # Second poll returns REMOVED
+        mock_ksql_client.query.side_effect = [
+            [{"AVAILABILITY": "UNAVAILABLE"}],
+            [{"AVAILABILITY": "REMOVED"}]
+        ]
+
+        deregister_asset(
+            asset_uuid,
+            mock_ksql_client,
+            bootstrap_servers
+        )
+
+        # Query loop should poll twice
+        self.assertEqual(mock_ksql_client.query.call_count, 2)
+
+        # REMOVED should be sent twice:
+        #   1 initial send
+        #   1 resend after UNAVAILABLE
+        avail_calls = [
+            c for c in
+            mock_producer_instance.send_asset_attribute.call_args_list
+            if c[0][1].id == "avail"
+        ]
+
+        self.assertEqual(len(avail_calls), 2)
+
+        for call in avail_calls:
+            self.assertEqual(call[0][0], asset_uuid)
+            self.assertEqual(call[0][1].value, "REMOVED")
+
+        # Total calls:
+        #   2 avail REMOVED
+        #   2 reference cleanup
+        self.assertEqual(
+            len(mock_producer_instance.send_asset_attribute.call_args_list),
+            4
+        )
+
+        # Flush calls:
+        #   1 initial REMOVED
+        #   1 resend after UNAVAILABLE
+        #   1 final flush after tombstones / UNS cleanup
+        self.assertEqual(mock_producer_instance.flush.call_count, 3)

@@ -45,6 +45,16 @@ class BaseAsset:
         subscribers (dict): Mapping of subscription keys to NATSSubscriber instances.
     """
 
+    # Instance attributes
+    ksql: KSQLDBClient
+    bootstrap_servers: str | None
+    asset_router_url: str | None
+    producer: AssetProducer | None
+    loop_thread: AsyncLoopThread | None
+    subscribers: dict[str, NATSSubscriber]
+
+    _test_mode: bool
+    _mocked_attributes: list[str]
     _shared_producer: AssetProducer = None   # class-level singleton producer
 
     KSQL_ASSET_TABLE = None

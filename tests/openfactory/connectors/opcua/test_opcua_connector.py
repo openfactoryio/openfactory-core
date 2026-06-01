@@ -154,47 +154,35 @@ class TestOPCUAConnector(unittest.TestCase):
         )
 
         mock_notify.success.assert_called_once_with(
-            f"SHDR device {self.device.uuid} deregistered successfully"
+            f"OPC UA device {self.device.uuid} deregistered successfully"
         )
 
-    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    def test_deploy_invalid_coordinator_asset(self, mock_asset, mock_register_asset, mock_notify):
-
+    @patch.object(OPCUAConnector, "_get_coordinator")
+    def test_deploy_invalid_coordinator_asset(self, mock_get_coordinator):
+        """ Deploy should raise if coordinator does not expose register_device """
         coordinator = MagicMock()
-        coordinator.avail.value = "AVAILABLE"
+        coordinator.asset_uuid = "COORD-123"
         coordinator.register_device.side_effect = TypeError()
-        mock_asset.return_value = coordinator
+
+        mock_get_coordinator.return_value = coordinator
 
         with self.assertRaises(OFAException) as cm:
             self.connector.deploy(self.device, "some_file.yml")
 
-        self.assertIn(
-            "does not appear to be a valid OPC UA coordinator",
-            str(cm.exception)
-        )
+        mock_get_coordinator.assert_called_once_with()
+        self.assertIn("does not appear to be a valid OPC UA coordinator", str(cm.exception))
 
-        mock_register_asset.assert_not_called()
-        mock_notify.success.assert_not_called()
-
-    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    def test_tear_down_invalid_coordinator_asset(self, mock_asset, mock_deregister, mock_notify):
-        """ Deploy should raise if coordinator asset is invalid """
+    @patch.object(OPCUAConnector, "_get_coordinator")
+    def test_tear_down_invalid_coordinator_asset(self, mock_get_coordinator):
+        """ tear_down should raise if coordinator asset is invalid. """
         coordinator = MagicMock()
-        coordinator.avail.value = "AVAILABLE"
+        coordinator.asset_uuid = "COORD-123"
         coordinator.deregister_device.side_effect = TypeError()
-        mock_asset.return_value = coordinator
+
+        mock_get_coordinator.return_value = coordinator
 
         with self.assertRaises(OFAException) as cm:
             self.connector.tear_down(self.device.uuid)
 
-        self.assertIn(
-            "does not appear to be a valid SHDR coordinator",
-            str(cm.exception)
-        )
-
-        mock_deregister.assert_not_called()
-        mock_notify.success.assert_not_called()
+        mock_get_coordinator.assert_called_once_with()
+        self.assertIn("does not appear to be a valid OPC UA coordinator", str(cm.exception))

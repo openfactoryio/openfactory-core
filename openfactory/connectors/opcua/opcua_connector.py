@@ -124,8 +124,8 @@ class OPCUAConnector(Connector):
         try:
             coordinator.deregister_device(sender_uuid='opcua-connector', device_uuid=device_uuid)
         except TypeError:
-            raise OFAException(f"Asset {coordinator.asset_uuid} does not appear to be a valid SHDR coordinator")
-        user_notify.success(f"SHDR device {device_uuid} deregistered successfully")
+            raise OFAException(f"Asset {coordinator.asset_uuid} does not appear to be a valid OPC UA coordinator")
+        user_notify.success(f"OPC UA device {device_uuid} deregistered successfully")
 
         # De-register device asset
         deregister_asset(

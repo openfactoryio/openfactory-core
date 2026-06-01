@@ -74,7 +74,7 @@ class TestSHDRConnector(unittest.TestCase):
 
         # Assert coordinator registration
         mock_coordinator.register_device.assert_called_once_with(
-            sender_uuid='shdr-connector',
+            sender_uuid='ofa-cli',
             device_config='{"field":"value"}'
         )
 

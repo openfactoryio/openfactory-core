@@ -92,7 +92,7 @@ class SHDRConnector(Connector):
         coordinator = self._get_coordinator()
 
         try:
-            coordinator.register_device(sender_uuid='shdr-connector', device_config=str(device.model_dump_json()))
+            coordinator.register_device(sender_uuid='ofa-cli', device_config=str(device.model_dump_json()))
         except TypeError:
             raise OFAException(f"Asset '{self.COORDINATOR_UUID}' does not appear to be a valid SHDR coordinator.")
 

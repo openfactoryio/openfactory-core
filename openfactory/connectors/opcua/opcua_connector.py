@@ -43,7 +43,7 @@ class OPCUAConnector(Connector):
        The schema of the OPCUAConnector is :class:`openfactory.schemas.connectors.opcua.OPCUAConnectorSchema`.
     """
 
-    COORDINATOR_UUID = "OPCUA-COORDINATOR"
+    CONNECTOR_NAME = "OPCUA"
 
     def __init__(self,
                  deployment_strategy: OpenFactoryServiceDeploymentStrategy,
@@ -63,7 +63,7 @@ class OPCUAConnector(Connector):
 
     def _get_coordinator(self) -> Asset:
         """
-        Get the OPC UA coordinator asset.
+        Discover and returns the OPC UA coordinator asset.
 
         Returns:
             Asset: The OPC UA coordinator asset.
@@ -71,9 +71,16 @@ class OPCUAConnector(Connector):
         Raises:
             OFAException: If the OPC UA coordinator is not configured or unavailable.
         """
-        coordinator = Asset(asset_uuid=self.COORDINATOR_UUID, ksqlClient=self.ksql)
+        query = f"select ASSET_UUID FROM ASSETS_TYPE WHERE TYPE='{self.CONNECTOR_NAME}.Coordinator';"
+        res = self.ksql.query(query)
+        if res:
+            coordinator = Asset(asset_uuid=res[0]["ASSET_UUID"], ksqlClient=self.ksql)
+        else:
+            raise OFAException("OPC UA Coordinator is not deployed")
+
         if coordinator.avail.value != "AVAILABLE":
-            raise OFAException(f"SHDR Coordinator '{self.COORDINATOR_UUID}' is not deployed")
+            raise OFAException("OPC UA Coordinator is not AVAILABLE")
+
         return coordinator
 
     def deploy(self, device: Device, yaml_config_file: str) -> None:
@@ -92,7 +99,7 @@ class OPCUAConnector(Connector):
         try:
             coordinator.register_device(sender_uuid='opcua-connector', device_config=str(device.model_dump_json()))
         except TypeError:
-            raise OFAException(f"Asset '{self.COORDINATOR_UUID}' does not appear to be a valid OPC UA coordinator.")
+            raise OFAException(f"Asset '{coordinator.asset_uuid}' does not appear to be a valid OPC UA coordinator.")
 
         user_notify.success(f"OPC UA device {device.uuid} registered successfully")
 
@@ -117,7 +124,7 @@ class OPCUAConnector(Connector):
         try:
             coordinator.deregister_device(sender_uuid='opcua-connector', device_uuid=device_uuid)
         except TypeError:
-            raise OFAException(f"Asset {self.COORDINATOR_UUID} does not appear to be a valid SHDR coordinator")
+            raise OFAException(f"Asset {coordinator.asset_uuid} does not appear to be a valid SHDR coordinator")
         user_notify.success(f"SHDR device {device_uuid} deregistered successfully")
 
         # De-register device asset

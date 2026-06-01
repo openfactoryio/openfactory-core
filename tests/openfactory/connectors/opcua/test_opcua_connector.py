@@ -51,21 +51,67 @@ class TestOPCUAConnector(unittest.TestCase):
         with self.assertRaises(OFAException):
             self.connector.deploy(self.device, "config.yaml")
 
-    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
     @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    def test_deploy(self, mock_asset, mock_register_asset, mock_notify):
-        """ Test successful deployment """
+    def test_get_coordinator(self, mock_asset):
+        """ _get_coordinator should return coordinator when available. """
+        self.ksql_mock.query.return_value = [
+            {"ASSET_UUID": "COORD-123"}
+        ]
+
         coordinator = MagicMock()
         coordinator.avail.value = "AVAILABLE"
         mock_asset.return_value = coordinator
 
-        self.connector.deploy(self.device, "some_file.yml")
+        result = self.connector._get_coordinator()
+
+        self.ksql_mock.query.assert_called_once_with(
+            "select ASSET_UUID FROM ASSETS_TYPE WHERE TYPE='OPCUA.Coordinator';"
+        )
 
         mock_asset.assert_called_once_with(
-            asset_uuid="OPCUA-COORDINATOR",
+            asset_uuid="COORD-123",
             ksqlClient=self.ksql_mock
         )
+
+        self.assertIs(result, coordinator)
+
+    def test_get_coordinator_not_deployed_raises(self):
+        """ _get_coordinator should raise if no coordinator is found. """
+        self.ksql_mock.query.return_value = []
+
+        with self.assertRaises(OFAException) as cm:
+            self.connector._get_coordinator()
+
+        self.assertEqual(str(cm.exception), "OPC UA Coordinator is not deployed")
+
+    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
+    def test_get_coordinator_not_available_raises(self, mock_asset):
+        """ _get_coordinator should raise if coordinator is not AVAILABLE. """
+
+        self.ksql_mock.query.return_value = [
+            {"ASSET_UUID": "COORD-123"}
+        ]
+
+        coordinator = MagicMock()
+        coordinator.avail.value = "UNAVAILABLE"
+        mock_asset.return_value = coordinator
+
+        with self.assertRaises(OFAException) as cm:
+            self.connector._get_coordinator()
+
+        self.assertEqual(str(cm.exception), "OPC UA Coordinator is not AVAILABLE")
+
+    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
+    @patch("openfactory.connectors.opcua.opcua_connector.register_asset")
+    @patch.object(OPCUAConnector, "_get_coordinator")
+    def test_deploy(self, mock_get_coordinator, mock_register_asset, mock_notify):
+        """ Test successful deployment """
+        coordinator = MagicMock()
+        mock_get_coordinator.return_value = coordinator
+
+        self.connector.deploy(self.device, "some_file.yml")
+
+        mock_get_coordinator.assert_called_once_with()
 
         coordinator.register_device.assert_called_once_with(
             sender_uuid="opcua-connector",
@@ -86,19 +132,15 @@ class TestOPCUAConnector(unittest.TestCase):
 
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
     @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    def test_tear_down_success(self, mock_asset, mock_deregister, mock_notify):
-        """ Test successful tear down """
+    @patch.object(OPCUAConnector, "_get_coordinator")
+    def test_tear_down_success(self, mock_get_coordinator, mock_deregister, mock_notify):
+        """ Test successful tear down. """
         coordinator = MagicMock()
-        coordinator.avail.value = "AVAILABLE"
-        mock_asset.return_value = coordinator
+        mock_get_coordinator.return_value = coordinator
 
         self.connector.tear_down(self.device.uuid)
 
-        mock_asset.assert_called_once_with(
-            asset_uuid="OPCUA-COORDINATOR",
-            ksqlClient=self.ksql_mock
-        )
+        mock_get_coordinator.assert_called_once_with()
 
         coordinator.deregister_device.assert_called_once_with(
             sender_uuid="opcua-connector",
@@ -114,22 +156,6 @@ class TestOPCUAConnector(unittest.TestCase):
         mock_notify.success.assert_called_once_with(
             f"SHDR device {self.device.uuid} deregistered successfully"
         )
-
-    @patch("openfactory.connectors.opcua.opcua_connector.Asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
-    @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    def test_tear_down_coordinator_unavailable_raises(self, mock_notify, mock_deregister, mock_asset):
-        """ Tear down should raise if coordinator is unavailable """
-        coordinator = MagicMock()
-        coordinator.avail.value = "UNAVAILABLE"
-        mock_asset.return_value = coordinator
-
-        with self.assertRaises(OFAException) as cm:
-            self.connector.tear_down(self.device.uuid)
-
-        self.assertIn("OPCUA-COORDINATOR", str(cm.exception))
-        mock_deregister.assert_not_called()
-        mock_notify.success.assert_not_called()
 
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
     @patch("openfactory.connectors.opcua.opcua_connector.register_asset")

@@ -153,8 +153,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
 
         app._run_fastapi.assert_awaited_once()
 
-    async def test_async_run_failure_triggers_cleanup(self):
-        """ Test async_run failure triggers cleanup """
+    async def test_async_run_failure_triggers_shutdown(self):
+        """ Verify async_run invokes shutdown when FastAPI task crashes. """
         app = _TestApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
@@ -166,11 +166,11 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError("boom")
 
         app._run_fastapi = failing_fastapi
-        app.app_event_loop_stopped = MagicMock()
+        app.shutdown = MagicMock()
 
         await app.async_run()
 
-        app.app_event_loop_stopped.assert_called_once()
+        app.shutdown.assert_called_once()
 
     async def test_uvicorn_shutdown_flag(self):
         """ Test uvicorn shutdown flag """

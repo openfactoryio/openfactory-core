@@ -287,8 +287,8 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
 
         app._run_flask.assert_called_once()
 
-    async def test_async_run_failure_triggers_cleanup(self):
-        """ Test async_run failure triggers cleanup """
+    async def test_async_run_failure_triggers_shutdown(self):
+        """ Verify async_run invokes shutdown when Flask thread crashes. """
 
         app = _TestApp(
             ksqlClient=self.ksql_mock,
@@ -301,10 +301,11 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError("boom")
 
         app._run_flask = failing_flask
-        app.app_event_loop_stopped = MagicMock()
+        app.shutdown = MagicMock()
+
         await app.async_run()
 
-        app.app_event_loop_stopped.assert_called_once()
+        app.shutdown.assert_called_once()
 
     async def test_default_async_main_loop_cancel(self):
         """ Ensure default async_main_loop is cancellable """
@@ -376,3 +377,23 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
             app._thread_wrapper(failing)
 
         self.assertIsInstance(app._thread_exception, RuntimeError)
+
+    async def test_async_run_shutdown_is_only_executed_once(self):
+        """ Verify async_run does not execute cleanup twice. """
+        app = _TestApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            test_mode=True
+        )
+
+        app.shutdown = MagicMock()
+
+        def failing_flask():
+            raise RuntimeError("boom")
+
+        app._run_flask = failing_flask
+
+        await app.async_run()
+
+        app.shutdown.assert_called_once()

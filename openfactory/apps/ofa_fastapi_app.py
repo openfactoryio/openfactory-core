@@ -360,7 +360,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
 
             # OpenFactory cleanup
             try:
-                self.app_event_loop_stopped()
+                self.shutdown()
             except Exception:
                 pass
 

@@ -274,4 +274,5 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         """
         client = docker.from_env()
         container = client.containers.get(service_name)
-        container.remove(force=True)
+        container.stop()
+        container.remove()

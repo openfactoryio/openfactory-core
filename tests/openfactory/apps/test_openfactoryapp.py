@@ -267,42 +267,38 @@ class TestOpenFactoryApp(unittest.TestCase):
         self.assertIn("Setup OpenFactory App DEV-UUID", calls)
 
     def test_signal_sigint(self):
-        """ Test signal SIGINT """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
-                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
-        app.app_event_loop_stopped = MagicMock()
+        """ Verify SIGINT delegates to shutdown. """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
 
-        with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
-            mock_signals.return_value.name = 'SIGINT'
-            # Assert that SystemExit is raised
+        app.shutdown = MagicMock()
+
+        with patch("openfactory.apps.ofaapp.signal.Signals") as mock_signals:
+            mock_signals.return_value.name = "SIGINT"
             with self.assertRaises(SystemExit):
                 app.signal_handler(signal.SIGINT, None)
 
-        # Check that deregister_asset was called with the expected arguments
-        self.mock_deregister.assert_called_once_with(
-            'DEV-UUID', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
-        )
-        # Check app_event_loop_stopped was called
-        app.app_event_loop_stopped.assert_called_once()
+        app.shutdown.assert_called_once()
 
     def test_signal_sigterm(self):
-        """ Test signal SIGTERM """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
-                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
-        app.app_event_loop_stopped = MagicMock()
-
-        with patch('openfactory.apps.ofaapp.signal.Signals') as mock_signals:
-            mock_signals.return_value.name = 'SIGTERM'
-            # Assert that SystemExit is raised
-            with self.assertRaises(SystemExit):
-                app.signal_handler(signal.SIGINT, None)
-
-        # Check that deregister_asset was called with the expected arguments
-        self.mock_deregister.assert_called_once_with(
-            'DEV-UUID', ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap'
+        """ Verify SIGTERM delegates to shutdown. """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
         )
-        # Check app_event_loop_stopped was called
-        app.app_event_loop_stopped.assert_called_once()
+
+        app.shutdown = MagicMock()
+
+        with patch("openfactory.apps.ofaapp.signal.Signals") as mock_signals:
+            mock_signals.return_value.name = "SIGTERM"
+            with self.assertRaises(SystemExit):
+                app.signal_handler(signal.SIGTERM, None)
+
+        app.shutdown.assert_called_once()
 
     def test_main_loop_not_implemented(self):
         """ Test call to main_loop raise NotImplementedError """
@@ -320,20 +316,85 @@ class TestOpenFactoryApp(unittest.TestCase):
         app.main_loop.assert_called_once()
 
     def test_run_handles_main_loop_exception(self):
-        """ Test handling of exception in main_loop """
+        """ Verify run() invokes shutdown on main loop failure. """
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
-            bootstrap_servers='mock_bootstrap',
-            asset_router_url='mocked_asset_url'
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
         )
-        app.main_loop = MagicMock(side_effect=Exception("Boom"))
 
-        with patch.object(app.logger, 'exception') as mock_logger_exception:
-            app.run()
-            mock_logger_exception.assert_called_once()
-            args, kwargs = mock_logger_exception.call_args
-            assert "An error occurred in the main_loop of the app." in args[0]
-            self.mock_deregister.assert_called_once()
+        app.main_loop = MagicMock(side_effect=Exception("Boom"))
+        app.shutdown = MagicMock()
+
+        app.run()
+
+        app.shutdown.assert_called_once()
+
+    def test_shutdown_is_idempotent(self):
+        """ Verify shutdown() executes cleanup only once. """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+
+        app.app_event_loop_stopped = MagicMock()
+
+        app.shutdown()
+        app.shutdown()
+        app.shutdown()
+
+        self.mock_deregister.assert_called_once_with(
+            "DEV-UUID",
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap"
+        )
+        app.app_event_loop_stopped.assert_called_once()
+        self.assertTrue(app._shutdown_completed)
+
+    def test_shutdown_after_signal_handler_is_noop(self):
+        """ Verify shutdown() becomes a no-op after signal_handler already performed cleanup. """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+
+        app.app_event_loop_stopped = MagicMock()
+
+        with patch("openfactory.apps.ofaapp.signal.Signals") as mock_signals:
+            mock_signals.return_value.name = "SIGINT"
+            with self.assertRaises(SystemExit):
+                app.signal_handler(signal.SIGINT, None)
+
+        # Simulate a second shutdown path (e.g. FastAPI/Flask runtime cleanup)
+        app.shutdown()
+
+        # Cleanup should only have happened once
+        self.mock_deregister.assert_called_once_with(
+            "DEV-UUID",
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap"
+        )
+        app.app_event_loop_stopped.assert_called_once()
+        self.assertTrue(app._shutdown_completed)
+
+    def test_signal_handler_calls_shutdown(self):
+        """ Signal handler should delegate cleanup to shutdown(). """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+
+        app.shutdown = MagicMock()
+
+        with patch("openfactory.apps.ofaapp.signal.Signals") as mock_signals:
+            mock_signals.return_value.name = "SIGINT"
+            with self.assertRaises(SystemExit):
+                app.signal_handler(signal.SIGINT, None)
+
+        app.shutdown.assert_called_once()
 
 
 class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
@@ -399,36 +460,17 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         app.async_main_loop.assert_awaited_once()
 
     async def test_async_run_handles_exception(self):
-        """ Verify async_run handles exceptions from async_main_loop. """
-        app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
-                             ksqlClient=self.ksql_mock)
+        """ async_run() should shutdown on async main loop failure. """
 
-        # Patch async_main_loop to raise an exception
-        app.async_main_loop = AsyncMock(side_effect=Exception("Boom!"))
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mocked_broker",
+            asset_router_url="mocked_asset_url"
+        )
 
-        # Patch welcome_banner to avoid side effects
-        app.welcome_banner = lambda: None
-
-        # Patch add_attribute
-        app.add_attribute = lambda *a, **k: None
-
-        # Patch logger to avoid actual logging
-        app.logger = unittest.mock.Mock()
-
-        # Patch deregister_asset and app_event_loop_stopped
-        app.app_event_loop_stopped = unittest.mock.Mock()
+        app.async_main_loop = AsyncMock(side_effect=Exception("Boom"))
+        app.shutdown = MagicMock()
 
         await app.async_run()
 
-        # Check app_event_loop_stopped called
-        app.app_event_loop_stopped.assert_called_once()
-
-        # Check deregister_asset called with asset_uuid
-        self.mock_deregister.assert_called_once_with(
-            app.asset_uuid,
-            ksqlClient=app.ksql,
-            bootstrap_servers=app.bootstrap_servers
-        )
-
-        # Check logger.exception called
-        app.logger.exception.assert_called()
+        app.shutdown.assert_called_once()

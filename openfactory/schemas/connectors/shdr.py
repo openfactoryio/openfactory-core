@@ -19,7 +19,6 @@ Key Models:
 
 Validation Features:
 --------------------
-- Validates ``host`` as a valid IPv4 or IPv6 address.
 - Validates ``port`` range (1-65535).
 - Restricts SHDR data point ``type`` to ``Samples`` or ``Events``.
 - Forbids unknown fields to ensure strict schema conformance.

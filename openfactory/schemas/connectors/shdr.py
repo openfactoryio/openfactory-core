@@ -50,7 +50,7 @@ YAML Example:
 """
 
 from typing import Literal, Dict
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SHDRDataPointSchema(BaseModel):
@@ -84,9 +84,9 @@ class SHDRConnectorSchema(BaseModel):
         description="Discriminator field to identify SHDR connector type."
     )
 
-    host: IPvAnyAddress = Field(
+    host: str = Field(
         ...,
-        description="SHDR server IP address."
+        description="SHDR server hostname or IP address.",
     )
 
     port: int = Field(

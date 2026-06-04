@@ -494,7 +494,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
 
             # cleanup
             try:
-                self.app_event_loop_stopped()
+                self.shutdown()
             except Exception:
                 self.logger.exception("Cleanup failed")
 

@@ -19,7 +19,6 @@ Key Models:
 
 Validation Features:
 --------------------
-- Validates ``host`` as a valid IPv4 or IPv6 address.
 - Validates ``port`` range (1-65535).
 - Restricts SHDR data point ``type`` to ``Samples`` or ``Events``.
 - Forbids unknown fields to ensure strict schema conformance.
@@ -50,7 +49,7 @@ YAML Example:
 """
 
 from typing import Literal, Dict
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SHDRDataPointSchema(BaseModel):
@@ -84,9 +83,9 @@ class SHDRConnectorSchema(BaseModel):
         description="Discriminator field to identify SHDR connector type."
     )
 
-    host: IPvAnyAddress = Field(
+    host: str = Field(
         ...,
-        description="SHDR server IP address."
+        description="SHDR server hostname or IP address.",
     )
 
     port: int = Field(

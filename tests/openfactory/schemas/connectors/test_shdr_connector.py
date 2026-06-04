@@ -96,11 +96,11 @@ class TestSHDRConnectorSchema(unittest.TestCase):
         self.assertEqual(errors[0]["loc"], ("host",))
         self.assertEqual(errors[0]["type"], "missing")
 
-    def test_invalid_host_raises(self):
-        """ Invalid IP address should raise ValidationError """
+    def test_hostname_is_accepted(self):
+        """ Hostnames are accepted as SHDR server hosts """
         data = {
             "type": "shdr",
-            "host": "not-an-ip",
+            "host": "shdr-server",
             "port": 7878,
             "data": {
                 "temp": {
@@ -110,13 +110,9 @@ class TestSHDRConnectorSchema(unittest.TestCase):
             }
         }
 
-        with self.assertRaises(ValidationError) as cm:
-            SHDRConnectorSchema(**data)
+        schema = SHDRConnectorSchema(**data)
 
-        errors = cm.exception.errors()
-
-        self.assertEqual(errors[0]["loc"], ("host",))
-        self.assertEqual(errors[0]["type"], "ip_any_address")
+        self.assertEqual(schema.host, "shdr-server")
 
     def test_missing_port_raises(self):
         """ Missing port should raise ValidationError """

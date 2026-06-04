@@ -150,6 +150,8 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                          bootstrap_servers=bootstrap_servers, asset_router_url=asset_router_url,
                          test_mode=test_mode)
 
+        self._shutdown_completed = False
+
         # setup logging
         self.logger = configure_prefixed_logger(
             app_uuid,
@@ -321,6 +323,23 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         """ Called when main loop is stopped. """
         pass
 
+    def shutdown(self) -> None:
+        """
+        Shutdown the application and execute cleanup logic.
+
+        This method is idempotent and may be called multiple times safely.
+        """
+        if self._shutdown_completed:
+            return
+
+        self._shutdown_completed = True
+        deregister_asset(
+            self.asset_uuid,
+            ksqlClient=self.ksql,
+            bootstrap_servers=self.bootstrap_servers
+        )
+        self.app_event_loop_stopped()
+
     def signal_handler(self, signum: int, frame: Optional[FrameType]) -> None:
         """
         Handles ``SIGINT`` and ``SIGTERM`` signals, gracefully stopping the application.
@@ -335,8 +354,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         """
         signal_name = signal.Signals(signum).name
         self.logger.info(f"Received signal {signal_name}, stopping app gracefully ...")
-        deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        self.app_event_loop_stopped()
+        self.shutdown()
         exit(0)
 
     def main_loop(self) -> None:
@@ -386,11 +404,9 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         self.logger.info("Starting main loop")
         try:
             self.main_loop()
-
         except Exception:
             self.logger.exception("An error occurred in the main_loop of the app.")
-            self.app_event_loop_stopped()
-            deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+            self.shutdown()
 
     async def async_main_loop(self) -> None:
         """
@@ -437,8 +453,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             await self.async_main_loop()
         except Exception:
             self.logger.exception("An error occurred in the async main loop")
-            self.app_event_loop_stopped()
-            deregister_asset(self.asset_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+            self.shutdown()
 
 
 if __name__ == "__main__":

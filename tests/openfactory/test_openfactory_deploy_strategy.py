@@ -179,7 +179,7 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     def test_local_remove(self, mock_from_env):
-        """ Test local Docker remove method using direct docker.from_env() """
+        """ Test local Docker remove performs a graceful shutdown before removal. """
         mock_docker_client = MagicMock()
         mock_container = MagicMock()
         mock_docker_client.containers.get.return_value = mock_container
@@ -189,7 +189,18 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         strategy.remove("test-container")
 
         mock_docker_client.containers.get.assert_called_once_with("test-container")
-        mock_container.remove.assert_called_once_with(force=True)
+
+        # Verify graceful shutdown sequence
+        self.assertEqual(
+            mock_container.method_calls,
+            [
+                unittest.mock.call.stop(),
+                unittest.mock.call.remove(),
+            ]
+        )
+
+        mock_container.stop.assert_called_once_with()
+        mock_container.remove.assert_called_once_with()
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     @patch("openfactory.openfactory_deploy_strategy.Mount")

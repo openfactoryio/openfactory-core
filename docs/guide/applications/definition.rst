@@ -27,6 +27,8 @@ Each application supports the following sections:
 
 - ``uuid`` — Asset UUID identifier of the application
 - ``image`` — Docker image to run
+- ``runtime_uid`` — User UID in the runtime
+- ``runtime_gid`` — User GID in the runtim 
 - ``uns`` — Unified Namespace metadata
 - ``environment`` — environment variables
 - ``storage`` — storage backend configuration
@@ -53,6 +55,17 @@ The Docker image defines the application runtime:
 .. code-block:: yaml
 
     image: ghcr.io/openfactoryio/scheduler:v1.0.3
+
+Runtime UID and GID
+-------------------
+The ``UID`` and ``GID`` of the user int he runtime can be configured:
+
+.. code-block:: yaml
+
+    runtime_uid: 1200
+    runtime_gid: 1210
+
+Both entries (``runtime_uid`` and ``runtime_gid``) must be defined together.
 
 UNS (Unified Namespace)
 -----------------------
@@ -180,7 +193,9 @@ The ``deploy`` section defines how the application is deployed.
         apps:
           scheduler:
             uuid: "app-scheduler"
-              image: ghcr.io/openfactoryio/scheduler:v1.0.0
+            image: ghcr.io/openfactoryio/scheduler:v1.0.0
+            runtime_uid: 1200
+            runtime_gid: 1210
 
             uns:
               location: building-a

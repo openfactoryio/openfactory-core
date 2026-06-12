@@ -53,7 +53,10 @@ class DockerAccesLayer:
 
         try:
             self.docker_client = docker.DockerClient(base_url=self.docker_url)
-            swarm_attrs = self.docker_client.swarm.attrs
+            if config.DEPLOYMENT_PLATFORM == 'swarm':
+                swarm_attrs = self.docker_client.swarm.attrs
+            else:
+                swarm_attrs = []
         except docker.errors.DockerException as e:
             user_notify.warning(f"ERROR: Could not connect to Docker at {self.docker_url}: {e}")
             self.worker_token = 'UNAVAILABLE'

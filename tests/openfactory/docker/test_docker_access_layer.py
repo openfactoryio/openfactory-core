@@ -14,6 +14,7 @@ class TestDockerAccessLayer(unittest.TestCase):
     def test_connect_success(self, mock_docker_client_class, mock_config):
         """ Test successful connection to Docker engine in Swarm mode """
         mock_config.OPENFACTORY_MANAGER_NODE_DOCKER_URL = 'tcp://127.0.0.1:2375'
+        mock_config.DEPLOYMENT_PLATFORM = 'swarm'
 
         # Prepare mock DockerClient instance
         mock_docker_client = MagicMock()
@@ -68,7 +69,7 @@ class TestDockerAccessLayer(unittest.TestCase):
     @patch('openfactory.docker.docker_access_layer.docker.DockerClient')
     def test_connect_docker_exception(self, mock_docker_client_class, mock_config, mock_user_notify):
         """ Test connection failure due to DockerException when accessing swarm.attrs """
-
+        mock_config.DEPLOYMENT_PLATFORM = 'swarm'
         mock_config.OPENFACTORY_MANAGER_NODE_DOCKER_URL = 'tcp://127.0.0.1:2375'
 
         # Raise DockerException when accessing swarm.attrs

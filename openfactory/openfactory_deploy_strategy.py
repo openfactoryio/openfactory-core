@@ -17,6 +17,7 @@ Key Components:
 Features:
 ---------
 - Unified interface for deploying and removing OpenFactory services.
+- Supports configurable image pull policies (``missing`` and ``always``).
 - Supports optional runtime UID/GID configuration for compatibility with shared
   filesystems such as NFS.
 - Supports environment variables, container commands, labels, ports, networks,
@@ -33,6 +34,7 @@ Usage Example:
     local_strategy = LocalDockerDeploymentStrategy()
     local_strategy.deploy(
         image="ghcr.io/openfactoryio/scheduler:v1.0.0",
+        image_pull_policy="missing",
         name="scheduler",
         user="1234:5678",
         env=["ENV=production"],
@@ -48,6 +50,7 @@ Usage Example:
     swarm_strategy = SwarmDeploymentStrategy()
     swarm_strategy.deploy(
         image="ghcr.io/openfactoryio/reporter:v1.0.0",
+        image_pull_policy="missing",
         name="reporter",
         user="1234:5678",
         env=["LOG_LEVEL=info"],
@@ -69,8 +72,11 @@ to standardize service deployment across local development and production enviro
 import docker
 from docker.types import Mount, DriverConfig
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Literal
 from openfactory.docker.docker_access_layer import dal
+
+
+ImagePullPolicy = Literal["missing", "always"]
 
 
 class OpenFactoryServiceDeploymentStrategy(ABC):
@@ -79,6 +85,7 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
     @abstractmethod
     def deploy(self, *,
                image: str,
+               image_pull_policy: ImagePullPolicy = "missing",
                user: Optional[str] = None,
                name: str,
                env: List[str],
@@ -95,6 +102,10 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
 
         Args:
             image (str): Docker image to deploy.
+            image_pull_policy (str): Image pull behavior.
+
+                - ``missing``: Pull the image only if it is not available locally.
+                - ``always``: Always pull the image before deployment.
             user (Optional[str]): Runtime user in Docker format ``UID:GID``.
             name (str): Name of the service or container.
             env (List[str]): Environment variables in `KEY=VALUE` format.
@@ -125,6 +136,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
     def deploy(self, *,
                image: str,
+               image_pull_policy: ImagePullPolicy = "missing",
                user: Optional[str] = None,
                name: str,
                env: List[str],
@@ -140,6 +152,9 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         Deploy a Docker service using Docker Swarm.
 
         See parent method for argument descriptions.
+
+        Note:
+            - ``image_pull_policy`` is currently ignored for Swarm deployments.
         """
         dal.docker_client.services.create(
             image=image,
@@ -206,6 +221,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
     def deploy(self, *,
                image: str,
+               image_pull_policy: ImagePullPolicy = "missing",
                user: Optional[str] = None,
                name: str,
                env: List[str],
@@ -224,6 +240,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         Note:
             - ``constraints`` and ``mode`` are ignored for local containers.
+            - ``image_pull_policy="always"`` forces a Docker image pull before deployment.
         """
         client = docker.from_env()
 
@@ -240,6 +257,9 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                     docker_mounts.append(self.swarm_mount_to_container_mount(m))
                 else:
                     raise ValueError(f"Unsupported mount type: {m['Type']}")
+
+        if image_pull_policy == "always":
+            client.images.pull(image)
 
         container = client.containers.run(
             image=image,

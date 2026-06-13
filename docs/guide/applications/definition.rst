@@ -6,6 +6,7 @@ They are defined declaratively using YAML.
 
 Each application describes:
     - which container image to run
+    - how container images are refreshed during deployment
     - how it integrates into the Unified Namespace (UNS)
     - how it is configured and deployed
     - how it is optionally exposed externally
@@ -27,6 +28,7 @@ Each application supports the following sections:
 
 - ``uuid`` — Asset UUID identifier of the application
 - ``image`` — Docker image to run
+- ``image_pull_policy`` — image pull behavior during deployment
 - ``runtime_uid`` — User UID in the runtime
 - ``runtime_gid`` — User GID in the runtim 
 - ``uns`` — Unified Namespace metadata
@@ -55,6 +57,25 @@ The Docker image defines the application runtime:
 .. code-block:: yaml
 
     image: ghcr.io/openfactoryio/scheduler:v1.0.3
+
+Image Pull Policy
+-----------------
+
+The ``image_pull_policy`` controls how OpenFactory obtains container images during deployment.
+
+Supported values:
+
+- ``missing`` — pull the image only if it is not available locally.
+- ``always`` — always pull the image before deployment.
+
+Example:
+
+.. code-block:: yaml
+
+    image: ghcr.io/openfactoryio/scheduler:latest
+    image_pull_policy: always
+
+This is particularly useful when using mutable image tags such as ``latest``.
 
 Runtime UID and GID
 -------------------
@@ -193,7 +214,8 @@ The ``deploy`` section defines how the application is deployed.
         apps:
           scheduler:
             uuid: "app-scheduler"
-            image: ghcr.io/openfactoryio/scheduler:v1.0.0
+            image: ghcr.io/openfactoryio/scheduler:latest
+            image_pull_policy: always
             runtime_uid: 1200
             runtime_gid: 1210
 
@@ -241,6 +263,7 @@ The ``deploy`` section defines how the application is deployed.
     - UNS metadata must match the configured schema
     - Hostnames are normalized and validated to comply with DNS rules
     - A canonical hostname is always generated when routing is enabled
+    - ``image_pull_policy: always`` is recommended when using mutable image tags such as ``latest``.
 
 .. seealso::
     - The schema of OpenFactory Apps is :class:`openfactory.schemas.apps.OpenFactoryAppSchema`.

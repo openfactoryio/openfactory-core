@@ -101,6 +101,88 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         self.assertIn("uuid", str(context.exception))
         self.assertIn("image", str(context.exception))
 
+    def test_default_image_pull_policy(self):
+        """ image_pull_policy defaults to 'missing' """
+        config = OpenFactoryAppsConfig(
+            apps={
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1"
+                }
+            }
+        )
+
+        self.assertEqual(config.apps["demo1"].image_pull_policy, "missing")
+
+    def test_image_pull_policy_always(self):
+        """ image_pull_policy='always' is accepted """
+        config = OpenFactoryAppsConfig(
+            apps={
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "image_pull_policy": "always"
+                }
+            }
+        )
+
+        self.assertEqual(config.apps["demo1"].image_pull_policy, "always")
+
+    def test_image_pull_policy_missing(self):
+        """ image_pull_policy='missing' is accepted """
+        config = OpenFactoryAppsConfig(
+            apps={
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "image_pull_policy": "missing"
+                }
+            }
+        )
+
+        self.assertEqual(config.apps["demo1"].image_pull_policy, "missing")
+
+    def test_invalid_image_pull_policy(self):
+        """ invalid image_pull_policy should raise ValidationError """
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(
+                apps={
+                    "demo1": {
+                        "uuid": "DEMO-APP",
+                        "image": "demofact/demo1",
+                        "image_pull_policy": "sometimes"
+                    }
+                }
+            )
+
+        errors = cm.exception.errors()
+
+        self.assertTrue(
+            any(
+                e["loc"] == ("apps", "demo1", "image_pull_policy")
+                for e in errors
+            )
+        )
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_image_pull_policy_integration_with_get_apps_from_config_file(self, mock_load_yaml):
+        """ image_pull_policy is correctly parsed and attached using get_apps_from_config_file """
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "uns": {"workcenter": "WC2"},
+                    "image": "demofact/demo1",
+                    "image_pull_policy": "always"
+                }
+            }
+        }
+
+        result = get_apps_from_config_file("dummy.yaml", self.uns_schema)
+
+        self.assertEqual(result["demo1"].image_pull_policy, "always")
+
     def test_missing_apps_key(self):
         """ Test missing `apps` key"""
         invalid_config = {

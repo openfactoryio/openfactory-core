@@ -431,7 +431,6 @@ class OpenFactoryManager(OpenFactory):
                 user_notify.fail(f"Device {device.uuid} could not be torn down: {err}")
 
             deregister_device_connector(device.uuid, bootstrap_servers=self.bootstrap_servers)
-            deregister_asset(device.uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"Device {device.uuid} shut down successfully")
 
     def tear_down_application(self, app_uuid: str) -> None:

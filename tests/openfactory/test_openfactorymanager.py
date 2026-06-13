@@ -1157,15 +1157,6 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Connector teardown called for deployed device only
         mock_connector_instance.tear_down.assert_called_once_with("device-uuid-1")
 
-        # Assets should be deregistered
-        expected_calls = [
-            call("device-uuid-1",
-                 ksqlClient=self.manager.ksql,
-                 bootstrap_servers=self.manager.bootstrap_servers),
-        ]
-        mock_deregister_asset.assert_has_calls(expected_calls, any_order=False)
-        assert mock_deregister_asset.call_count == 1
-
         # Check deregister_device_connector
         expected_calls = [
             call("device-uuid-1",

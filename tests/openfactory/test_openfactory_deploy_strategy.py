@@ -42,6 +42,21 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
         self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 2}})
 
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_accepts_image_pull_policy(self, mock_docker_client):
+        """ Test Docker Swarm deploy accepts image_pull_policy parameter """
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            image_pull_policy="always",
+            name="test-service",
+            env=["ENV=prod"]
+        )
+
+        mock_docker_client.services.create.assert_called_once()
+
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_deploy_with_runtime_user(self, mock_docker_client):
         """ Test Docker Swarm deploy with runtime user """
 
@@ -150,6 +165,44 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertEqual(kwargs["network"], "bridge")
         self.assertEqual(kwargs["labels"], {"type": "api"})
         self.assertEqual(kwargs["nano_cpus"], 1000000000)
+
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_image_pull_policy_always(self, mock_from_env):
+        """ Test local Docker deploy always pulls image before deployment """
+
+        mock_client = MagicMock()
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            image_pull_policy="always",
+            name="test-container",
+            env=["ENV=dev"]
+        )
+
+        mock_client.images.pull.assert_called_once_with("test-image")
+        mock_client.containers.run.assert_called_once()
+
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_image_pull_policy_missing(self, mock_from_env):
+        """ Test local Docker deploy does not explicitly pull image when policy is missing """
+
+        mock_client = MagicMock()
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            image_pull_policy="missing",
+            name="test-container",
+            env=["ENV=dev"]
+        )
+
+        mock_client.images.pull.assert_not_called()
+        mock_client.containers.run.assert_called_once()
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     def test_local_deploy_with_runtime_user(self, mock_from_env):

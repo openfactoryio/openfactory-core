@@ -9,8 +9,9 @@ ensure application configurations are consistent, valid, and semantically enrich
 
 Key Components
 --------------
-- :class:`OpenFactoryAppSchema`: Defines a single application including its UUID, Docker image,
-  environment variables, UNS metadata, named storage backend, and container networks.
+- :class:`OpenFactoryAppSchema`: Defines a single application including its UUID,
+  Docker image, image pull policy, environment variables, UNS metadata,
+  named storage backend, and container networks.
 - :class:`OpenFactoryAppsConfig`: Validates a dictionary of application entries and ensures
   correct schema structure.
 - :meth:`get_apps_from_config_file`: Loads, validates, and enriches applications from a
@@ -20,6 +21,11 @@ Features
 --------
 - Supports UNS (Unified Namespace) enrichment through the ``AttachUNSMixin``.
 - Restricts configuration fields with `extra="forbid"` to ensure strict schema conformance.
+- Supports configurable image pull policies:
+
+  - ``missing``: Pull the image only if it is not available locally.
+  - ``always``: Always pull the image before deployment.
+
 - Supports multiple named storage backends, including:
 
   - ``LocalBackend``: Bind-mount a local host directory into containers (for development).
@@ -46,6 +52,7 @@ configuration YAML file, with automatic UNS enrichment.
         scheduler:
           uuid: "app-scheduler"
           image: ghcr.io/openfactoryio/scheduler:v1.0.0
+          image_pull_policy: missing
           runtime_uid: 1234
           runtime_gid: 5678
 
@@ -108,7 +115,7 @@ Note:
 import re
 import openfactory.config as Config
 from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator, model_validator
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Literal
 from openfactory.config import load_yaml
 from openfactory.models.user_notifications import user_notify
 from openfactory.schemas.uns import UNSSchema, AttachUNSMixin
@@ -238,6 +245,9 @@ class Routing(BaseModel):
             self.alias_hostname = None
 
 
+ImagePullPolicy = Literal["missing", "always"]
+
+
 class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     """ OpenFactory Application Schema. """
     uuid: str = Field(..., description="Unique identifier for the app")
@@ -248,6 +258,15 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     )
 
     image: str = Field(..., description="Docker image for the app")
+
+    image_pull_policy: ImagePullPolicy = Field(
+        default="missing",
+        description=(
+            "Image pull policy. "
+            "'missing' pulls only if the image is absent locally. "
+            "'always' always pulls before deployment."
+        )
+    )
 
     runtime_uid: Optional[int] = Field(
         default=None,

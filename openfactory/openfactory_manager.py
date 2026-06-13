@@ -188,6 +188,9 @@ class OpenFactoryManager(OpenFactory):
         """
         Deploy an OpenFactory application.
 
+        The application image and image pull policy are forwarded to the
+        configured deployment strategy.
+
         Args:
             application (OpenFactoryAppSchema): The application configuration.
 
@@ -274,6 +277,7 @@ class OpenFactoryManager(OpenFactory):
         try:
             self.deployment_strategy.deploy(
                 image=application.image,
+                image_pull_policy=application.image_pull_policy,
                 user=runtime_user,
                 name=application.uuid.lower(),
                 mode={"Replicated": {"Replicas": 1}},

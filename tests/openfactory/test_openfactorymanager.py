@@ -455,6 +455,25 @@ class TestOpenFactoryManager(unittest.TestCase):
 
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_passes_image_pull_policy(self, mock_user_notify, mock_register_asset):
+        """ image_pull_policy should be passed to deployment strategy """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_PULL_POLICY",
+            image="app_image",
+            image_pull_policy="always"
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("image_pull_policy", kwargs)
+        self.assertEqual(kwargs["image_pull_policy"], "always")
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_runtime_user(self, mock_user_notify, mock_register_asset):
         """ runtime UID/GID should be passed to deployment strategy """
         app = OpenFactoryAppSchema(

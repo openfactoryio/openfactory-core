@@ -1,8 +1,8 @@
 """
 This module defines Pydantic models and utility functions to parse, validate,
 and enrich application configuration files in OpenFactory. Application definitions
-include Docker image info, environment variables, optional UNS metadata, storage
-backends, and container networks.
+include Docker image info, environment variables, optional UNS metadata,
+storage backends, Prometheus metrics endpoints, and container networks.
 
 This module is used by OpenFactory deployment tools and runtime components to
 ensure application configurations are consistent, valid, and semantically enriched.
@@ -11,7 +11,7 @@ Key Components
 --------------
 - :class:`OpenFactoryAppSchema`: Defines a single application including its UUID,
   Docker image, image pull policy, environment variables, UNS metadata,
-  named storage backend, and container networks.
+  named storage backend, Prometheus metrics endpoint and container networks.
 - :class:`OpenFactoryAppsConfig`: Validates a dictionary of application entries and ensures
   correct schema structure.
 - :meth:`get_apps_from_config_file`: Loads, validates, and enriches applications from a
@@ -35,6 +35,8 @@ Features
 - Supports application exposure via Traefik using host-based routing.
   Routing configuration allows defining an internal port and optional hostname.
   Canonical and optional alias hostnames are generated automatically.
+- Supports Prometheus metrics endpoint configuration.
+  Applications may expose metrics on a configurable port and path.
 - Provides utilities to load application configs from YAML with user-friendly
   error handling and notifications.
 - Ensures validated and enriched applications are returned as plain dictionaries.
@@ -81,6 +83,10 @@ configuration YAML file, with automatic UNS enrichment.
             port: 8000
             hostname: dashboard
 
+          metrics:
+            port: 4000
+            path: /metrics
+
           networks:
             - factory-net
             - monitoring-net
@@ -105,6 +111,9 @@ Note:
     - **UNS metadata**: Must match the ``UNSSchema`` used in the environment for semantic consistency.
     - **Storage backends**: Will be extended in future to support more types.
     - **Routing**: Hostnames are normalized and validated to comply with DNS constraints.
+    - **Metrics**: Applications may optionally expose Prometheus metrics
+      using the `metrics` section. Metrics endpoints are automatically
+      registered with OpenFactory for monitoring during deployment.
     - Use the ``apps_dict`` property to access validated apps in runtime code.
 
 .. seealso::
@@ -245,11 +254,49 @@ class Routing(BaseModel):
             self.alias_hostname = None
 
 
+class Metrics(BaseModel):
+    """
+    Prometheus metrics endpoint exposed by an application.
+
+    This schema defines where Prometheus metrics can be retrieved
+    from a running application.
+
+    .. admonition:: YAML example
+
+        .. code-block:: yaml
+
+            metrics:
+                port: 4000
+                path: /metrics
+    """
+
+    port: int = Field(
+        ...,
+        ge=1,
+        le=65535,
+        description="Port exposing Prometheus metrics"
+    )
+
+    path: str = Field(
+        default="/metrics",
+        description="HTTP path exposing Prometheus metrics"
+    )
+
+
 ImagePullPolicy = Literal["missing", "always"]
 
 
 class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
-    """ OpenFactory Application Schema. """
+    """
+    OpenFactory Application Schema.
+
+    Defines a deployable OpenFactory application including
+    container image information, runtime settings,
+    storage backends, routing configuration,
+    Prometheus metrics exposure, network attachments,
+    and deployment constraints.
+    """
+
     uuid: str = Field(..., description="Unique identifier for the app")
 
     uns: Optional[Dict[str, Any]] = Field(
@@ -292,6 +339,11 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     routing: Optional[Routing] = Field(
         default=None,
         description="Optional routing configuration to expose the application via Traefik (host-based routing)"
+    )
+
+    metrics: Optional[Metrics] = Field(
+        default=None,
+        description="Optional Prometheus metrics endpoint"
     )
 
     networks: Optional[List[str]] = Field(

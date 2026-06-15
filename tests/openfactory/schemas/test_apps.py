@@ -799,3 +799,148 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
                 app_uuid="ABCD1234",
                 base_domain="example.com"
             )
+
+    def test_optional_metrics(self):
+        """ metrics field is optional """
+
+        valid_config = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1"
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**valid_config)
+
+        self.assertIsNone(config.apps["demo1"].metrics)
+
+    def test_metrics_default_path(self):
+        """ metrics path defaults to /metrics """
+
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "metrics": {
+                        "port": 4000
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+
+        metrics = config.apps["demo1"].metrics
+
+        self.assertEqual(metrics.port, 4000)
+        self.assertEqual(metrics.path, "/metrics")
+
+    def test_metrics_custom_path(self):
+        """ metrics custom path is parsed correctly """
+
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "metrics": {
+                        "port": 8080,
+                        "path": "/prometheus"
+                    }
+                }
+            }
+        }
+
+        config = OpenFactoryAppsConfig(**config_data)
+
+        metrics = config.apps["demo1"].metrics
+
+        self.assertEqual(metrics.port, 8080)
+        self.assertEqual(metrics.path, "/prometheus")
+
+    def test_metrics_port_required(self):
+        """ metrics.port is required """
+
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "metrics": {}
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**config_data)
+
+        errors = cm.exception.errors()
+
+        self.assertTrue(
+            any(
+                e["loc"] == ("apps", "demo1", "metrics", "port")
+                and e["type"] == "missing"
+                for e in errors
+            )
+        )
+
+    def test_metrics_invalid_port(self):
+        """ metrics.port must be between 1 and 65535 """
+
+        config_data = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "metrics": {
+                        "port": 70000
+                    }
+                }
+            }
+        }
+
+        with self.assertRaises(ValidationError) as cm:
+            OpenFactoryAppsConfig(**config_data)
+
+        errors = cm.exception.errors()
+
+        self.assertTrue(
+            any(
+                e["loc"] == ("apps", "demo1", "metrics", "port")
+                and e["type"] == "less_than_equal"
+                for e in errors
+            )
+        )
+
+    @patch("openfactory.schemas.apps.load_yaml")
+    def test_metrics_integration_with_get_apps_from_config_file(self, mock_load_yaml):
+        """ metrics are correctly parsed and attached using get_apps_from_config_file """
+
+        mock_load_yaml.return_value = {
+            "apps": {
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "uns": {"workcenter": "WC2"},
+                    "image": "demofact/demo1",
+                    "metrics": {
+                        "port": 4000,
+                        "path": "/metrics"
+                    }
+                }
+            }
+        }
+
+        result = get_apps_from_config_file(
+            "dummy.yaml",
+            self.uns_schema
+        )
+
+        self.assertIsNotNone(result)
+
+        metrics = result["demo1"].metrics
+
+        self.assertEqual(metrics.port, 4000)
+        self.assertEqual(metrics.path, "/metrics")

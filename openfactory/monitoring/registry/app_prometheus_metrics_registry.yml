@@ -1,0 +1,22 @@
+# ---------------------------------------------------------------------------------------
+# 🏭 OpenFactory App configuration file for the Prometheus Metrics Registry App
+#
+# Deploy with:
+#   ofa device up app_prometheus_metrics_registry.yml
+# ---------------------------------------------------------------------------------------
+# Environment variables:
+#
+# Optional:
+#   PROMETHEUS_METRICS_REGISTRY_LOG_LEVEL    Log level (default: INFO)
+#
+# ---------------------------------------------------------------------------------------
+
+apps:
+
+  prometheus_metrics_registry:
+    uuid: PROMETHEUS-METRICS-REGISTRY
+    image: prometheus-metrics-registry
+    environment:
+      - LOG_LEVEL=${PROMETHEUS_METRICS_REGISTRY_LOG_LEVEL:-INFO}
+    networks:
+      - factory-net

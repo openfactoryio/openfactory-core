@@ -56,6 +56,7 @@ from openfactory.utils import register_asset, deregister_asset, load_plugin, reg
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy, SwarmDeploymentStrategy
 from openfactory.connectors.registry import build_connector
+from openfactory.monitoring.utils import register_prometheus_target, deregister_prometheus_target
 
 
 class OpenFactoryManager(OpenFactory):
@@ -294,6 +295,8 @@ class OpenFactoryManager(OpenFactory):
 
         register_asset(application.uuid, uns=application.uns, asset_type='OpenFactoryApp',
                        ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=application.uuid.lower())
+        if application.metrics:
+            register_prometheus_target(application, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         user_notify.success(f"Application {application.uuid} deployed successfully")
 
     def deploy_devices_from_config_file(self, yaml_config_file: str) -> None:
@@ -458,6 +461,7 @@ class OpenFactoryManager(OpenFactory):
         except docker.errors.APIError as err:
             raise OFAException(err)
         deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+        deregister_prometheus_target(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         user_notify.success(f"OpenFactory application {app_uuid} shut down successfully")
 
     def shut_down_apps_from_config_file(self, yaml_config_file: str) -> None:

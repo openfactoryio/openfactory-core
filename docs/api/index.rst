@@ -9,6 +9,7 @@ API Reference
    connectors/index
    apps/index
    filelayer/index
+   monitoring/index
    kafka/index
    schemas/index
    utils/index

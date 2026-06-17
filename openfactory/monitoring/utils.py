@@ -41,7 +41,7 @@ def deregister_prometheus_target(target_uuid: str,
     Deregister a new Prometheus target
 
     Args:
-        target_uid (str): OpenFactory UUID of target to deregister.
+        target_uuid (str): OpenFactory UUID of target to deregister.
         ksqlClient: (KSQLDBClient) KSQL client for executing queries.
         bootstrap_servers (str): Kafka bootstrap server address.
     """

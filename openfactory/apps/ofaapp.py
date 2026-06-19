@@ -9,12 +9,14 @@ from types import FrameType
 from typing import Optional
 from pydantic import TypeAdapter
 from openfactory import __version__
+from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
 from openfactory.setup_logging import configure_prefixed_logger
 from openfactory.schemas.filelayer.storage import StorageBackendSchema
 from openfactory.schemas.command_header import CommandEnvelope
+from openfactory.monitoring.utils import discover_prometheus_registry
 from openfactory.filelayer.backend import FileBackend
 from openfactory.apps.attributefield import OpenFactoryAppMeta, EventAttribute
 
@@ -318,6 +320,30 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         print(f"Application manufacturer:    {self.application_manufacturer.value}")
         print(f"Application license:         {self.application_license.value}")
         print("==============================================================")
+
+    def register_prometheus_metrics(self, metrics_port: int, metrics_path: str = '/metrics') -> None:
+        """
+        Register Prometheus metrics with the OpenFactory Prometheus metrics registry
+
+        Args:
+            metrics_port (int): Port on which metrics is published
+            metrics_path (str): Endpoint of metrics. Defaults to ``/metrics``
+        """
+        try:
+            registry_uuid = discover_prometheus_registry(self.ksql)
+        except OFAException:
+            self.logger.warning("No OpenFactory Prometheus metrics registry deployed - Metrics not registerd")
+            return
+        self.logger.debug(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
+        registry = Asset(registry_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+        registry.method('register_target', 'ofa-cli',
+                        args=[
+                            ('application_uuid', self.asset_uuid),
+                            ('host', self.asset_uuid.lower()),
+                            ('port', str(metrics_port)),
+                            ('path', metrics_path),
+                            ])
+        registry.close()
 
     def app_event_loop_stopped(self) -> None:
         """ Called when main loop is stopped. """

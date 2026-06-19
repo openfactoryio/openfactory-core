@@ -474,3 +474,61 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         await app.async_run()
 
         app.shutdown.assert_called_once()
+
+    @patch("openfactory.apps.ofaapp.Asset")
+    @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
+    def test_register_prometheus_metrics_success(self, mock_discover_registry, MockAsset):
+        """ Metrics registry is discovered and target is registered. """
+
+        mock_discover_registry.return_value = "PROM-UUID"
+        mock_registry = MagicMock()
+        MockAsset.return_value = mock_registry
+
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+
+        app.register_prometheus_metrics(metrics_port=8000, metrics_path="/metrics")
+
+        mock_discover_registry.assert_called_once_with(self.ksql_mock)
+
+        MockAsset.assert_called_once_with(
+            "PROM-UUID",
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap"
+        )
+
+        mock_registry.method.assert_called_once_with(
+            "register_target",
+            "ofa-cli",
+            args=[
+                ("application_uuid", "DEV-UUID"),
+                ("host", "dev-uuid"),
+                ("port", "8000"),
+                ("path", "/metrics"),
+            ]
+        )
+
+        mock_registry.close.assert_called_once()
+
+    @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
+    def test_register_prometheus_metrics_no_registry(self, mock_discover_registry):
+        """ No Prometheus registry deployed. """
+
+        mock_discover_registry.side_effect = OFAException("not found")
+
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+
+        app.logger = MagicMock()
+        app.register_prometheus_metrics(metrics_port=8000)
+
+        mock_discover_registry.assert_called_once_with(self.ksql_mock)
+        app.logger.warning.assert_called_once_with(
+            "No OpenFactory Prometheus metrics registry deployed - Metrics not registerd"
+        )

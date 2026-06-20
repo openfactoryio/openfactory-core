@@ -388,13 +388,26 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
                 if msg.error():
                     if msg.error().code() == KafkaError._PARTITION_EOF:
                         continue
-                    self.logger.error("Kafka error: %s", msg.error())
+                    err = msg.error()
+                    self.logger.error(
+                        "Kafka error: code=%s name=%s fatal=%s retriable=%s message=%s",
+                        err.code(),
+                        err.name(),
+                        err.fatal(),
+                        err.retriable(),
+                        err,
+                    )
                     forwarder_metrics.KAFKA_ERRORS.labels(forwarder=self.asset_uuid).inc()
+
+                    if err.fatal():
+                        self.logger.critical("Fatal Kafka error: %s (name=%s)", err, err.name())
+                        os._exit(1)
+
                     continue
 
                 value = self.decode_message_value(msg.value())
                 value = self.add_timestamps(value, msg)
-                self.logger.debug(f"Main id={id(msg)}   partition={msg.partition()} offset={msg.offset()} key={msg.key()} {value['ID']}")
+                self.logger.debug(f"Main id={id(msg)}   partition={msg.partition()} offset={msg.offset()} key={msg.key()} {value.get("ID")}")
                 await self.queue.put({
                     "msg": msg,
                     "value": value,

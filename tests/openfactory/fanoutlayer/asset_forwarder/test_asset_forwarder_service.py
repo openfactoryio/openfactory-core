@@ -259,23 +259,33 @@ class TestAssetForwarderService(unittest.TestCase):
 
         self.service.hash_ring.get.assert_called_once_with(b"asset-1")
 
-    def test_on_assign(self):
-        """ Test partition assignment callback. """
-        consumer = MagicMock()
-        partitions = [MagicMock()]
-
-        self.service._on_assign(consumer, partitions)
-
-        consumer.assign.assert_called_once_with(partitions)
-
     def test_on_assign_logs(self):
         """ Test partition assignment logging. """
         consumer = MagicMock()
         partitions = [MagicMock()]
 
+        self.service.register_prometheus_metrics = MagicMock()
+
         self.service._on_assign(consumer, partitions)
 
-        self.service.logger.info.assert_called_once_with("Assigned: %s", partitions)
+        self.service.logger.info.assert_called_once_with(
+            "Assigned: %s",
+            partitions
+        )
+
+    def test_on_assign(self):
+        """ Test partition assignment callback. """
+        consumer = MagicMock()
+        partitions = [MagicMock()]
+        self.service.register_prometheus_metrics = MagicMock()
+
+        self.service._on_assign(consumer, partitions)
+
+        consumer.assign.assert_called_once_with(partitions)
+        self.service.register_prometheus_metrics.assert_called_once_with(
+            metrics_port=4000,
+            metrics_path="/metrics"
+        )
 
     def test_on_revoke(self):
         """ Test partition revocation callback. """

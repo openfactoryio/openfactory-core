@@ -25,7 +25,7 @@
 #   - python3 -u -m openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service
 #
 # To build the image locally:
-#   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile.asset_forwarder openfactory/fanoutlayer
+#   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile.asset_forwarder .
 # ------------------------------------------------------------------------------
 
 # -------------------------------

@@ -451,8 +451,6 @@ class OpenFactoryManager(OpenFactory):
             OFAException: If the application cannot be torn down.
         """
         try:
-            # first deregister metrics as this teardown could be for the asset-forwarder
-            deregister_prometheus_target(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             app = Asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             self.deployment_strategy.remove(app.DockerService.value)
             app.close()
@@ -463,6 +461,7 @@ class OpenFactoryManager(OpenFactory):
         except docker.errors.APIError as err:
             raise OFAException(err)
         deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+        deregister_prometheus_target(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         user_notify.success(f"OpenFactory application {app_uuid} shut down successfully")
 
     def shut_down_apps_from_config_file(self, yaml_config_file: str) -> None:

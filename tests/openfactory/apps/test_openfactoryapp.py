@@ -475,43 +475,34 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
 
         app.shutdown.assert_called_once()
 
-    @patch("openfactory.apps.ofaapp.Asset")
     @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
-    def test_register_prometheus_metrics_success(self, mock_discover_registry, MockAsset):
-        """ Metrics registry is discovered and target is registered. """
+    def test_register_prometheus_metrics_success(self, mock_discover_registry):
+        """ Metrics registry is discovered and target registration message is sent. """
 
         mock_discover_registry.return_value = "PROM-UUID"
-        mock_registry = MagicMock()
-        MockAsset.return_value = mock_registry
+        self.ksql_mock.get_kafka_topic.return_value = "metrics-topic"
 
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock_bootstrap",
             asset_router_url="mocked_asset_url"
         )
+        app.producer = MagicMock()
 
         app.register_prometheus_metrics(metrics_port=8000, metrics_path="/metrics")
 
         mock_discover_registry.assert_called_once_with(self.ksql_mock)
-
-        MockAsset.assert_called_once_with(
-            "PROM-UUID",
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers="mock_bootstrap"
+        self.ksql_mock.get_kafka_topic.assert_called_once_with("METRICS_TARGETS_SOURCE")
+        app.producer.produce.assert_called_once_with(
+            topic="metrics-topic",
+            key="DEV-UUID",
+            value=json.dumps({
+                "HOST": "dev-uuid",
+                "PORT": "8000",
+                "PATH": "/metrics"
+            })
         )
-
-        mock_registry.method.assert_called_once_with(
-            "register_target",
-            "ofa-cli",
-            args=[
-                ("application_uuid", "DEV-UUID"),
-                ("host", "dev-uuid"),
-                ("port", "8000"),
-                ("path", "/metrics"),
-            ]
-        )
-
-        mock_registry.close.assert_called_once()
+        app.producer.flush.assert_called_once()
 
     @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
     def test_register_prometheus_metrics_no_registry(self, mock_discover_registry):

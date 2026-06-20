@@ -335,15 +335,17 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             self.logger.warning("No OpenFactory Prometheus metrics registry deployed - Metrics not registerd")
             return
         self.logger.info(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
-        registry = Asset(registry_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        registry.method('register_target', 'ofa-cli',
-                        args=[
-                            ('application_uuid', self.asset_uuid),
-                            ('host', self.asset_uuid.lower()),
-                            ('port', str(metrics_port)),
-                            ('path', metrics_path),
-                            ])
-        registry.close()
+        topic = self.ksql.get_kafka_topic('METRICS_TARGETS_SOURCE')
+        self.producer.produce(
+            topic=topic,
+            key=self.asset_uuid,
+            value=json.dumps({
+                "HOST": self.asset_uuid.lower(),
+                "PORT": str(metrics_port),
+                "PATH": metrics_path
+            })
+        )
+        self.producer.flush()
 
     def app_event_loop_stopped(self) -> None:
         """ Called when main loop is stopped. """

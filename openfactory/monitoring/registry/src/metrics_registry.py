@@ -63,8 +63,6 @@ class MetricsRegistry(OpenFactoryFastAPIApp):
             self.wait_until(attribute_id='AssetType', value='OpenFactoryApp')
         self.AssetType = 'Prometheus.Registry'
 
-        self.create_metrics_table()
-
         # Prometheus discovery endpoint
         PROMETHEUS_SD_ENDPOINT = os.getenv("PROMETHEUS_SD_ENDPOINT", "/prometheus/targets")
         self.api.get(PROMETHEUS_SD_ENDPOINT)(
@@ -82,48 +80,6 @@ class MetricsRegistry(OpenFactoryFastAPIApp):
     @property
     def metrics_table(self) -> str:
         return "METRICS_TARGETS"
-
-    def create_metrics_table(self):
-        """
-        Create the KSQLDB tables used to store metrics targets.
-
-        Creates a source table backed by the Kafka topic and a materialized
-        table used for querying currently registered metrics endpoints.
-
-        The source table receives registration and deregistration events
-        emitted through the registry's OFA methods.
-
-        Raises:
-            Exception: If KSQLDB rejects table creation.
-        """
-
-        self.logger.info("Creating metrics target tables if they do not exist.")
-
-        # Source table
-        self.ksql.statement_query(f"""
-        CREATE TABLE IF NOT EXISTS {self.metrics_source_table} (
-            APPLICATION_UUID STRING PRIMARY KEY,
-            HOST STRING,
-            PORT INTEGER,
-            PATH STRING
-        ) WITH (
-            KAFKA_TOPIC='{self.metrics_topic}',
-            VALUE_FORMAT='JSON',
-            PARTITIONS=1
-        );
-        """)
-
-        # Materialized table
-        self.ksql.statement_query(f"""
-        CREATE TABLE IF NOT EXISTS {self.metrics_table} AS
-            SELECT
-                APPLICATION_UUID,
-                HOST,
-                PORT,
-                PATH
-            FROM {self.metrics_source_table}
-            EMIT CHANGES;
-        """)
 
     @ofa_method()
     def register_target(

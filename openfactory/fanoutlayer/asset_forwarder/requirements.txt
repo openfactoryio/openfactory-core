@@ -1,4 +1,0 @@
-nats-py
-confluent-kafka
-prometheus-client
-uvloop

@@ -177,6 +177,12 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         are assigned to this consumer instance.
         """
         self.logger.info("Assigned: %s", partitions)
+
+        if not partitions:
+            self.logger.critical("Kafka consumer was assigned zero partitions. "
+                                 "Are there too many forwarders running comapred to topic partions ?")
+            os._exit(1)
+
         consumer.assign(partitions)
 
         # register Prometheus metrics

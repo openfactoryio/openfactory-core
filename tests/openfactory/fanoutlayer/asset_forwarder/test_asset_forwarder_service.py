@@ -1,6 +1,6 @@
 import json
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service import AssetForwarderService
 
 
@@ -286,6 +286,25 @@ class TestAssetForwarderService(unittest.TestCase):
             metrics_port=4000,
             metrics_path="/metrics"
         )
+
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.os._exit", side_effect=SystemExit(1))
+    def test_on_assign_empty_partition_list_is_fatal(self, mock_exit):
+        """ Test that an empty partition assignment is treated as fatal. """
+
+        consumer = MagicMock()
+        self.service.register_prometheus_metrics = MagicMock()
+
+        with self.assertRaises(SystemExit):
+            self.service._on_assign(consumer, [])
+
+        self.service.logger.critical.assert_called_once_with(
+            "Kafka consumer was assigned zero partitions. "
+            "Are there too many forwarders running comapred to topic partions ?"
+        )
+
+        mock_exit.assert_called_once_with(1)
+        consumer.assign.assert_not_called()
+        self.service.register_prometheus_metrics.assert_not_called()
 
     def test_on_revoke(self):
         """ Test partition revocation callback. """

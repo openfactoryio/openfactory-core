@@ -1409,6 +1409,68 @@ class TestOpenFactoryManager(unittest.TestCase):
     @patch("openfactory.openfactory_manager.Asset")
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.deregister_asset")
+    def test_tear_down_application_deregisters_prometheus_before_removing_service(
+        self,
+        mock_deregister_asset,
+        mock_user_notify,
+        MockAsset,
+        mock_deregister_prometheus_target
+    ):
+        """ Prometheus target must be deregistered before Docker service removal. """
+
+        # Mock Asset instance
+        mock_app_instance = MagicMock()
+        mock_app_instance.DockerService.value = "mock-service-name"
+        MockAsset.return_value = mock_app_instance
+
+        # Record execution order
+        call_order = []
+
+        def deregister_prometheus_side_effect(*args, **kwargs):
+            call_order.append("deregister_prometheus")
+
+        def remove_service_side_effect(*args, **kwargs):
+            call_order.append("remove_service")
+
+        mock_deregister_prometheus_target.side_effect = (
+            deregister_prometheus_side_effect
+        )
+        self.manager.deployment_strategy.remove.side_effect = (
+            remove_service_side_effect
+        )
+
+        app_uuid = "app-uuid-123"
+
+        self.manager.tear_down_application(app_uuid)
+
+        # Verify ordering
+        self.assertEqual(call_order, ["deregister_prometheus", "remove_service"])
+
+        # Verify normal teardown behavior still occurred
+        mock_deregister_prometheus_target.assert_called_once_with(
+            app_uuid,
+            ksqlClient=self.manager.ksql,
+            bootstrap_servers=self.manager.bootstrap_servers
+        )
+
+        self.manager.deployment_strategy.remove.assert_called_once_with(
+            "mock-service-name"
+        )
+
+        mock_deregister_asset.assert_called_once_with(
+            app_uuid,
+            ksqlClient=self.manager.ksql,
+            bootstrap_servers=self.manager.bootstrap_servers
+        )
+
+        mock_user_notify.success.assert_called_once_with(
+            f"OpenFactory application {app_uuid} shut down successfully"
+        )
+
+    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
+    @patch("openfactory.openfactory_manager.Asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.deregister_asset")
     def test_tear_down_application_no_docker_service_still_deregisters_prometheus_target(
         self,
         mock_deregister_asset,

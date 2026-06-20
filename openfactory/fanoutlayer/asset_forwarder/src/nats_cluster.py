@@ -1,7 +1,4 @@
 """
-NATS Cluster Wrapper
-===================
-
 This module provides the ``NatsCluster`` class, which wraps a connection
 to a single NATS cluster for use by the OpenFactory Asset Forwarder.
 
@@ -14,6 +11,9 @@ The class handles:
 It is designed to ensure that asset messages are routed reliably to the
 correct NATS cluster.
 
+Logging is delegated to the caller by supplying a logger instance during
+construction.
+
 Usage
 -----
 
@@ -22,7 +22,7 @@ Usage
     from nats_cluster import NatsCluster
     import asyncio
 
-    cluster = NatsCluster(name="C1", servers=["nats://localhost:4222"])
+    cluster = NatsCluster(name="C1", servers=["nats://localhost:4222"], logger=logger)
     asyncio.run(cluster.connect())
     asyncio.run(cluster.publish("asset.123", b"payload"))
     asyncio.run(cluster.close())
@@ -31,16 +31,16 @@ Attributes
 ----------
 
 - ``name`` (str): Logical name of the NATS cluster (e.g., "C1").
-- ``servers`` (List[str]): List of NATS server URLs.
+- ``servers`` (list[str]): List of NATS server URLs.
+- ``logger`` (Logger): Logger used for connection and publish events.
 - ``reconnect_time_wait`` (int): Seconds to wait between reconnect attempts.
 - ``nc`` (Optional[NATS]): Active NATS client connection.
 - ``_lock`` (asyncio.Lock): Ensures only one concurrent connection attempt.
 """
 
 import asyncio
-from typing import List, Optional
 from nats.aio.client import Client as NATS
-from .logger import logger
+from logging import Logger
 
 
 class NatsCluster:
@@ -56,24 +56,27 @@ class NatsCluster:
     Attributes:
         name (str): Logical name of the NATS cluster (e.g., "C1").
         servers (List[str]): List of NATS server URLs for this cluster.
+        logger (Logger): Logger used for connection and publish events.
         reconnect_time_wait (int): Time in seconds to wait before reconnect attempts.
         nc (Optional[NATS]): Active NATS client connection, or None if not connected.
         _lock (asyncio.Lock): Ensures only one connection attempt runs at a time.
     """
 
-    def __init__(self, name: str, servers: List[str], reconnect_time_wait: int = 2) -> None:
+    def __init__(self, name: str, servers: list[str], logger: Logger, reconnect_time_wait: int = 2) -> None:
         """
         Initialize a NATS cluster wrapper.
 
         Args:
             name (str): Cluster name identifier (used for logging and routing).
-            servers (List[str]): List of server URLs for connecting to this cluster.
+            servers (list[str]): List of server URLs for connecting to this cluster.
+            logger (Logger): Logger used for connection and publish events.
             reconnect_time_wait (int, optional): Delay (in seconds) between reconnect
                 attempts. Defaults to 2.
         """
         self.name = name
         self.servers = servers
-        self.nc: Optional[NATS] = None
+        self.logger: Logger = logger
+        self.nc: NATS | None = None
         self._lock = asyncio.Lock()
         self.reconnect_time_wait = reconnect_time_wait
 
@@ -97,20 +100,20 @@ class NatsCluster:
                 except Exception:
                     pass
 
-            async def disconnected_cb():
-                logger.warning(f"NATS[{self.name}] disconnected — will attempt reconnect...")
+            async def disconnected_cb() -> None:
+                self.logger.warning(f"NATS[{self.name}] disconnected — will attempt reconnect...")
 
-            async def reconnected_cb():
-                logger.info(f"NATS[{self.name}] reconnected successfully.")
+            async def reconnected_cb() -> None:
+                self.logger.info(f"NATS[{self.name}] reconnected successfully.")
 
-            async def closed_cb():
-                logger.warning(f"NATS[{self.name}] connection permanently closed.")
+            async def closed_cb() -> None:
+                self.logger.warning(f"NATS[{self.name}] connection permanently closed.")
 
-            async def error_handler(e):
-                logger.warning("NATS[{self.name}] client error: %s", e)
+            async def error_handler(e: Exception) -> None:
+                self.logger.warning(f"NATS[{self.name}] client error: {e}")
 
             nc = NATS()
-            logger.info(f"Connecting to NATS server {self.name} at {self.servers} ...")
+            self.logger.info(f"Connecting to NATS server {self.name} at {self.servers} ...")
             await nc.connect(
                 servers=self.servers,
                 reconnect_time_wait=self.reconnect_time_wait,
@@ -125,7 +128,7 @@ class NatsCluster:
                 verbose=False,
             )
             self.nc = nc
-            logger.info(f"NATS server {self.name} connected")
+            self.logger.info(f"NATS server {self.name} connected")
 
     async def publish(self, subject: str, payload: bytes) -> None:
         """
@@ -149,18 +152,18 @@ class NatsCluster:
         """
         Close the connection to the NATS cluster.
 
-        Attempts a graceful drain first, then forces close if needed.
+        Attempts a graceful drain before closing the client.
         Safe to call multiple times.
         """
         if self.nc:
             try:
-                logger.info(f"Draining NATS server {self.name} ...")
+                self.logger.info(f"Draining NATS server {self.name} ...")
                 await self.nc.drain()
             except Exception:
                 pass
             try:
                 await self.nc.close()
-                logger.info(f"Closed connection to NATS server {self.name}")
+                self.logger.info(f"Closed connection to NATS server {self.name}")
             except Exception:
                 pass
             self.nc = None

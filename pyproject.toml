@@ -26,6 +26,9 @@ dependencies = [
 
     # Custom Git dependency (pinned to commit)
     "mtc2kafka @ git+https://github.com/rwuthric/python-mtc2kafka.git@03a99e32b0bd4d4929e9d81b753868fee88cfa4d",
+
+    # monitoring
+    "prometheus-client>=0.20.0,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -39,7 +42,6 @@ flask = [
 ]
 
 dev = [
-    "prometheus-client",
     "flake8",
     "tomlkit",
 ]

@@ -1,7 +1,8 @@
 import unittest
 import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
-from openfactory.fanoutlayer.asset_forwarder.nats_cluster import NatsCluster
+from logging import Logger
+from openfactory.fanoutlayer.asset_forwarder.src.nats_cluster import NatsCluster
 
 
 class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
@@ -13,19 +14,22 @@ class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
         """ Set up a NatsCluster instance with mock servers. """
         self.cluster_name = "C1"
         self.servers = ["nats://localhost:4222"]
+        self.logger = MagicMock(spec=Logger)
         self.cluster = NatsCluster(name=self.cluster_name,
                                    servers=self.servers,
+                                   logger=self.logger,
                                    reconnect_time_wait=1)
 
     async def test_init_sets_attributes(self):
         """ Test that attributes are set correctly on initialization. """
         self.assertEqual(self.cluster.name, self.cluster_name)
         self.assertEqual(self.cluster.servers, self.servers)
+        self.assertEqual(self.cluster.logger, self.logger)
         self.assertEqual(self.cluster.reconnect_time_wait, 1)
         self.assertIsNone(self.cluster.nc)
         self.assertIsInstance(self.cluster._lock, asyncio.Lock)
 
-    @patch("openfactory.fanoutlayer.asset_forwarder.nats_cluster.NATS", autospec=True)
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.nats_cluster.NATS", autospec=True)
     async def test_connect_calls_nats_connect(self, mock_nats_cls):
         """ Test that connect sets nc and calls NATS.connect with expected args. """
         mock_nc = mock_nats_cls.return_value
@@ -55,7 +59,7 @@ class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
         # Ensure self.nc is assigned
         self.assertEqual(self.cluster.nc, mock_nc)
 
-    @patch("openfactory.fanoutlayer.asset_forwarder.nats_cluster.NATS", autospec=True)
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.nats_cluster.NATS", autospec=True)
     async def test_connect_does_not_reconnect_if_already_connected(self, mock_nats_cls):
         """ Test that connect does nothing if nc is already connected. """
         mock_nc = mock_nats_cls.return_value
@@ -64,7 +68,7 @@ class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
         await self.cluster.connect()
         mock_nc.connect.assert_not_called()
 
-    @patch("openfactory.fanoutlayer.asset_forwarder.nats_cluster.NATS.publish", new_callable=AsyncMock)
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.nats_cluster.NATS.publish", new_callable=AsyncMock)
     async def test_publish_calls_connect_and_publish(self, mock_publish):
         """ Test that publish calls connect and nc.publish with correct arguments. """
         self.cluster.connect = AsyncMock()
@@ -98,3 +102,45 @@ class TestNatsCluster(unittest.IsolatedAsyncioTestCase):
         self.cluster.nc = None
         await self.cluster.close()  # Should not raise
         await self.cluster.close()  # Still safe
+
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.nats_cluster.NATS", autospec=True)
+    async def test_connect_closes_disconnected_client_before_reconnect(self, mock_nats_cls):
+        """ Test that a disconnected client is closed before reconnecting. """
+        old_nc = MagicMock()
+        old_nc.is_connected = False
+        old_nc.close = AsyncMock()
+
+        self.cluster.nc = old_nc
+
+        new_nc = mock_nats_cls.return_value
+        new_nc.connect = AsyncMock()
+
+        await self.cluster.connect()
+
+        old_nc.close.assert_awaited_once()
+        new_nc.connect.assert_awaited_once()
+
+    async def test_close_continues_if_drain_fails(self):
+        """ Test that close still closes the connection if drain fails. """
+        mock_nc = MagicMock()
+        mock_nc.drain = AsyncMock(side_effect=Exception("boom"))
+        mock_nc.close = AsyncMock()
+
+        self.cluster.nc = mock_nc
+
+        await self.cluster.close()
+
+        mock_nc.close.assert_awaited_once()
+        self.assertIsNone(self.cluster.nc)
+
+    async def test_close_continues_if_close_fails(self):
+        """ Test that close handles close failures gracefully. """
+        mock_nc = MagicMock()
+        mock_nc.drain = AsyncMock()
+        mock_nc.close = AsyncMock(side_effect=Exception("boom"))
+
+        self.cluster.nc = mock_nc
+
+        await self.cluster.close()
+
+        self.assertIsNone(self.cluster.nc)

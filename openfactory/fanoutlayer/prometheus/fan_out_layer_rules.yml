@@ -43,25 +43,53 @@ groups:
           component: "fan_out_layer"
           role: "forwarder"
 
-      # Queue size per forwarder
+      # Kafka consumer errors per forwarder (errors/sec)
+      - record: forwarder:kafka_errors_rate
+        expr: rate(asset_forwarder_kafka_errors_total[1m])
+        labels:
+          component: "fan_out_layer"
+          role: "forwarder"
+
+      # Invalid messages per forwarder (messages/sec)
+      - record: forwarder:invalid_messages_rate
+        expr: rate(asset_forwarder_invalid_messages_total[1m])
+        labels:
+          component: "fan_out_layer"
+          role: "forwarder"
+
+      # NATS publishing failures per NATS Cluster (failures/sec)
+      - record: forwarder:nats_publish_failures_rate
+        expr: rate(asset_forwarder_nats_publish_failures_total[1m])
+        labels:
+          component: "fan_out_layer"
+          role: "forwarder"
+
+      # Current queue backlog per forwarder
+      - record: forwarder:queue_size_current
+        expr: asset_forwarder_queue_size
+        labels:
+          component: "fan_out_layer"
+          role: "forwarder"
+
+      # Average queue size per forwarder
       - record: forwarder:queue_size_avg
-        expr: sum(rate(asset_forwarder_queue_size_sum[1m])) by (forwarder)
+        expr: sum(rate(asset_forwarder_queue_size_histogram_sum[1m])) by (forwarder)
               /
-              sum(rate(asset_forwarder_queue_size_count[1m])) by (forwarder)
+              sum(rate(asset_forwarder_queue_size_histogram_count[1m])) by (forwarder)
         labels:
           component: "fan_out_layer"
           role: "forwarder"
 
       # 95th percentile queue size per forwarder
       - record: forwarder:queue_size_p95
-        expr: histogram_quantile(0.95, sum by (forwarder, le) (asset_forwarder_queue_size_bucket))
+        expr: histogram_quantile(0.95, sum(rate(asset_forwarder_queue_size_histogram_bucket[1m])) by (forwarder, le))
         labels:
           component: "fan_out_layer"
           role: "forwarder"
 
       # 99th percentile queue size per forwarder
       - record: forwarder:queue_size_p99
-        expr: histogram_quantile(0.99, sum by (forwarder, le) (asset_forwarder_queue_size_bucket))
+        expr: histogram_quantile(0.99, sum(rate(asset_forwarder_queue_size_histogram_bucket[1m])) by (forwarder, le))
         labels:
           component: "fan_out_layer"
           role: "forwarder"

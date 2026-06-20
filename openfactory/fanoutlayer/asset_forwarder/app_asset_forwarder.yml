@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------------------
+# 🏭 OpenFactory App configuration file for the Asset Forwarder App
+#
+# Deploy with:
+#   ofa device up app_asset_forwarder.yml
+# ---------------------------------------------------------------------------------------
+# Environment variables:
+#
+# Optional:
+#   ASSET_FORWARDER_LOG_LEVEL    Log level (default: INFO)
+#
+# ---------------------------------------------------------------------------------------
+
+apps:
+
+  app_asset_forwarder:
+    uuid: ASSET_FORWARDER
+    image: asset-forwarder
+    environment:
+      - LOG_LEVEL=${ASSET_FORWARDER_LOG_LEVEL:-INFO}
+      - NATS_CLUSTER_C1=nats://nats:4222
+    networks:
+      - factory-net

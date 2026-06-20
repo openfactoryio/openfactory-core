@@ -11,6 +11,7 @@ API Reference
    filelayer/index
    monitoring/index
    kafka/index
+   fanoutlayer/index.rst
    schemas/index
    utils/index
    exceptions

@@ -51,7 +51,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          context: ./openfactory/fanoutlayer/
+          context: .
           file: ./openfactory/fanoutlayer/Dockerfile.asset_forwarder
           push: true
           tags: |

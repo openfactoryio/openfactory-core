@@ -32,7 +32,7 @@ def config():
 
 @cli.group()
 def device():
-    """ Manage MTConnect devices. """
+    """ Manage devices. """
     pass
 
 

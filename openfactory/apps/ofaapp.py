@@ -334,7 +334,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         except OFAException:
             self.logger.warning("No OpenFactory Prometheus metrics registry deployed - Metrics not registerd")
             return
-        self.logger.debug(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
+        self.logger.info(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
         registry = Asset(registry_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         registry.method('register_target', 'ofa-cli',
                         args=[

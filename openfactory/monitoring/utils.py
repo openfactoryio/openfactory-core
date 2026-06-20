@@ -1,5 +1,6 @@
+import json
 from openfactory.kafka.ksql import KSQLDBClient
-from openfactory.assets import Asset
+from openfactory.kafka import AssetProducer
 from openfactory.schemas.apps import OpenFactoryAppSchema
 from openfactory.exceptions import OFAException
 
@@ -23,16 +24,18 @@ def register_prometheus_target(target: OpenFactoryAppSchema,
         ksqlClient: (KSQLDBClient) KSQL client for executing queries.
         bootstrap_servers (str): Kafka bootstrap server address.
     """
-    registry_uuid = discover_prometheus_registry(ksqlClient)
-    registry = Asset(registry_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
-    registry.method('register_target', 'ofa-cli',
-                    args=[
-                        ('application_uuid', target.uuid),
-                        ('host', target.uuid.lower()),
-                        ('port', str(target.metrics.port)),
-                        ('path', target.metrics.path),
-                        ])
-    registry.close()
+    topic = ksqlClient.get_kafka_topic('METRICS_TARGETS_SOURCE')
+    producer = AssetProducer(ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
+    producer.produce(
+        topic=topic,
+        key=target.uuid,
+        value=json.dumps({
+            "HOST": target.uuid.lower(),
+            "PORT": str(target.metrics.port),
+            "PATH": target.metrics.path
+        })
+    )
+    producer.flush()
 
 
 def deregister_prometheus_target(target_uuid: str,
@@ -45,10 +48,11 @@ def deregister_prometheus_target(target_uuid: str,
         ksqlClient: (KSQLDBClient) KSQL client for executing queries.
         bootstrap_servers (str): Kafka bootstrap server address.
     """
-    try:
-        registry_uuid = discover_prometheus_registry(ksqlClient)
-    except OFAException:
-        return
-    registry = Asset(registry_uuid, ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
-    registry.method('deregister_target', 'ofa-cli', args=[('application_uuid', target_uuid)])
-    registry.close()
+    topic = ksqlClient.get_kafka_topic('METRICS_TARGETS_SOURCE')
+    producer = AssetProducer(ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
+    producer.produce(
+        topic=topic,
+        key=target_uuid,
+        value=None
+    )
+    producer.flush()

@@ -19,18 +19,20 @@ Note:
 
 .. admonition:: Usage Example
 
-  To use the NFS Storage Backend, add a `storage` entry to your OpenFactory YAML configuration file:
+  To use the NFS Storage Backend, add a ``storage`` entry to your OpenFactory YAML configuration file
+  where each entry has its own dedicated name (``data`` in the example below):
 
   .. code-block:: yaml
 
      storage:
-       type: nfs
-       server: nfs.server.openfactory.org
-       remote_path: /nfs/data
-       mount_point: /mnt
-       mount_options:
-         - rw
-         - noatime
+       data:
+         type: nfs
+         server: nfs.server.openfactory.org
+         remote_path: /nfs/data
+         mount_point: /mnt
+         mount_options:
+           - rw
+           - noatime
 
 .. seealso::
 

@@ -18,14 +18,16 @@ Note:
 
 .. admonition:: Usage Example
 
-  To use the Local Storage Backend, add a `storage` entry to your OpenFactory YAML configuration file:
+  To use the Local Storage Backend, add a ``storage`` entry to your OpenFactory YAML configuration file
+  where each entry has its own dedicated name (``data`` in the example below):
 
   .. code-block:: yaml
 
      storage:
-       type: local
-       local_path: /nfs/data
-       mount_point: /mnt
+       data:
+         type: local
+         local_path: /nfs/data
+         mount_point: /mnt
 
 .. seealso::
 

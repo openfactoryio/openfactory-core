@@ -139,7 +139,7 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         self.KAFKA_CONSUMER_TIME_OUT_MS = float(os.getenv("KAFKA_CONSUMER_TIME_OUT_MS", "1"))
 
         self.kafka_config = {
-            "bootstrap.servers": os.environ["KAFKA_BROKER"],
+            "bootstrap.servers": self.bootstrap_servers,
             "group.id": self.kafka_group,
             "enable.auto.commit": True,
             "enable.auto.offset.store": False,

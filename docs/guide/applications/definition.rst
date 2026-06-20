@@ -123,12 +123,20 @@ Example (NFS):
 .. code-block:: yaml
 
     storage:
-      type: nfs
-      server: deskfab.openfactory.com
-      remote_path: /nfs/deskfab
-      mount_point: /mnt
-      mount_options:
-        - ro
+      data:
+        type: nfs
+        server: deskfab.openfactory.com
+        remote_path: /nfs/data
+        mount_point: /mnt/data
+        mount_options:
+          - rw
+      config:
+        type: nfs
+        server: deskfab.openfactory.com
+        remote_path: /nfs/config
+        mount_point: /mnt/config
+        mount_options:
+          - ro
 
 Multiple storage backends are supported.
 

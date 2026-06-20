@@ -74,10 +74,6 @@ class MetricsRegistry(OpenFactoryFastAPIApp):
         return "metrics_targets"
 
     @property
-    def metrics_source_table(self) -> str:
-        return "METRICS_TARGETS_SOURCE"
-
-    @property
     def metrics_table(self) -> str:
         return "METRICS_TARGETS"
 

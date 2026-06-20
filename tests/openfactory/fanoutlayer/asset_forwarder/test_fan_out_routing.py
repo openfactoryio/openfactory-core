@@ -1,6 +1,7 @@
 import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
-from openfactory.fanoutlayer.asset_forwarder.nats_cluster import NatsCluster
+from unittest.mock import AsyncMock, MagicMock
+from logging import Logger
+from openfactory.fanoutlayer.asset_forwarder.src.nats_cluster import NatsCluster
 from openfactory.fanoutlayer.utils.hash_ring import ConsistentHashRing
 
 
@@ -13,18 +14,15 @@ class TestFanOutRouting(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """ Set up multiple mocked clusters and a hash ring. """
         # Create multiple clusters
+        self.logger = MagicMock(spec=Logger)
         self.clusters = {
-            "C1": NatsCluster(name="C1", servers=["nats://localhost:4222"]),
-            "C2": NatsCluster(name="C2", servers=["nats://localhost:4223"]),
-            "C3": NatsCluster(name="C3", servers=["nats://localhost:4224"]),
+            "C1": NatsCluster(name="C1", servers=["nats://localhost:4222"], logger=self.logger),
+            "C2": NatsCluster(name="C2", servers=["nats://localhost:4223"], logger=self.logger),
+            "C3": NatsCluster(name="C3", servers=["nats://localhost:4224"], logger=self.logger),
         }
 
         # Create hash ring from cluster names
         self.ring = ConsistentHashRing(nodes=list(self.clusters.keys()), replicas=10)
-
-        # Patch NATS to prevent real connections
-        self.nats_patch = patch("openfactory.fanoutlayer.asset_forwarder.nats_cluster.NATS", autospec=True)
-        self.mock_nats_cls = self.nats_patch.start()
 
         # Assign a separate mocked NATS client per cluster
         for i, cluster in enumerate(self.clusters.values()):
@@ -32,12 +30,7 @@ class TestFanOutRouting(unittest.IsolatedAsyncioTestCase):
             mock_nc.connect = AsyncMock()
             mock_nc.publish = AsyncMock()
             mock_nc.is_connected = True
-            self.mock_nats_cls.side_effect = [mock_nc] * len(self.clusters)
             cluster.nc = mock_nc
-
-    def tearDown(self):
-        """ Stop patching. """
-        self.nats_patch.stop()
 
     async def test_assets_routed_correctly(self):
         """ Test that multiple assets are routed consistently to the correct clusters. """
@@ -67,3 +60,14 @@ class TestFanOutRouting(unittest.IsolatedAsyncioTestCase):
         mapping_first = {asset: self.ring.get(asset.encode()) for asset in assets}
         mapping_second = {asset: self.ring.get(asset.encode()) for asset in assets}
         self.assertEqual(mapping_first, mapping_second)
+
+    async def test_routing_uses_all_clusters(self):
+        """ Test that assets are distributed across all configured clusters. """
+        assets = [f"asset-{i}" for i in range(500)]
+
+        used_clusters = {
+            self.ring.get(asset.encode())
+            for asset in assets
+        }
+
+        self.assertEqual(used_clusters, set(self.clusters.keys()))

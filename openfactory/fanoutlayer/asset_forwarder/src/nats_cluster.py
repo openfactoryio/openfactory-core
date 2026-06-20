@@ -56,9 +56,9 @@ class NatsCluster:
     Attributes:
         name (str): Logical name of the NATS cluster (e.g., "C1").
         servers (List[str]): List of NATS server URLs for this cluster.
-        logger (Logger): Logger used for connection and publish events.
+        logger (logging.Logger): Logger used for connection and publish events.
         reconnect_time_wait (int): Time in seconds to wait before reconnect attempts.
-        nc (Optional[NATS]): Active NATS client connection, or None if not connected.
+        nc: Active NATS client connection, or None if not connected.
         _lock (asyncio.Lock): Ensures only one connection attempt runs at a time.
     """
 
@@ -69,8 +69,8 @@ class NatsCluster:
         Args:
             name (str): Cluster name identifier (used for logging and routing).
             servers (list[str]): List of server URLs for connecting to this cluster.
-            logger (Logger): Logger used for connection and publish events.
-            reconnect_time_wait (int, optional): Delay (in seconds) between reconnect
+            logger (logging.Logger): Logger used for connection and publish events.
+            reconnect_time_wait (int, Optional): Delay (in seconds) between reconnect
                 attempts. Defaults to 2.
         """
         self.name = name

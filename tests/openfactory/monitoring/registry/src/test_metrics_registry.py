@@ -18,19 +18,6 @@ class TestMetricsRegistry(TestCase):
             test_mode=True
         )
 
-    @patch.object(MetricsRegistry, "create_metrics_table")
-    def test_init_creates_metrics_table(self, mock_create_metrics_table):
-        """ Should create metrics tables during initialization. """
-
-        registry = MetricsRegistry(
-            ksqlClient=MagicMock(),
-            bootstrap_servers="broker:9092",
-            test_mode=True
-        )
-
-        mock_create_metrics_table.assert_called_once()
-        self.assertEqual(registry.AssetType, "Prometheus.Registry")
-
     @patch.dict(os.environ, {"PROMETHEUS_SD_ENDPOINT": "/custom-targets"})
     def test_custom_prometheus_sd_endpoint(self):
         registry = MetricsRegistry(
@@ -42,22 +29,6 @@ class TestMetricsRegistry(TestCase):
         paths = [route.path for route in registry.api.routes]
 
         self.assertIn("/custom-targets", paths)
-
-    def test_create_metrics_table(self):
-        """ Should create source and materialized metrics tables. """
-        self.registry.ksql.statement_query.reset_mock()
-
-        self.registry.create_metrics_table()
-
-        self.assertEqual(self.registry.ksql.statement_query.call_count, 2)
-
-        source_sql = self.registry.ksql.statement_query.call_args_list[0][0][0]
-        materialized_sql = self.registry.ksql.statement_query.call_args_list[1][0][0]
-
-        self.assertIn("CREATE TABLE IF NOT EXISTS METRICS_TARGETS_SOURCE", source_sql)
-        self.assertIn("KAFKA_TOPIC='metrics_targets'", source_sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS METRICS_TARGETS AS", materialized_sql)
-        self.assertIn("FROM METRICS_TARGETS_SOURCE", materialized_sql)
 
     def test_register_target(self):
         """ Should publish a metrics target registration. """

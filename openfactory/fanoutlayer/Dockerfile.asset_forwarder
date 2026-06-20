@@ -22,7 +22,7 @@
 #   - /home/${UNAME}
 #
 # Entrypoint:
-#   - python3 -u -m asset_forwarder.asset_forwarder_service
+#   - python3 -u -m openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service
 #
 # To build the image locally:
 #   docker build -t asset-forwarder -f openfactory/fanoutlayer/Dockerfile.asset_forwarder openfactory/fanoutlayer
@@ -40,7 +40,6 @@ LABEL documentation="https://github.com/openfactoryio/openfactory-core/tree/main
 
 ARG VERSION=dev
 ARG APPLICATION_MANUFACTURER=OpenFactoryIO
-ARG OPENFACTORY_VERSION=main
 
 # Install build-time dependencies
 RUN apt-get update && \
@@ -50,14 +49,12 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /build
 
-# Copy asset_forwarder and utils
-COPY asset_forwarder/ ./asset_forwarder/
-COPY utils/ ./utils/
-COPY asset_forwarder/requirements.txt ./requirements.txt
+# Copy OpenFactory
+COPY . .
 
 # Install Python dependencies into system site-packages
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install .[fastapi]
 
 # Strip unnecessary files to reduce layer size
 RUN find /usr/local/lib/python3.13/site-packages -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + \
@@ -87,10 +84,6 @@ WORKDIR /home/${UNAME}
 COPY --from=build /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=build /usr/local/bin /usr/local/bin
 
-# Copy source code with correct ownership
-COPY --chown=ofa_forwarder:ofa_forwarder asset_forwarder/ ./openfactory/fanoutlayer/asset_forwarder/
-COPY --chown=ofa_forwarder:ofa_forwarder utils/ ./openfactory/fanoutlayer/utils/
-
 USER ${UNAME}
 
-CMD ["python3", "-u", "-m", "openfactory.fanoutlayer.asset_forwarder.asset_forwarder_service"]
+CMD ["python3", "-u", "-m", "openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service"]

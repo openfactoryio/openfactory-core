@@ -173,3 +173,10 @@ class MTConnectConnector(Connector):
             pass
         except docker.errors.APIError as err:
             raise OFAException(err)
+
+        # De-register device asset
+        deregister_asset(
+            asset_uuid=device_uuid,
+            ksqlClient=self.ksql,
+            bootstrap_servers=self.bootstrap_servers
+        )

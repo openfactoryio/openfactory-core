@@ -9,7 +9,6 @@ from types import FrameType
 from typing import Optional
 from pydantic import TypeAdapter
 from openfactory import __version__
-from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
@@ -329,11 +328,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             metrics_port (int): Port on which metrics is published
             metrics_path (str): Endpoint of metrics. Defaults to ``/metrics``
         """
-        try:
-            registry_uuid = discover_prometheus_registry(self.ksql)
-        except OFAException:
-            self.logger.warning("No OpenFactory Prometheus metrics registry deployed - Metrics not registerd")
-            return
+        registry_uuid = discover_prometheus_registry(self.ksql)
         self.logger.info(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
         topic = self.ksql.get_kafka_topic('METRICS_TARGETS_SOURCE')
         self.producer.produce(

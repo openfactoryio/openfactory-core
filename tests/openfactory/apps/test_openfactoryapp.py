@@ -503,23 +503,3 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
             })
         )
         app.producer.flush.assert_called_once()
-
-    @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
-    def test_register_prometheus_metrics_no_registry(self, mock_discover_registry):
-        """ No Prometheus registry deployed. """
-
-        mock_discover_registry.side_effect = OFAException("not found")
-
-        app = OpenFactoryApp(
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers="mock_bootstrap",
-            asset_router_url="mocked_asset_url"
-        )
-
-        app.logger = MagicMock()
-        app.register_prometheus_metrics(metrics_port=8000)
-
-        mock_discover_registry.assert_called_once_with(self.ksql_mock)
-        app.logger.warning.assert_called_once_with(
-            "No OpenFactory Prometheus metrics registry deployed - Metrics not registerd"
-        )

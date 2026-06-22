@@ -9,7 +9,6 @@ from types import FrameType
 from typing import Optional
 from pydantic import TypeAdapter
 from openfactory import __version__
-from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute

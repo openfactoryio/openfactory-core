@@ -12,9 +12,9 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_deploy(self, mock_docker_client):
         """ Test Docker Swarm deploy method """
-        mock_create = MagicMock()
-        mock_docker_client.services.create = mock_create
+
         strategy = SwarmDeploymentStrategy()
+
         strategy.deploy(
             image="test-image",
             name="test-service",
@@ -28,18 +28,33 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
             mode={"Replicated": {"Replicas": 2}}
         )
 
-        mock_create.assert_called_once()
-        args, kwargs = mock_create.call_args
-        self.assertEqual(kwargs["image"], "test-image")
+        mock_docker_client.api.create_service.assert_called_once()
+
+        args, kwargs = mock_docker_client.api.create_service.call_args
+        task = args[0]
+
+        self.assertEqual(task["ContainerSpec"]["Image"], "test-image")
+        self.assertEqual(task["ContainerSpec"]["Env"], ["ENV=prod"])
+        self.assertEqual(task["ContainerSpec"]["Labels"], {"role": "web"})
+        self.assertEqual(task["ContainerSpec"]["Command"], ["run"])
+        self.assertEqual(task["Resources"]["Limits"]["NanoCPUs"], 500000000)
+        self.assertEqual(task["Placement"]["Constraints"], ["node.role==manager"])
         self.assertEqual(kwargs["name"], "test-service")
-        self.assertEqual(kwargs["env"], ["ENV=prod"])
-        self.assertEqual(kwargs["labels"], {"role": "web"})
-        self.assertEqual(kwargs["command"], "run")
-        self.assertIsNotNone(kwargs["endpoint_spec"])
         self.assertEqual(kwargs["networks"], ["net1"])
-        self.assertEqual(kwargs["constraints"], ["node.role==manager"])
-        self.assertEqual(kwargs["resources"]["Limits"]["NanoCPUs"], 500000000)
         self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 2}})
+        self.assertEqual(kwargs["labels"], {"role": "web"})
+        self.assertEqual(
+            kwargs["endpoint_spec"],
+            {
+                "Ports": [
+                    {
+                        "Protocol": "tcp",
+                        "PublishedPort": 8080,
+                        "TargetPort": 80
+                    }
+                ]
+            }
+        )
 
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_deploy_accepts_image_pull_policy(self, mock_docker_client):
@@ -54,14 +69,11 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
             env=["ENV=prod"]
         )
 
-        mock_docker_client.services.create.assert_called_once()
+        mock_docker_client.api.create_service.assert_called_once()
 
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_deploy_with_runtime_user(self, mock_docker_client):
         """ Test Docker Swarm deploy with runtime user """
-
-        mock_create = MagicMock()
-        mock_docker_client.services.create = mock_create
 
         strategy = SwarmDeploymentStrategy()
 
@@ -72,22 +84,19 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
             user="1234:5678"
         )
 
-        mock_create.assert_called_once()
+        mock_docker_client.api.create_service.assert_called_once()
 
-        _, kwargs = mock_create.call_args
+        args, _ = mock_docker_client.api.create_service.call_args
+        task = args[0]
 
-        self.assertIn("user", kwargs)
-        self.assertEqual(kwargs["user"], "1234:5678")
+        self.assertEqual(task["ContainerSpec"]["User"], "1234:5678")
 
-    @patch("openfactory.openfactory_deploy_strategy.docker.types.Mount")
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
-    def test_swarm_deploy_with_mounts(self, mock_docker_client, mock_mount_class):
+    def test_swarm_deploy_with_mounts(self, mock_docker_client):
         """ Test Docker Swarm deploy with mounts """
-        mock_create = MagicMock()
-        mock_docker_client.services.create = mock_create
+
         strategy = SwarmDeploymentStrategy()
 
-        # Simulated mount spec (what get_mount_spec() now returns)
         mounts = [{
             "Target": "/mnt/data",
             "Source": "nfs-prover3018-desk",
@@ -111,10 +120,55 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
             mounts=mounts
         )
 
-        # Check that the mounts list was passed to services.create
-        _, kwargs = mock_create.call_args
-        self.assertIn("mounts", kwargs)
-        self.assertEqual(kwargs["mounts"], mounts)
+        mock_docker_client.api.create_service.assert_called_once()
+
+        args, _ = mock_docker_client.api.create_service.call_args
+        task = args[0]
+
+        self.assertEqual(task["ContainerSpec"]["Mounts"], mounts)
+
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_with_open_files(self, mock_docker_client):
+        """ Test Docker Swarm deploy with open_files limit """
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-service",
+            env=["ENV=prod"],
+            open_files=5000
+        )
+
+        args, _ = mock_docker_client.api.create_service.call_args
+
+        task = args[0]
+
+        self.assertEqual(
+            task["ContainerSpec"]["Ulimits"],
+            [{
+                "Name": "nofile",
+                "Soft": 5000,
+                "Hard": 5000
+            }]
+        )
+
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_without_open_files(self, mock_docker_client):
+        """ Test Docker Swarm deploy without open_files limit """
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-service",
+            env=["ENV=prod"]
+        )
+
+        args, _ = mock_docker_client.api.create_service.call_args
+        task = args[0]
+
+        self.assertNotIn("Ulimits", task["ContainerSpec"])
 
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_remove(self, mock_docker_client):
@@ -127,6 +181,46 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
 
         mock_docker_client.services.get.assert_called_once_with("test-service")
         mock_service.remove.assert_called_once_with()
+
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_without_resources(self, mock_docker_client):
+        """ Test Docker Swarm deploy without resources """
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-service",
+            env=["ENV=prod"],
+            resources=None
+        )
+
+        mock_docker_client.api.create_service.assert_called_once()
+
+        args, _ = mock_docker_client.api.create_service.call_args
+        task = args[0]
+
+        self.assertNotIn("Resources", task)
+
+    @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
+    def test_swarm_deploy_without_constraints(self, mock_docker_client):
+        """ Test Docker Swarm deploy without constraints """
+
+        strategy = SwarmDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-service",
+            env=["ENV=prod"],
+            constraints=None
+        )
+
+        mock_docker_client.api.create_service.assert_called_once()
+
+        args, _ = mock_docker_client.api.create_service.call_args
+        task = args[0]
+
+        self.assertNotIn("Placement", task)
 
 
 class TestLocalDockerDeploymentStrategy(unittest.TestCase):
@@ -165,6 +259,8 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertEqual(kwargs["network"], "bridge")
         self.assertEqual(kwargs["labels"], {"type": "api"})
         self.assertEqual(kwargs["nano_cpus"], 1000000000)
+        self.assertIn("ulimits", kwargs)
+        self.assertIsNone(kwargs["ulimits"])
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     def test_local_deploy_image_pull_policy_always(self, mock_from_env):
@@ -427,3 +523,51 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertFalse(mock_client.networks.get.called)
         # container.connect should also NOT be called
         self.assertFalse(mock_client.networks.get.return_value.connect.called)
+
+    @patch("openfactory.openfactory_deploy_strategy.Ulimit")
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_with_open_files(self, mock_from_env, mock_ulimit):
+        """ Test local Docker deploy with open_files limit """
+
+        mock_client = MagicMock()
+        mock_run = MagicMock()
+
+        mock_client.containers.run = mock_run
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-container",
+            env=["ENV=dev"],
+            open_files=5000
+        )
+
+        mock_ulimit.assert_called_once_with(name="nofile", soft=5000, hard=5000)
+
+        _, kwargs = mock_run.call_args
+        self.assertIn("ulimits", kwargs)
+        self.assertEqual(kwargs["ulimits"], [mock_ulimit.return_value])
+
+    @patch("openfactory.openfactory_deploy_strategy.Ulimit")
+    @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
+    def test_local_deploy_without_open_files(self, mock_from_env, mock_ulimit):
+        """ Test local Docker deploy without open_files limit """
+
+        mock_client = MagicMock()
+        mock_client.containers.run = MagicMock()
+        mock_from_env.return_value = mock_client
+
+        strategy = LocalDockerDeploymentStrategy()
+
+        strategy.deploy(
+            image="test-image",
+            name="test-container",
+            env=["ENV=dev"]
+        )
+
+        mock_ulimit.assert_not_called()
+        _, kwargs = mock_client.containers.run.call_args
+        self.assertIn("ulimits", kwargs)
+        self.assertIsNone(kwargs["ulimits"])

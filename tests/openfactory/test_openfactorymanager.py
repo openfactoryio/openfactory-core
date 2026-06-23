@@ -483,6 +483,8 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.assertIsNone(kwargs["constraints"])
         self.assertIsNone(kwargs["networks"])
         self.assertEqual(kwargs["mounts"], [])
+        self.assertIn("open_files", kwargs)
+        self.assertIsNone(kwargs["open_files"])
 
         # labels should be present (empty because no routing)
         self.assertIn("labels", kwargs)
@@ -623,6 +625,49 @@ class TestOpenFactoryManager(unittest.TestCase):
         deploy_call = self.manager.deployment_strategy.deploy.call_args
         self.assertIsNone(deploy_call.kwargs["resources"])
         self.assertIsNone(deploy_call.kwargs["constraints"])
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_passes_open_files_limit(self, mock_user_notify, mock_register_asset):
+        """ open_files limit should be passed to deployment strategy """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_OPEN_FILES",
+            image="app_image",
+            deploy=Deploy(
+                resources=Resources(
+                    limits=ResourcesDefinition(
+                        open_files=5000
+                    )
+                )
+            )
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("open_files", kwargs)
+        self.assertEqual(kwargs["open_files"], 5000)
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_without_open_files_limit(self, mock_user_notify, mock_register_asset):
+        """ open_files should be None when not configured """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_NO_OPEN_FILES",
+            image="app_image"
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("open_files", kwargs)
+        self.assertIsNone(kwargs["open_files"])
 
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")

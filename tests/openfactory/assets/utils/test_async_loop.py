@@ -1,5 +1,7 @@
 import unittest
 import asyncio
+import os
+import psutil
 from openfactory.assets.utils import AsyncLoopThread
 
 
@@ -15,6 +17,18 @@ class TestAsyncLoopThread(unittest.TestCase):
     async def async_fail(self):
         await asyncio.sleep(0.01)
         raise ValueError("boom")
+
+    def test_thread_starts(self):
+        """ Test background thread is started """
+        loop = AsyncLoopThread()
+        self.assertTrue(loop.thread.is_alive())
+        loop.stop()
+
+    def test_stop_stops_thread(self):
+        """ Test stop terminates background thread """
+        loop = AsyncLoopThread()
+        loop.stop()
+        self.assertFalse(loop.thread.is_alive())
 
     def test_run_simple_coro(self):
         """ Test running a simple coroutine """
@@ -39,8 +53,14 @@ class TestAsyncLoopThread(unittest.TestCase):
             future.result(timeout=1)
         loop_thread.stop()
 
-    def test_stop_idempotent(self):
-        """ Test stopping the loop multiple times does not raise """
-        loop_thread = AsyncLoopThread()
-        loop_thread.stop()
-        loop_thread.stop()
+    @unittest.skipUnless(hasattr(psutil.Process(os.getpid()), "num_fds"), "num_fds only available on Unix platforms")
+    def test_stop_releases_file_descriptors(self):
+        """ Test stop releases file descriptors created by the event loop """
+        proc = psutil.Process(os.getpid())
+
+        before = proc.num_fds()
+        loop = AsyncLoopThread()
+        loop.stop()
+        after_stop = proc.num_fds()
+
+        self.assertEqual(after_stop, before)

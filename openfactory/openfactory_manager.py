@@ -48,7 +48,7 @@ from openfactory import OpenFactory
 from openfactory.schemas.devices import get_devices_from_config_file
 from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file, normalize_name
 from openfactory.schemas.uns import UNSSchema
-from openfactory.schemas.common import constraints, resources
+from openfactory.schemas.common import constraints, resources, open_files_limit
 from openfactory.assets import Asset
 from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
@@ -284,6 +284,7 @@ class OpenFactoryManager(OpenFactory):
                 mode={"Replicated": {"Replicas": 1}},
                 env=env,
                 resources=resources(application.deploy),
+                open_files=open_files_limit(application.deploy),
                 constraints=constraints(application.deploy),
                 networks=application.networks,
                 mounts=mounts,

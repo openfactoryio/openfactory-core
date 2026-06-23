@@ -17,7 +17,7 @@ jobs:
     steps:
     
       - name: Check out MTConnect Agent repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: mtconnect/cppagent
           ref: ${{ env.CPPAGENT_VERSION }}

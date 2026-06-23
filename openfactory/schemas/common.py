@@ -7,14 +7,14 @@ to be shared across device and connector configuration schemas.
 
 Components:
 -----------
-- `ResourcesDefinition`: Represents CPU and memory values for a container.
+- `ResourcesDefinition`: Represents CPU, memory, and file descriptor limits for a container.
 - `Resources`: Groups `reservations` and `limits` for container resources.
 - `Placement`: Defines constraints for container placement on specific nodes.
 - `Deploy`: Complete deployment configuration including replicas, resource configs, and placement rules.
 
 Key Features:
 -------------
-- Express CPU and memory constraints using common formats (e.g., 0.5 CPUs, "1Gi" memory)
+- Express CPU, memory, and file descriptor constraints for containers
 - Define both resource requests and limits for containers
 - Support placement constraints for scheduling on labeled nodes
 - Modular, reusable across multiple OpenFactory schema modules
@@ -26,7 +26,7 @@ Define a deployment configuration:
     >>> Deploy(
     ...     replicas=2,
     ...     resources=Resources(
-    ...         reservations=ResourcesDefinition(cpus=0.5, memory="512Mi"),
+    ...         reservations=ResourcesDefinition(cpus=0.5, memory="512Mi", open_files=65535),
     ...         limits=ResourcesDefinition(cpus=1.0, memory="1Gi")
     ...     ),
     ...     placement=Placement(
@@ -44,14 +44,27 @@ from typing import List, Optional, Dict, Any
 
 
 class ResourcesDefinition(BaseModel):
-    """ Defines resource limits or reservations such as CPU and memory. """
+    """ Defines resource limits or reservations such as CPU, memory, and open file descriptors. """
+
     cpus: Optional[float] = Field(
         default=None,
         description="Amount of CPU to allocate, expressed as a fractional number (e.g., 0.25 = one quarter of a CPU core)."
     )
+
     memory: Optional[str] = Field(
         default=None,
         description="Amount of memory to allocate (e.g., '512Mi', '1Gi')."
+    )
+
+    open_files: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Maximum number of Linux file descriptors available to the container. "
+            "File descriptors include files, network sockets, pipes, and other "
+            "operating-system resources. Applications managing many devices or "
+            "network connections may require a higher limit than the default value."
+        )
     )
 
 
@@ -187,8 +200,8 @@ def resources(deploy: Optional[Deploy]) -> Optional[Dict[str, Dict[str, Any]]]:
     """
     Retrieve and normalize resources from a Deploy object for Docker deployments.
 
-    Extracts CPU and memory settings from ``deploy.resources`` and converts them
-    into the dictionary format expected by Docker.
+    Extracts CPU, memory, and file descriptor settings from ``deploy.resources``
+    and converts them into the dictionary format expected by Docker.
 
     Args:
         deploy (Optional[Deploy]): Deployment configuration for an application.
@@ -271,3 +284,23 @@ def constraints(deploy: Optional[Deploy]) -> Optional[List[str]]:
         normalized.append(c.strip())
 
     return normalized
+
+
+def open_files_limit(deploy: Optional[Deploy], default: Optional[int] = None) -> Optional[int]:
+    """
+    Retrieve the open file descriptor limit value from a Deploy object.
+
+    Args:
+        deploy (Optional[Deploy]): The deployment configuration object.
+        default (Optional[int]): Value returned if no limit is configured.
+
+    Returns:
+        Optional[int]: Configured open file descriptor limit or default.
+    """
+    if deploy is None:
+        return default
+
+    resources = getattr(deploy, 'resources', None)
+    limits = resources.limits if resources else None
+
+    return limits.open_files if limits and limits.open_files is not None else default

@@ -101,6 +101,7 @@ configuration YAML file, with automatic UNS enrichment.
               limits:
                 cpus: 1.0
                 memory: "1Gi"
+                open_files: 65535
 
             placement:
                 constraints:

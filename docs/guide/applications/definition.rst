@@ -196,7 +196,9 @@ All networks must exist prior to deployment.
 Deployment
 ----------
 
-The ``deploy`` section defines how the application is deployed.
+The ``deploy`` section defines how the application is deployed,
+including replicas, resource limits, file descriptor limits,
+and placement constraints.
 
 .. code-block:: yaml
 
@@ -210,6 +212,7 @@ The ``deploy`` section defines how the application is deployed.
         limits:
           cpus: 1.0
           memory: "1Gi"
+          open_files: 65535
 
       placement:
         constraints:
@@ -261,6 +264,7 @@ The ``deploy`` section defines how the application is deployed.
                 limits:
                   cpus: 1.0
                   memory: "1Gi"
+                  open_files: 65535
 
               placement:
                 constraints:
@@ -276,3 +280,34 @@ The ``deploy`` section defines how the application is deployed.
 .. seealso::
     - The schema of OpenFactory Apps is :class:`openfactory.schemas.apps.OpenFactoryAppSchema`.
     - The runtime class of OpenFactory Apps is :class:`openfactory.apps.ofaapp.OpenFactoryApp`.
+
+Open File Descriptors
+~~~~~~~~~~~~~~~~~~~~~
+
+Applications that manage large numbers of devices or network connections
+may require more file descriptors than the default container limit.
+
+The ``open_files`` setting defines the maximum number of Linux file
+descriptors available to the application.
+
+.. code-block:: yaml
+
+    deploy:
+      resources:
+        limits:
+          open_files: 65535
+
+Linux file descriptors include:
+
+- files
+- network sockets
+- pipes
+- event polling descriptors
+- other operating-system resources
+
+Applications managing many devices or network connections may require a
+higher limit than the platform default.
+
+If ``open_files`` is not specified, OpenFactory does not define a file
+descriptor limit and the default limit provided by the container runtime
+(e.g., Docker Engine) is used.

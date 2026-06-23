@@ -22,6 +22,7 @@ Features:
   filesystems such as NFS.
 - Supports environment variables, container commands, labels, ports, networks,
   constraints, resource limits, and Docker mounts.
+- Supports configurable open file descriptor limits (ulimits) for containers and services.
 - Converts backend mount specifications (Local, NFS, Volume) into Docker-compatible mounts.
 - Handles Swarm-specific options (mode, constraints) transparently.
 - Provides user-friendly defaults for local container deployment.
@@ -38,6 +39,7 @@ Usage Example:
         name="scheduler",
         user="1234:5678",
         env=["ENV=production"],
+        open_files=65535,
         mounts=[{
             "Type": "bind",
             "Source": "/opt/openfactory/data",
@@ -54,6 +56,7 @@ Usage Example:
         name="reporter",
         user="1234:5678",
         env=["LOG_LEVEL=info"],
+        open_files=65535,
         mounts=[{
             "Type": "nfs",
             "Source": "192.168.0.100:/exports/reports",
@@ -70,7 +73,7 @@ to standardize service deployment across local development and production enviro
 """
 
 import docker
-from docker.types import Mount, DriverConfig
+from docker.types import Mount, DriverConfig, Ulimit, ContainerSpec, TaskTemplate, EndpointSpec, Placement
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any, Literal
 from openfactory.docker.docker_access_layer import dal
@@ -95,6 +98,7 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
                networks: Optional[List[str]] = None,
                constraints: Optional[List[str]] = None,
                resources: Optional[Dict[str, Any]] = None,
+               open_files: Optional[int] = None,
                mode: Optional[Dict[str, Any]] = None,
                mounts: Optional[List[dict]] = None) -> None:
         """
@@ -109,12 +113,15 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
             user (Optional[str]): Runtime user in Docker format ``UID:GID``.
             name (str): Name of the service or container.
             env (List[str]): Environment variables in `KEY=VALUE` format.
-            labels (Optional[Dict[str, str]]): Metadata labels (Swarm only).
+            labels (Optional[Dict[str, str]]): Metadata labels attached to the deployed container or service.
             command (Optional[str]): Command to override the default entrypoint.
             ports (Optional[Dict[int, int]]): Port mappings from host to container (host:container).
             networks (Optional[List[str]]): Networks to connect the service or container to.
             constraints (Optional[List[str]]): Constraints for placement (Swarm only).
             resources (Optional[Dict[str, Any]]): Resource limits and reservations.
+            open_files (Optional[int]): Maximum number of open file descriptors
+                (RLIMIT_NOFILE) available to the process inside the container.
+                If not specified, the container runtime default is used.
             mode (Optional[Dict[str, Any]]): Service mode (Swarm only).
             mounts (Optional[List[dict]]): List of Docker mount specifications.
         """
@@ -132,7 +139,13 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
 
 
 class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
-    """ Deployment strategy for Docker Swarm mode. """
+    """
+    Deployment strategy for Docker Swarm mode.
+
+    Uses the Docker Engine API directly to create services, allowing support
+    for advanced container settings such as file descriptor limits (ulimits)
+    that are not exposed by the high-level Docker SDK service API.
+    """
 
     def deploy(self, *,
                image: str,
@@ -146,6 +159,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                networks: Optional[List[str]] = None,
                constraints: Optional[List[str]] = None,
                resources: Optional[Dict[str, Any]] = None,
+               open_files: Optional[int] = None,
                mode: Optional[Dict[str, Any]] = None,
                mounts: Optional[List[Mount]] = None) -> None:
         """
@@ -155,20 +169,41 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         Note:
             - ``image_pull_policy`` is currently ignored for Swarm deployments.
+            - When ``open_files`` is specified, the service is deployed with a ``nofile`` ulimit using identical soft and hard limits.
+            - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """
-        dal.docker_client.services.create(
+
+        container = ContainerSpec(
             image=image,
-            user=user,
-            name=name,
-            env=env,
-            labels=labels,
             command=command,
-            endpoint_spec=docker.types.EndpointSpec(ports=ports) if ports else None,
-            networks=networks,
-            constraints=constraints,
+            env=env,
+            user=user,
+            mounts=mounts,
+            labels=labels
+        )
+
+        if open_files is not None:
+            container["Ulimits"] = [
+                {
+                    "Name": "nofile",
+                    "Soft": open_files,
+                    "Hard": open_files
+                }
+            ]
+
+        task = TaskTemplate(
+            container,
             resources=resources,
+            placement=Placement(constraints=constraints) if constraints else None
+        )
+
+        dal.docker_client.api.create_service(
+            task,
+            name=name,
+            labels=labels,
             mode=mode,
-            mounts=mounts
+            networks=networks,
+            endpoint_spec=EndpointSpec(ports=ports) if ports else None
         )
 
     def remove(self, service_name):
@@ -231,6 +266,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                networks: Optional[List[str]] = None,
                constraints: Optional[List[str]] = None,
                resources: Optional[Dict[str, Any]] = None,
+               open_files: Optional[int] = None,
                mode: Optional[Dict[str, Any]] = None,
                mounts: Optional[List[dict]] = None) -> None:
         """
@@ -241,6 +277,8 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         Note:
             - ``constraints`` and ``mode`` are ignored for local containers.
             - ``image_pull_policy="always"`` forces a Docker image pull before deployment.
+            - When ``open_files`` is specified, a ``nofile`` ulimit is configured with identical soft and hard limits.
+            - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """
         client = docker.from_env()
 
@@ -261,6 +299,16 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         if image_pull_policy == "always":
             client.images.pull(image)
 
+        ulimits = None
+        if open_files is not None:
+            ulimits = [
+                Ulimit(
+                    name="nofile",
+                    soft=open_files,
+                    hard=open_files
+                )
+            ]
+
         container = client.containers.run(
             image=image,
             user=user,
@@ -272,7 +320,8 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             network=networks[0] if networks else None,
             labels=labels,
             nano_cpus=resources.get("Limits", {}).get("NanoCPUs") if resources else None,
-            mounts=docker_mounts
+            mounts=docker_mounts,
+            ulimits=ulimits
         )
 
         # Attach to additional networks

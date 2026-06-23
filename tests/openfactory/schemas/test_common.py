@@ -26,6 +26,16 @@ class TestCommonSchemas(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ResourcesDefinition(cpus="not-a-float")
 
+    def test_resources_definition_open_files(self):
+        """ Test ResourcesDefinition with open_files. """
+        model = ResourcesDefinition(open_files=65535)
+        self.assertEqual(model.open_files, 65535)
+
+    def test_resources_definition_invalid_open_files(self):
+        """ Test ResourcesDefinition rejects invalid open_files values. """
+        with self.assertRaises(ValidationError):
+            ResourcesDefinition(open_files=0)
+
     def test_resources_valid(self):
         """ Test valid Resources with nested reservations and limits. """
         data = {
@@ -65,16 +75,26 @@ class TestCommonSchemas(unittest.TestCase):
         data = {
             "replicas": 3,
             "resources": {
-                "reservations": {"cpus": 0.2, "memory": "128Mi"},
-                "limits": {"cpus": 0.5, "memory": "256Mi"}
+                "reservations": {
+                    "cpus": 0.2,
+                    "memory": "128Mi"
+                },
+                "limits": {
+                    "cpus": 0.5,
+                    "memory": "256Mi",
+                    "open_files": 65535
+                }
             },
             "placement": {
                 "constraints": ["node.labels.arch == amd64"]
             }
         }
+
         model = Deploy(**data)
+
         self.assertEqual(model.replicas, 3)
         self.assertEqual(model.resources.limits.cpus, 0.5)
+        self.assertEqual(model.resources.limits.open_files, 65535)
         self.assertEqual(model.placement.constraints[0], "node.labels.arch == amd64")
 
     def test_deploy_invalid_replicas(self):

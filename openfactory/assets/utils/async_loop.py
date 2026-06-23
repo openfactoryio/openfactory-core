@@ -50,3 +50,4 @@ class AsyncLoopThread:
         """
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join()
+        self.loop.close()

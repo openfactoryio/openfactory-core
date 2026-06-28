@@ -1096,6 +1096,23 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Should NOT attempt to load or deploy devices
         mock_get_devices_from_config_file.assert_not_called()
 
+    @patch("openfactory.openfactory_manager.get_devices_from_config_file")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.UNSSchema")
+    def test_deploy_devices_from_config_file_uns_schema_ofa_exception(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_devices_from_config_file
+    ):
+        """ Test that an OFAException while loading the UNS schema aborts deployment. """
+        mock_uns_schema_class.side_effect = OFAException("mocked error")
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.deploy_devices_from_config_file("dummy.yaml")
+
+        mock_user_notify.fail.assert_called_once_with("OpenFactory configuration error: mocked error")
+        mock_get_devices_from_config_file.assert_not_called()
+
     @patch('openfactory.openfactory_manager.get_devices_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
     @patch('openfactory.openfactory_manager.UNSSchema')
@@ -1219,6 +1236,23 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Assertions
         mock_get_apps_from_config_file.assert_called_once_with('dummy_config.yaml', mock_uns_instance)
         mock_user_notify.info.assert_not_called()
+
+    @patch("openfactory.openfactory_manager.get_apps_from_config_file")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.UNSSchema")
+    def test_deploy_apps_from_config_file_uns_schema_ofa_exception(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_apps_from_config_file
+    ):
+        """ Test that an OFAException while loading the UNS schema aborts deployment. """
+        mock_uns_schema_class.side_effect = OFAException("mocked error")
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.deploy_apps_from_config_file("dummy.yaml")
+
+        mock_user_notify.fail.assert_called_once_with("OpenFactory configuration error: mocked error")
+        mock_get_apps_from_config_file.assert_not_called()
 
     @patch('openfactory.openfactory_manager.deregister_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
@@ -1345,6 +1379,23 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Assertions
         mock_get_devices_from_config_file.assert_called_once_with("dummy_config.yaml", uns_schema=mock_uns_instance)
         self.manager.tear_down_device.assert_not_called()
+
+    @patch("openfactory.openfactory_manager.get_devices_from_config_file")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.UNSSchema")
+    def test_shut_down_devices_from_config_file_uns_schema_ofa_exception(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_devices_from_config_file
+    ):
+        """ Test that an OFAException while loading the UNS schema aborts shutdown. """
+        mock_uns_schema_class.side_effect = OFAException("mocked error")
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.shut_down_devices_from_config_file("dummy.yaml")
+
+        mock_user_notify.fail.assert_called_once_with("OpenFactory configuration error: mocked error")
+        mock_get_devices_from_config_file.assert_not_called()
 
     @patch('openfactory.openfactory_manager.deregister_device_connector')
     @patch('openfactory.openfactory_manager.build_connector')
@@ -1587,6 +1638,23 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         # No success message
         mock_user_notify.assert_not_called()
+
+    @patch("openfactory.openfactory_manager.get_apps_from_config_file")
+    @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.UNSSchema")
+    def test_shut_down_apps_from_config_file_uns_schema_ofa_exception(
+        self,
+        mock_uns_schema_class,
+        mock_user_notify,
+        mock_get_apps_from_config_file,
+    ):
+        """ Test that an OFAException while loading the UNS schema aborts shutdown. """
+        mock_uns_schema_class.side_effect = OFAException("mocked error")
+        manager = OpenFactoryManager(ksqlClient=MagicMock(), bootstrap_servers="mocked")
+        manager.shut_down_apps_from_config_file("dummy.yaml")
+
+        mock_user_notify.fail.assert_called_once_with("OpenFactory configuration error: mocked error")
+        mock_get_apps_from_config_file.assert_not_called()
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')

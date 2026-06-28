@@ -51,6 +51,7 @@ import re
 from typing import List, Dict, Any
 from pydantic import BaseModel, RootModel, model_validator
 from openfactory.utils.open_uris import open_ofa
+from openfactory.exceptions import OFAException
 import openfactory.config as config
 
 
@@ -205,6 +206,8 @@ class UNSSchema:
         Raises:
             ValueError: If the schema content does not conform to the expected UNS schema model.
         """
+        if not schema_yaml_file:
+            raise OFAException("No UNS schema defined. Did you set the environment variable OPENFACTORY_UNS_SCHEMA ?")
 
         with open_ofa(schema_yaml_file) as f:
             raw = yaml.safe_load(f)

@@ -4,6 +4,7 @@ import yaml
 import os
 from unittest import mock
 from openfactory.schemas.uns import UNSSchema
+from openfactory.exceptions import OFAException
 
 
 class TestUNSSchema(unittest.TestCase):
@@ -33,6 +34,17 @@ class TestUNSSchema(unittest.TestCase):
 
     def tearDown(self):
         os.remove(self.temp_file.name)
+
+    def test_init_no_schema_defined(self):
+        """ Test that an OFAException is raised when no UNS schema is configured. """
+
+        with self.assertRaises(OFAException) as cm:
+            UNSSchema(schema_yaml_file=None)
+
+        self.assertEqual(
+            str(cm.exception),
+            "No UNS schema defined. Did you set the environment variable OPENFACTORY_UNS_SCHEMA ?"
+        )
 
     def test_schema_model_validation_error_is_caught(self):
         """ Test that UNSSchema catches ValueError from UNSSchemaModel and re-raises it """

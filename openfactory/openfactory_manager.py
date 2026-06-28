@@ -327,6 +327,9 @@ class OpenFactoryManager(OpenFactory):
         except FileNotFoundError:
             user_notify.fail(f"The UNS schema '{config.OPENFACTORY_UNS_SCHEMA}' could not be found.")
             return
+        except OFAException as e:
+            user_notify.fail(f"OpenFactory configuration error: {e}")
+            return
 
         # load devices
         devices = get_devices_from_config_file(yaml_config_file, uns_schema)
@@ -380,6 +383,9 @@ class OpenFactoryManager(OpenFactory):
         except FileNotFoundError:
             user_notify.fail(f"The UNS schema '{config.OPENFACTORY_UNS_SCHEMA}' could not be found.")
             return
+        except OFAException as e:
+            user_notify.fail(f"OpenFactory configuration error: {e}")
+            return
 
         # load apps
         apps = get_apps_from_config_file(yaml_config_file, uns_schema)
@@ -412,6 +418,9 @@ class OpenFactoryManager(OpenFactory):
             return
         except FileNotFoundError:
             user_notify.fail(f"The UNS schema '{config.OPENFACTORY_UNS_SCHEMA}' could not be found.")
+            return
+        except OFAException as e:
+            user_notify.fail(f"OpenFactory configuration error: {e}")
             return
 
         devices = get_devices_from_config_file(yaml_config_file, uns_schema=uns_schema)
@@ -483,6 +492,9 @@ class OpenFactoryManager(OpenFactory):
             return
         except FileNotFoundError:
             user_notify.fail(f"The UNS schema '{config.OPENFACTORY_UNS_SCHEMA}' could not be found.")
+            return
+        except OFAException as e:
+            user_notify.fail(f"OpenFactory configuration error: {e}")
             return
 
         apps = get_apps_from_config_file(yaml_config_file, uns_schema)

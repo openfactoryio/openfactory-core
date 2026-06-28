@@ -182,7 +182,8 @@ class BaseAsset:
                 pass  # ignore exceptions from cancelled tasks
 
         # Stop the AsyncLoopThread
-        self.loop_thread.stop()
+        if self.loop_thread:
+            self.loop_thread.stop()
 
     def _get_mocked_attribute_by_id(self, target_id: str) -> AssetAttribute | None:
         """

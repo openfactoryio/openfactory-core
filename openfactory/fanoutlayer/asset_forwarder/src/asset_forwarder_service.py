@@ -52,6 +52,7 @@ The service exposes Prometheus metrics including:
 - Queue backlog.
 - Queue waiting time.
 - Message processing latency.
+- Kafka consume call rate.
 
 The Prometheus endpoint is exposed through the OpenFactory
 application framework.
@@ -96,6 +97,9 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         """
         super().__init__(*args, **kwargs)
 
+        # Consumer assignment flag
+        self.consumer_has_been_assigned = False
+
         # forwarder queue
         self.queue = asyncio.Queue(maxsize=int(os.getenv("ASSET_FORWARDER_QUEUE_SIZE", "10000")))
 
@@ -113,6 +117,31 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
 
         # Expose Prometheus metrics
         self.api.get(PROMETHEUS_METRICS_PATH)(forwarder_metrics.metrics_endpoint)
+
+    def _error_cb(self, err: KafkaError) -> None:
+        """
+        Handle asynchronous Kafka client errors.
+
+        Called by the underlying librdkafka client when an asynchronous
+        client-level error occurs. These errors are independent of message
+        consumption and may indicate connection failures, broker issues,
+        group coordination problems, or other internal client events.
+
+        This callback is intended for diagnostics and monitoring. It does
+        not receive message-specific errors, which are reported through
+        :meth:`Message.error()`.
+
+        Args:
+            err: Kafka client error reported by librdkafka.
+        """
+        self.logger.error(
+            "Kafka client error: code=%s name=%s fatal=%s retriable=%s message=%s",
+            err.code(),
+            err.name(),
+            err.fatal(),
+            err.retriable(),
+            err,
+        )
 
     def setup_consumer(self) -> None:
         """
@@ -145,6 +174,7 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
             "enable.auto.offset.store": False,
             "auto.commit.interval.ms": float(os.getenv("KAFKA_CONSUMER_COMMIT_INTERVAL_MS", "100")),
             "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest"),
+            "error_cb": self._error_cb,
         }
 
         self.consumer = Consumer(self.kafka_config)
@@ -173,20 +203,33 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         """
         Handle Kafka partition assignment and register metrics.
 
-        Called by the Kafka consumer during a rebalance when partitions
-        are assigned to this consumer instance.
+        Called by the Kafka consumer when partitions are assigned to this
+        consumer. The callback updates the consumer state, explicitly assigns
+        the partitions to the consumer, and registers the Prometheus metrics
+        endpoint.
         """
-        self.logger.info("Assigned: %s", partitions)
+        self.logger.info("Assigned partitions: %s", partitions)
+        self.consumer_has_been_assigned = True
 
         if not partitions:
             self.logger.critical("Kafka consumer was assigned zero partitions. "
-                                 "Are there too many forwarders running comapred to topic partions ?")
+                                 "Are there too many forwarders running compared to topic partitions ?")
             os._exit(1)
 
-        consumer.assign(partitions)
+        try:
+            consumer.assign(partitions)
+        except Exception as e:
+            self.logger.error("consumer.assign() failed. Exception=%s: %s", type(e).__name__, e, exc_info=True)
+            raise
 
-        # register Prometheus metrics
-        self.register_prometheus_metrics(metrics_port=4000, metrics_path=PROMETHEUS_METRICS_PATH)
+        try:
+            self.logger.info("Registering Prometheus metrics")
+            self.register_prometheus_metrics(metrics_port=4000, metrics_path=PROMETHEUS_METRICS_PATH)
+        except Exception as e:
+            self.logger.error("Failed to register Prometheus metrics. Exception=%s: %s", type(e).__name__, e, exc_info=True)
+            raise
+
+        self.logger.info("Leaving assign")
 
     def _on_revoke(self, consumer: Consumer, partitions: list[TopicPartition]) -> None:
         """
@@ -196,11 +239,28 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         are revoked from this consumer instance. Pending offsets are
         committed before ownership is transferred to another consumer.
         """
-        self.logger.info("Revoked: %s", partitions)
+        self.logger.info("Revoked partitions: %s", partitions)
+
         try:
             consumer.commit(asynchronous=False)
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.error("Commit failed. Exception=%s: %s", type(e).__name__, e, exc_info=True)
+
+    def _on_lost(self, consumer: Consumer, partitions: list[TopicPartition]) -> None:
+        """
+        Handle Kafka partition loss.
+
+        Called when the consumer loses ownership of one or more partitions.
+
+        Unlike ``_on_revoke()``, the consumer no longer owns these partitions,
+        so offsets must not be committed. The callback is used for diagnostics
+        only; recovery is handled by librdkafka.
+
+        Args:
+            consumer: Kafka consumer instance.
+            partitions: List of lost partitions.
+        """
+        self.logger.critical("Partitions lost: %s", partitions)
 
     def decode_message_value(self, raw_value: bytes | bytearray | str) -> dict[str, Any]:
         """
@@ -341,6 +401,7 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
                 try:
                     processing_time = asyncio.get_running_loop().time() - processing_start
                     forwarder_metrics.MESSAGE_PROCESSING_LATENCY.labels(forwarder=self.asset_uuid).observe(processing_time)
+                    forwarder_metrics.QUEUE_SIZE.labels(forwarder=self.asset_uuid).set(self.queue.qsize())
                 except Exception:
                     self.logger.exception("Failed to update processing latency metric")
                 self.queue.task_done()
@@ -349,12 +410,13 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         """
         Main service loop.
 
-        Starts worker tasks, subscribes to Kafka, consumes messages,
-        and queues them for asynchronous processing.
+        Starts the worker and Kafka watchdog tasks, subscribes to Kafka,
+        consumes messages, and queues them for asynchronous processing.
         """
 
         # worker task
         self.worker_task = asyncio.create_task(self.worker())
+        self.watchdog_task = asyncio.create_task(self.kafka_watchdog())
 
         def worker_done(task: asyncio.Task) -> None:
             """
@@ -370,13 +432,35 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
             if exc:
                 self.logger.exception("Worker task crashed", exc_info=exc)
 
+        def watchdog_done(task: asyncio.Task) -> None:
+            """
+            Log unexpected Kafka watchdog task failures.
+
+            If the consumer remains without a partition assignment beyond the
+            configured grace period, the process is terminated so that the
+            container runtime can restart it and force a fresh Kafka consumer
+            join.
+
+            Args:
+                task: Completed watchdog task.
+            """
+            try:
+                exc = task.exception()
+            except asyncio.CancelledError:
+                return
+            if exc:
+                self.logger.exception("Kafka watchdog task crashed", exc_info=exc)
+                os._exit(1)
+
         self.worker_task.add_done_callback(worker_done)
+        self.watchdog_task.add_done_callback(watchdog_done)
 
         # Kafka subscription
         self.consumer.subscribe(
             [self.kafka_topic],
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
+            on_lost=self._on_lost,
         )
 
         while True:
@@ -385,6 +469,7 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
                 num_messages=self.KAFKA_CONSUMER_BATCH_SIZE,
                 timeout=self.KAFKA_CONSUMER_TIME_OUT_MS / 1000.0,
             )
+            forwarder_metrics.KAFKA_CONSUME_CALLS.labels(forwarder=self.asset_uuid).inc()
 
             for msg in msgs:
 
@@ -419,6 +504,62 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
                     "queued_at": asyncio.get_running_loop().time(),
                 })
                 forwarder_metrics.QUEUE_SIZE.labels(forwarder=self.asset_uuid).set(self.queue.qsize())
+
+    async def kafka_watchdog(self) -> None:
+        """
+        Monitor the Kafka consumer health.
+
+        Periodically verifies that the consumer still owns at least one
+        partition. If the consumer remains without any partition assignment,
+        the process is terminated so that the container can be restarted.
+
+        A grace period is used because a temporary lack of assignment is
+        normal during consumer group rebalances.
+        """
+        self.logger.debug("Started Kafka Watchdog.")
+
+        check_interval = float(os.getenv("KAFKA_WATCHDOG_INTERVAL", "30"))
+        max_unassigned_time = float(os.getenv("KAFKA_WATCHDOG_TIMEOUT", "300"))
+
+        unassigned_since = None
+
+        while True:
+            await asyncio.sleep(check_interval)
+
+            if not self.consumer_has_been_assigned:
+                continue
+
+            try:
+                assignment = self.consumer.assignment()
+                self.logger.debug("Current assignment: %s", assignment)
+            except Exception as e:
+                self.logger.exception("Kafka watchdog failed. Exception=%s: %s", type(e).__name__, e)
+                os._exit(1)
+
+            if assignment:
+                if unassigned_since is not None:
+                    self.logger.info("Kafka consumer has received a partition assignment again.")
+                unassigned_since = None
+                self.consumer_has_been_assigned = True
+                continue
+
+            now = asyncio.get_running_loop().time()
+
+            if unassigned_since is None:
+                unassigned_since = now
+                self.logger.warning(
+                    "Kafka consumer has no partition assignment. "
+                    "Waiting for rebalance..."
+                )
+                continue
+
+            if now - unassigned_since >= max_unassigned_time:
+                self.logger.critical(
+                    "Kafka consumer has had no partition assignment for %.0f seconds. "
+                    "Terminating so the container can be restarted.",
+                    max_unassigned_time,
+                )
+                os._exit(1)
 
 
 if __name__ == "__main__":

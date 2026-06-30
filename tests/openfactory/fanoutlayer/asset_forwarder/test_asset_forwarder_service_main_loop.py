@@ -35,6 +35,7 @@ class TestAssetForwarderMainLoop(unittest.IsolatedAsyncioTestCase):
             [self.service.kafka_topic],
             on_assign=self.service._on_assign,
             on_revoke=self.service._on_revoke,
+            on_lost=self.service._on_lost,
         )
 
     @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.forwarder_metrics")
@@ -129,6 +130,7 @@ class TestAssetForwarderMainLoop(unittest.IsolatedAsyncioTestCase):
 
         mock_metrics.KAFKA_ERRORS.labels.assert_called_once_with(forwarder=self.service.asset_uuid)
         mock_metrics.KAFKA_ERRORS.labels.return_value.inc.assert_called_once()
+        self.service.logger.error.assert_called_once()
 
     @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.os._exit")
     @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.forwarder_metrics")
@@ -155,13 +157,39 @@ class TestAssetForwarderMainLoop(unittest.IsolatedAsyncioTestCase):
 
         mock_metrics.KAFKA_ERRORS.labels.return_value.inc.assert_called_once()
         mock_exit.assert_called_once_with(1)
+        self.service.logger.critical.assert_called_once()
 
     @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.asyncio.create_task")
-    async def test_async_main_loop_starts_worker(self, mock_create_task):
-        """ Test worker task is started when main loop starts. """
+    async def test_async_main_loop_starts_worker_and_watchdog(self, mock_create_task):
+        """ Test worker and Kafka watchdog tasks are started. """
+
+        def create_task_side_effect(coro):
+            coro.close()  # Prevent "coroutine was never awaited" warnings.
+            return MagicMock()
+
+        mock_create_task.side_effect = create_task_side_effect
+
         self.service.consumer.consume.side_effect = asyncio.CancelledError()
 
         with self.assertRaises(asyncio.CancelledError):
             await self.service.async_main_loop()
 
-        mock_create_task.assert_called_once()
+        self.assertEqual(mock_create_task.call_count, 2)
+
+        self.assertEqual(mock_create_task.call_args_list[0].args[0].cr_code.co_name, "worker")
+        self.assertEqual(mock_create_task.call_args_list[1].args[0].cr_code.co_name, "kafka_watchdog")
+
+    @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.forwarder_metrics")
+    async def test_async_main_loop_increments_consume_calls_metric(self, mock_metrics):
+        """ Test Kafka consume call metric is incremented. """
+
+        self.service.worker = AsyncMock()
+        self.service.consumer.consume.side_effect = [
+            [],
+            asyncio.CancelledError(),
+        ]
+
+        with self.assertRaises(asyncio.CancelledError):
+            await self.service.async_main_loop()
+
+        self.assertEqual(mock_metrics.KAFKA_CONSUME_CALLS.labels.return_value.inc.call_count, 1)

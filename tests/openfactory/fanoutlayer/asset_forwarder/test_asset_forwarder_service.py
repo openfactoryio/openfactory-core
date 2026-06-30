@@ -268,10 +268,7 @@ class TestAssetForwarderService(unittest.TestCase):
 
         self.service._on_assign(consumer, partitions)
 
-        self.service.logger.info.assert_called_once_with(
-            "Assigned: %s",
-            partitions
-        )
+        self.service.logger.info.assert_any_call("Assigned partitions: %s", partitions)
 
     def test_on_assign(self):
         """ Test partition assignment callback. """
@@ -299,12 +296,39 @@ class TestAssetForwarderService(unittest.TestCase):
 
         self.service.logger.critical.assert_called_once_with(
             "Kafka consumer was assigned zero partitions. "
-            "Are there too many forwarders running comapred to topic partions ?"
+            "Are there too many forwarders running compared to topic partitions ?"
         )
 
         mock_exit.assert_called_once_with(1)
         consumer.assign.assert_not_called()
         self.service.register_prometheus_metrics.assert_not_called()
+
+    def test_on_assign_assign_failure(self):
+        """ Test assign failure is logged and re-raised. """
+        consumer = MagicMock()
+        consumer.assign.side_effect = RuntimeError("boom")
+
+        self.service.register_prometheus_metrics = MagicMock()
+
+        with self.assertRaises(RuntimeError):
+            self.service._on_assign(consumer, [MagicMock()])
+
+        self.service.logger.error.assert_called_once()
+        self.service.register_prometheus_metrics.assert_not_called()
+
+    def test_on_assign_register_metrics_failure(self):
+        """ Test metrics registration failure is logged and re-raised. """
+        consumer = MagicMock()
+
+        self.service.register_prometheus_metrics = MagicMock(
+            side_effect=RuntimeError("boom")
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.service._on_assign(consumer, [MagicMock()])
+
+        consumer.assign.assert_called_once()
+        self.service.logger.error.assert_called_once()
 
     def test_on_revoke(self):
         """ Test partition revocation callback. """
@@ -322,7 +346,7 @@ class TestAssetForwarderService(unittest.TestCase):
 
         self.service._on_revoke(consumer, partitions)
 
-        self.service.logger.info.assert_called_once_with("Revoked: %s", partitions)
+        self.service.logger.info.assert_called_once_with("Revoked partitions: %s", partitions)
 
     def test_on_revoke_commit_failure(self):
         """ Test that revoke continues if commit fails. """
@@ -330,3 +354,40 @@ class TestAssetForwarderService(unittest.TestCase):
         consumer.commit.side_effect = Exception()
 
         self.service._on_revoke(consumer, [])
+
+        self.service.logger.error.assert_called_once_with(
+            "Commit failed. Exception=%s: %s",
+            "Exception",
+            consumer.commit.side_effect,
+            exc_info=True,
+        )
+
+    def test_on_lost_logs(self):
+        """ Test partition loss logging. """
+        consumer = MagicMock()
+        partitions = [MagicMock()]
+
+        self.service._on_lost(consumer, partitions)
+
+        self.service.logger.critical.assert_called_once_with("Partitions lost: %s", partitions)
+
+    def test_error_cb_logs(self):
+        """ Test Kafka client error callback logging. """
+
+        err = MagicMock()
+        err.code.return_value = -195
+        err.name.return_value = "_TRANSPORT"
+        err.fatal.return_value = False
+        err.retriable.return_value = True
+        err.__str__.return_value = "connection refused"
+
+        self.service._error_cb(err)
+
+        self.service.logger.error.assert_called_once_with(
+            "Kafka client error: code=%s name=%s fatal=%s retriable=%s message=%s",
+            -195,
+            "_TRANSPORT",
+            False,
+            True,
+            err,
+        )

@@ -36,6 +36,13 @@ groups:
           component: "fan_out_layer"
           role: "forwarder"
 
+      # Kafka consume() calls per forwarder (calls/sec)
+      - record: forwarder:kafka_consume_calls_rate
+        expr: rate(asset_forwarder_kafka_consume_calls_total[1m])
+        labels:
+          component: "fan_out_layer"
+          role: "forwarder"
+
       # Message throughput per NATS Cluster (messages/sec)
       - record: forwarder:messages_published_rate
         expr: rate(asset_forwarder_nats_messages_published_total[1m])

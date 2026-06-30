@@ -106,6 +106,13 @@ QUEUE_SIZE_HISTOGRAM = Histogram(
     labelnames=("forwarder",),
 )
 
+# Kafka consume calls
+KAFKA_CONSUME_CALLS = Counter(
+    "asset_forwarder_kafka_consume_calls_total",
+    "Total number of completed Kafka consume() calls",
+    ["forwarder"]
+)
+
 
 def metrics_endpoint() -> Response:
     """

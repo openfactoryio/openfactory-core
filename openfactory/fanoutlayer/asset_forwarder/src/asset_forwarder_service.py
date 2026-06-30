@@ -201,7 +201,6 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
             consumer.commit(asynchronous=False)
         except Exception:
             pass
-        consumer.unassign()
 
     def decode_message_value(self, raw_value: bytes | bytearray | str) -> dict[str, Any]:
         """

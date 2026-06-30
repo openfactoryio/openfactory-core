@@ -314,7 +314,6 @@ class TestAssetForwarderService(unittest.TestCase):
         self.service._on_revoke(consumer, partitions)
 
         consumer.commit.assert_called_once_with(asynchronous=False)
-        consumer.unassign.assert_called_once()
 
     def test_on_revoke_logs(self):
         """ Test partition revocation logging. """
@@ -331,5 +330,3 @@ class TestAssetForwarderService(unittest.TestCase):
         consumer.commit.side_effect = Exception()
 
         self.service._on_revoke(consumer, [])
-
-        consumer.unassign.assert_called_once()

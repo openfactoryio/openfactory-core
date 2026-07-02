@@ -15,6 +15,9 @@ class _HTTPTestApp(OpenFactoryFastAPIApp):
         # expose OFA app for router-style access if needed
         self.api.state.ofa_app = self
 
+        # expose prometheus metrics
+        self.expose_metrics()
+
         @self.api.get("/")
         async def root():
             return {"status": "ok"}
@@ -40,10 +43,15 @@ class TestOpenFactoryFastAPIAppHTTP(unittest.TestCase):
         self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
 
+        self.register_metrics_patcher = patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
+        self.mock_register_metrics = self.register_metrics_patcher.start()
+        self.addCleanup(self.register_metrics_patcher.stop)
+
         self.app = _HTTPTestApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock",
-            asset_router_url="mock"
+            asset_router_url="mock",
+            test_mode=True
         )
 
         self.client = TestClient(self.app.api)
@@ -61,3 +69,9 @@ class TestOpenFactoryFastAPIAppHTTP(unittest.TestCase):
     def test_invalid_route(self):
         response = self.client.get("/unknown")
         self.assertEqual(response.status_code, 404)
+
+    def test_metrics_endpoint(self):
+        """ Should expose Prometheus metrics. """
+        response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/plain", response.headers["content-type"])

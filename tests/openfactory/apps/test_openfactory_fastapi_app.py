@@ -50,6 +50,69 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
 
         self.assertTrue(hasattr(app, "called"))
 
+    @patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
+    def test_expose_metrics_registers_route(self, mock_register):
+        """ Should register the Prometheus metrics endpoint. """
+
+        app = OpenFactoryFastAPIApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            test_mode=True
+        )
+
+        app.expose_metrics()
+
+        paths = [route.path for route in app.api.routes]
+        self.assertIn("/metrics", paths)
+        mock_register.assert_called_once_with(
+            metrics_port=4000,
+            metrics_path="/metrics"
+        )
+
+    @patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
+    def test_expose_metrics_is_idempotent(self, mock_register):
+        """ Calling expose_metrics twice should have no effect. """
+
+        app = OpenFactoryFastAPIApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            test_mode=True
+        )
+
+        app.expose_metrics()
+        app.expose_metrics()
+
+        paths = [
+            route.path
+            for route in app.api.routes
+            if route.path == "/metrics"
+        ]
+
+        self.assertEqual(len(paths), 1)
+        mock_register.assert_called_once()
+
+    @patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
+    def test_expose_metrics_rejects_existing_route(self, mock_register):
+        """ Should reject exposing metrics on an existing route. """
+
+        app = OpenFactoryFastAPIApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            test_mode=True
+        )
+
+        @app.api.get("/metrics")
+        async def metrics():
+            return {}
+
+        with self.assertRaisesRegex(ValueError, "A route is already registered"):
+            app.expose_metrics()
+
+        mock_register.assert_not_called()
+
 
 class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
     """

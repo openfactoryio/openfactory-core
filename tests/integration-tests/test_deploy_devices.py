@@ -43,8 +43,8 @@ class TestDeployDevices(TestCase):
         ]
         actual = sensor.attributes()
         self.assertCountEqual(actual, expected_attributes, 'The attributes of [TEMP-001] are not as expected')
-        self.assertEqual(sensor.references_above_uuid(), [], 'The references above of [TEMP-001] are not as expected')
-        self.assertCountEqual(sensor.references_below_uuid(), ['TEMP-001-PRODUCER', 'TEMP-001-AGENT'], 'The references below of [TEMP-001] are not as expected')
+        self.assertEqual(sensor.get_references_above_uuid(), [], 'The references above of [TEMP-001] are not as expected')
+        self.assertCountEqual(sensor.get_references_below_uuid(), ['TEMP-001-PRODUCER', 'TEMP-001-AGENT'], 'The references below of [TEMP-001] are not as expected')
 
         agent = Asset('TEMP-001-AGENT', ksqlClient=ksql.client, bootstrap_servers=config.KAFKA_BROKER)
         self.assertEqual(agent.agent_avail.value, 'AVAILABLE', 'Agent of [TEMP-001] is not available as it should')
@@ -91,8 +91,8 @@ class TestDeployDevices(TestCase):
         ]
         actual = sensor.attributes()
         self.assertCountEqual(actual, expected_attributes, 'The attributes of [TEMP-002] are not as expected')
-        self.assertEqual(sensor.references_above_uuid(), [], 'The references above of [TEMP-002] are not as expected')
-        self.assertCountEqual(sensor.references_below_uuid(), ['TEMP-002-PRODUCER', 'TEMP-002-AGENT'], 'The references below of [TEMP-002] are not as expected')
+        self.assertEqual(sensor.get_references_above_uuid(), [], 'The references above of [TEMP-002] are not as expected')
+        self.assertCountEqual(sensor.get_references_below_uuid(), ['TEMP-002-PRODUCER', 'TEMP-002-AGENT'], 'The references below of [TEMP-002] are not as expected')
 
         agent = Asset('TEMP-002-AGENT', ksqlClient=ksql.client, bootstrap_servers=config.KAFKA_BROKER)
         self.assertEqual(agent.agent_avail.value, 'AVAILABLE', 'Agent of [TEMP-002] is not available as it should')

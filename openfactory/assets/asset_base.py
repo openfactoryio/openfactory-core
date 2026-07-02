@@ -596,7 +596,7 @@ class BaseAsset:
         """
         raise NotImplementedError("Subclasses must implement _get_reference_list()")
 
-    def references_above_uuid(self) -> List[str]:
+    def get_references_above_uuid(self) -> List[str]:
         """
         Retrieves a list of asset-references of assets above the current asset.
 
@@ -605,7 +605,7 @@ class BaseAsset:
         """
         return self._get_reference_list(direction="above", as_assets=False)
 
-    def references_above(self) -> List[Self]:
+    def get_references_above(self) -> List[Self]:
         """
         Retrieves a list of assets above the current asset.
 
@@ -614,7 +614,7 @@ class BaseAsset:
         """
         return self._get_reference_list(direction="above", as_assets=True)
 
-    def references_below_uuid(self) -> List[str]:
+    def get_references_below_uuid(self) -> List[str]:
         """
         Retrieves a list of asset-references below the current asset.
 
@@ -623,7 +623,7 @@ class BaseAsset:
         """
         return self._get_reference_list(direction="below", as_assets=False)
 
-    def references_below(self) -> List[Self]:
+    def get_references_below(self) -> List[Self]:
         """
         Retrieves a list of assets below the current asset.
 

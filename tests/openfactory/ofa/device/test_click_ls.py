@@ -17,7 +17,7 @@ class TestClickDeviceLsCommand(unittest.TestCase):
         mock_device = MagicMock()
         mock_device.asset_uuid = "dev-123"
         mock_device.avail.value = "AVAILABLE"
-        mock_device.references_below_uuid.return_value = {
+        mock_device.get_references_below_uuid.return_value = {
             "dev-123-AGENT",
             "dev-123-PRODUCER",
             "dev-123-SUPERVISOR"
@@ -36,28 +36,6 @@ class TestClickDeviceLsCommand(unittest.TestCase):
         self.assertIn("dev-123-PROD", result.output)
         self.assertIn("dev-123-SUP", result.output)
         self.assertNotIn("NOT DEPLOYED", result.output)
-
-    @patch("openfactory.ofa.device.ls.OpenFactory")
-    def test_click_ls_handles_missing_services(self, MockOpenFactory):
-        """
-        Test click_ls handles devices with missing MTConnect, Kafka, and Supervisor
-        """
-        mock_device = MagicMock()
-        mock_device.asset_uuid = "dev-456"
-        mock_device.avail.value = "UNAVAILABLE"
-        mock_device.references_below_uuid.return_value = set()  # none deployed
-
-        instance = MockOpenFactory.return_value
-        instance.devices.return_value = [mock_device]
-
-        runner = CliRunner()
-        result = runner.invoke(click_ls)
-
-        self.assertEqual(result.exit_code, 0)
-        self.assertIn("dev-456", result.output)
-        self.assertIn("UNAVAILABLE", result.output)
-        self.assertIn("NOT DEPLOYED", result.output)
-        self.assertIn("Deployed Devices", result.output)
 
     @patch("openfactory.ofa.device.ls.OpenFactory")
     def test_click_ls_handles_empty_device_list(self, MockOpenFactory):

@@ -40,21 +40,21 @@ def click_ls() -> None:
 
         # MTConnect Agent
         agent_id = f"{dev.asset_uuid}-AGENT"
-        if agent_id in dev.references_below_uuid():
+        if agent_id in dev.get_references_below_uuid():
             agent_status = Text(agent_id, style="green")
         else:
             agent_status = Text("NOT DEPLOYED", style="bold red")
 
         # Kafka Producer
         prod_id = f"{dev.asset_uuid}-PRODUCER"
-        if prod_id in dev.references_below_uuid():
+        if prod_id in dev.get_references_below_uuid():
             prod_status = Text(prod_id, style="green")
         else:
             prod_status = Text("NOT DEPLOYED", style="bold red")
 
         # Supervisor
         sup_id = f"{dev.asset_uuid}-SUPERVISOR"
-        if sup_id in dev.references_below_uuid():
+        if sup_id in dev.get_references_below_uuid():
             sup_status = Text(sup_id, style="green")
         else:
             sup_status = Text("NOT DEPLOYED", style="bold red")

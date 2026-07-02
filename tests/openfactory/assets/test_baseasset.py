@@ -566,15 +566,15 @@ class TestBaseAsset(TestCase):
         with self.assertRaises(NotImplementedError):
             asset._get_reference_list('above')
 
-    def test_references_above_uuid_calls_get_reference_list(self, MockAssetProducer):
-        """ Test references_above_uuid() calls _get_reference_list with direction='above' and as_assets=False """
+    def test_get_references_above_uuid_calls_get_reference_list(self, MockAssetProducer):
+        """ Test get_references_above_uuid() calls _get_reference_list with direction='above' and as_assets=False """
 
         asset = ValidAsset("uuid-123", MagicMock())
 
         # Replace _get_reference_list with a MagicMock
         asset._get_reference_list = MagicMock(return_value=["mocked-asset"])
 
-        result = asset.references_above_uuid()
+        result = asset.get_references_above_uuid()
 
         # Assert the method was called with correct parameters
         asset._get_reference_list.assert_called_once_with(direction="above", as_assets=False)
@@ -582,15 +582,15 @@ class TestBaseAsset(TestCase):
         # Assert the return value is passed through
         self.assertEqual(result, ["mocked-asset"])
 
-    def test_references_above_calls_get_reference_list(self, MockAssetProducer):
-        """ Test references_above() calls _get_reference_list with direction='above' and as_assets=True """
+    def test_get_references_above_calls_get_reference_list(self, MockAssetProducer):
+        """ Test get_references_above() calls _get_reference_list with direction='above' and as_assets=True """
 
         asset = ValidAsset("uuid-123", MagicMock())
 
         # Replace _get_reference_list with a MagicMock
         asset._get_reference_list = MagicMock(return_value=["mocked-asset"])
 
-        result = asset.references_above()
+        result = asset.get_references_above()
 
         # Assert the method was called with correct parameters
         asset._get_reference_list.assert_called_once_with(direction="above", as_assets=True)
@@ -598,15 +598,15 @@ class TestBaseAsset(TestCase):
         # Assert the return value is passed through
         self.assertEqual(result, ["mocked-asset"])
 
-    def test_references_below_uuid_calls_get_reference_list(self, MockAssetProducer):
-        """ Test references_below_uuid() calls _get_reference_list with direction='below' and as_assets=False """
+    def test_get_references_below_uuid_calls_get_reference_list(self, MockAssetProducer):
+        """ Testget_ references_below_uuid() calls _get_reference_list with direction='below' and as_assets=False """
 
         asset = ValidAsset("uuid-123", MagicMock())
 
         # Replace _get_reference_list with a MagicMock
         asset._get_reference_list = MagicMock(return_value=["mocked-asset"])
 
-        result = asset.references_below_uuid()
+        result = asset.get_references_below_uuid()
 
         # Assert the method was called with correct parameters
         asset._get_reference_list.assert_called_once_with(direction="below", as_assets=False)
@@ -614,15 +614,15 @@ class TestBaseAsset(TestCase):
         # Assert the return value is passed through
         self.assertEqual(result, ["mocked-asset"])
 
-    def test_references_below_calls_get_reference_list(self, MockAssetProducer):
-        """ Test references_below() calls _get_reference_list with direction='below' and as_assets=True """
+    def test_get_references_below_calls_get_reference_list(self, MockAssetProducer):
+        """ Test get_references_below() calls _get_reference_list with direction='below' and as_assets=True """
 
         asset = ValidAsset("uuid-123", MagicMock())
 
         # Replace _get_reference_list with a MagicMock
         asset._get_reference_list = MagicMock(return_value=["mocked-asset"])
 
-        result = asset.references_below()
+        result = asset.get_references_below()
 
         # Assert the method was called with correct parameters
         asset._get_reference_list.assert_called_once_with(direction="below", as_assets=True)

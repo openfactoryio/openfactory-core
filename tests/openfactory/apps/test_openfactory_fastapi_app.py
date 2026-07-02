@@ -245,3 +245,40 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
 
             _, kwargs = mock_config.call_args
             self.assertEqual(kwargs["port"], 5555)
+
+    @patch("openfactory.apps.ofa_fastapi_app.uvicorn.Server")
+    @patch("openfactory.apps.ofa_fastapi_app.uvicorn.Config")
+    async def test_run_fastapi_logs_http_requests_by_default(self, mock_config, mock_server):
+        """ Should enable HTTP request logging by default. """
+
+        app = OpenFactoryFastAPIApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        mock_server.return_value.serve = AsyncMock()
+
+        await app._run_fastapi()
+
+        _, kwargs = mock_config.call_args
+        self.assertTrue(kwargs["access_log"])
+
+    @patch("openfactory.apps.ofa_fastapi_app.uvicorn.Server")
+    @patch("openfactory.apps.ofa_fastapi_app.uvicorn.Config")
+    async def test_run_fastapi_disables_http_request_logs(self, mock_config, mock_server):
+        """ Should disable HTTP request logging when requested. """
+
+        app = OpenFactoryFastAPIApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            log_http_requests=False
+        )
+
+        mock_server.return_value.serve = AsyncMock()
+
+        await app._run_fastapi()
+
+        _, kwargs = mock_config.call_args
+        self.assertFalse(kwargs["access_log"])

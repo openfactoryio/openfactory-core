@@ -2,6 +2,8 @@ import asyncio
 import os
 import uvicorn
 import logging
+from fastapi import Response
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
 from openfactory.kafka import KSQLDBClient
 from openfactory.apps import OpenFactoryApp
 
@@ -127,6 +129,41 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
                 ofa_app.move_axis(x, y)
                 return {"message": "moving"}
 
+    Prometheus metrics can be exposed by calling :meth:`expose_metrics`.
+    By default, the global Prometheus registry is exposed, allowing both
+    OpenFactory metrics and application-defined metrics to be scraped
+    through the same endpoint.
+
+    .. admonition:: Exposing Prometheus metrics
+
+        .. code-block:: python
+
+            import asyncio
+            from prometheus_client import Counter
+            from openfactory.apps import OpenFactoryFastAPIApp
+
+            REQUESTS = Counter(
+                "requests_total",
+                "Number of processed requests"
+            )
+
+            class DemoFastAPIApp(OpenFactoryFastAPIApp):
+
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.expose_metrics()
+
+                async def async_main_loop(self):
+                    while True:
+                        REQUESTS.inc()
+                        await asyncio.sleep(1)
+
+            app = DemoFastAPIApp(
+                ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL", "http://localhost:8088")),
+                bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092"),
+            )
+            app.run()
+
     Note:
       - The FastAPI application is accessible via :attr:`api` and behaves like a standard FastAPI instance.
       - Route definitions can be added either directly using :attr:`api` or via :class:`api.include_router() <fastapi.FastAPI>`.
@@ -140,6 +177,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         - :class:`openfactory.apps.ofaapp.OpenFactoryApp`
         - :class:`fastapi.FastAPI`
         - `FastAPI documentation <https://fastapi.tiangolo.com/>`_
+        - `Prometheus Python Client documentation <https://prometheus.github.io/client_python/>`_
     """
 
     def __init__(
@@ -232,6 +270,51 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
             of overriding this method.
         """
         pass
+
+    def expose_metrics(self, path: str = "/metrics", registry: CollectorRegistry = REGISTRY) -> None:
+        """
+        Expose Prometheus metrics through the embedded FastAPI application.
+
+        Registers an HTTP endpoint that returns all metrics contained in the
+        specified Prometheus registry using the standard Prometheus exposition
+        format.
+
+        Calling this method also registers the metrics endpoint with the OpenFactory platform,
+        allowing other OpenFactory components to discover and scrape it automatically.
+
+        By default, the global Prometheus registry is exposed, allowing both OpenFactory metrics
+        and user-defined Prometheus metrics to be scraped through the same endpoint.
+
+        This method is idempotent. Calling it multiple times with the same
+        ``path`` has no effect.
+
+        Args:
+            path: URL path where metrics are exposed. Defaults to ``"/metrics"``.
+            registry: Prometheus registry to expose. Defaults to the global Prometheus registry.
+
+        Raises:
+            ValueError:
+                If another endpoint is already registered for ``path``.
+        """
+
+        # Already registered by this method -> do nothing
+        if getattr(self, "_metrics_path", None) == path:
+            return
+
+        # Prevent overriding an existing route
+        for route in self.api.routes:
+            if getattr(route, "path", None) == path:
+                raise ValueError(f"A route is already registered for '{path}'.")
+
+        @self.api.get(path)
+        async def metrics():
+            return Response(
+                generate_latest(registry),
+                media_type=CONTENT_TYPE_LATEST,
+            )
+
+        self._metrics_path = path
+        self.register_prometheus_metrics(metrics_port=int(os.getenv("PORT", "4000")), metrics_path=path)
 
     async def _run_fastapi(self) -> None:
         """

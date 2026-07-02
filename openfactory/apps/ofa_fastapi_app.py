@@ -32,6 +32,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         - The server listens on all network interfaces (``0.0.0.0``).
         - The listening port is defined by the ``PORT`` environment variable, or defaults to ``4000`` if unset.
         - The server log level is aligned with the OpenFactory application logger.
+        - HTTP access logging can be enabled or disabled using the ``log_http_requests`` constructor parameter.
 
     Attributes:
         api (fastapi.FastAPI): FastAPI application instance attached to the OpenFactory app.
@@ -147,6 +148,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         bootstrap_servers: str | None = None,
         asset_router_url: str | None = None,
         loglevel: str = "INFO",
+        log_http_requests: bool = True,
         test_mode: bool = False,
     ) -> None:
         """
@@ -162,6 +164,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
             bootstrap_servers: Kafka bootstrap server address.
             asset_router_url: Asset Router URL.
             loglevel: Logging level (e.g., ``INFO``, ``DEBUG``).
+            log_http_requests: Enables logging of incoming HTTP requests handled by the embedded FastAPI server.
             test_mode: Enables test mode (disables live Kafka/ksql interaction).
 
         See also:
@@ -173,6 +176,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
                          loglevel=loglevel,
                          test_mode=test_mode)
 
+        self.log_http_requests = log_http_requests
         self._shutdown_event = asyncio.Event()
 
         # OPENFACTORY_ROOT_PATH is set by the OpenFactory deployment tool when the app is
@@ -242,6 +246,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
 
         Note:
             - The log level of the server is aligned with the OpenFactory application logger.
+            - Logging of incoming HTTP requests is controlled by the ``log_http_requests`` constructor parameter.
             - This method is intended for internal use and is called by :meth:`async_run`.
         """
         log_level = logging.getLevelName(self.logger.level).lower()
@@ -250,7 +255,8 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
             self.api,
             host="0.0.0.0",
             port=int(os.getenv("PORT", "4000")),
-            log_level=log_level
+            log_level=log_level,
+            access_log=self.log_http_requests
         )
         self._uvicorn_server = uvicorn.Server(config)
         await self._uvicorn_server.serve()

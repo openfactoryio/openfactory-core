@@ -161,7 +161,7 @@ class TestKSQLDBClient(unittest.TestCase):
             {"id": 1, "value": "a"},
             {"id": 2, "value": "b"}
         ]
-        assert result == expected_result
+        self.assertEqual(result, expected_result)
 
         # Verify _request was called correctly
         mock_request.assert_called_once_with(
@@ -229,6 +229,7 @@ class TestKSQLDBClient(unittest.TestCase):
 
     @patch("httpx.Client.request")
     def test_request_retries_on_failure(self, mock_request):
+        """ Test that failed requests are retried. """
         mock_request.side_effect = [httpx.RequestError("Connection failed"), MagicMock(status_code=200)]
         result = self.client.info()
         self.assertIsNotNone(result)
@@ -236,6 +237,7 @@ class TestKSQLDBClient(unittest.TestCase):
 
     @patch("httpx.Client.request")
     def test_request_fails_after_max_retries(self, mock_request):
+        """ Test that an exception is raised after exhausting retries. """
         mock_request.side_effect = httpx.RequestError("Connection failed")
         with self.assertRaises(KSQLDBClientException):
             self.client.info()
@@ -261,3 +263,174 @@ class TestKSQLDBClient(unittest.TestCase):
         mock_getsignal.assert_any_call(signal.SIGTERM)
         mock_signal.assert_any_call(signal.SIGINT, client._handle_exit)
         mock_signal.assert_any_call(signal.SIGTERM, client._handle_exit)
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_info_records_completed_request(self, mock_request, mock_completed):
+        """ Test that info() records completion of a successful request. """
+        mock_response = MagicMock()
+        mock_response.json.return_value = {}
+        mock_request.return_value = mock_response
+
+        self.client.info()
+
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_streams_records_completed_request(self, mock_request, mock_completed):
+        """ Test that streams() records completion of a successful request. """
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"streams": []}]
+        mock_request.return_value = mock_response
+
+        self.client.streams()
+
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_tables_records_completed_request(self, mock_request, mock_completed):
+        """ Test that tables() records completion of a successful request. """
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"tables": []}]
+        mock_request.return_value = mock_response
+
+        self.client.tables()
+
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_get_kafka_topic_records_completed_request(self, mock_request, mock_completed):
+        """ Test that get_kafka_topic() records completion of a successful request. """
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = [
+            {"sourceDescription": {"topic": "test"}}
+        ]
+        mock_request.return_value = mock_response
+
+        self.client.get_kafka_topic("STREAM")
+
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_statement_query_records_completed_request(self, mock_request, mock_completed):
+        """ Test that statement_query() records completion of a successful request. """
+        mock_request.return_value = MagicMock()
+        self.client.statement_query("SHOW STREAMS;")
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_query_records_completed_request(self, mock_request, mock_completed):
+        """ Test that query() records completion of a successful request. """
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.read.return_value = (
+            b'{"columnNames":["id","value"]}\n'
+            b'[1,"a"]\n'
+            b'[2,"b"]\n'
+        )
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_response
+        mock_request.return_value = mock_context
+
+        self.client.query("SELECT * FROM test_table;")
+
+        mock_completed.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request_completed")
+    @patch("openfactory.kafka.ksql.KSQLDBClient._request")
+    def test_insert_into_stream_records_completed_request(self, mock_request, mock_completed):
+        """ Test that insert_into_stream() records completion of a successful request. """
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.iter_bytes.return_value = iter([])
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_response
+        mock_request.return_value = mock_context
+
+        self.client.insert_into_stream("STREAM", [])
+
+        mock_completed.assert_called_once()
+
+    def test_request_completed_recycles_client(self):
+        """ Test that the HTTP client is recycled after the configured number of requests. """
+
+        old_client = MagicMock()
+        new_client = MagicMock()
+
+        self.client._client = old_client
+        self.client._create_client = MagicMock(return_value=new_client)
+
+        self.client._request_count = (
+            self.client._max_requests_per_connection - 1
+        )
+
+        self.client._request_completed()
+
+        old_client.close.assert_called_once()
+        self.client._create_client.assert_called_once()
+
+        self.assertIs(self.client._client, new_client)
+        self.assertEqual(self.client._request_count, 0)
+
+    def test_close_closes_http_client(self):
+        """ Test that close() closes the HTTP client. """
+
+        mock_client = MagicMock()
+        self.client._client = mock_client
+
+        self.client.close()
+
+        mock_client.close.assert_called_once()
+        self.assertIsNone(self.client._client)
+
+    def test_context_manager(self):
+        """ Test context manager support. """
+
+        client = KSQLDBClient(self.ksqldb_url)
+        client.close = MagicMock()
+
+        with client as c:
+            self.assertIs(c, client)
+
+        client.close.assert_called_once()
+
+    @patch("openfactory.kafka.ksql.signal.getsignal")
+    def test_handle_exit(self, mock_getsignal):
+        """ Test graceful shutdown on termination signal. """
+
+        self.client.close = MagicMock()
+        self.client.old_sigint = None
+        self.client.old_sigterm = None
+
+        with self.assertRaises(SystemExit):
+            self.client._handle_exit(signal.SIGINT, None)
+
+        self.client.close.assert_called_once()
+
+    def test_request_completed_before_threshold(self):
+        """ Test that the HTTP client is not recycled before the threshold. """
+
+        old_client = MagicMock()
+
+        self.client._client = old_client
+        self.client._create_client = MagicMock()
+
+        self.client._request_count = 0
+
+        self.client._request_completed()
+
+        old_client.close.assert_not_called()
+        self.client._create_client.assert_not_called()
+        self.assertEqual(self.client._request_count, 1)

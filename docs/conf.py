@@ -49,6 +49,7 @@ nitpick_ignore = [
     ('py:class', '_asyncio.Future'),
     ('py:class', 'FieldInfo'),
     ('py:class', 'NoneType'),
+    ("py:class", "httpx.Response"),
 ]
 
 templates_path = ['_templates']

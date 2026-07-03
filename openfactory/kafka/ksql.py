@@ -5,9 +5,13 @@ import time
 import atexit
 import signal
 import httpx
+from typing import Any
 from urllib.parse import urljoin
 from openfactory.setup_logging import configure_prefixed_logger, setup_third_party_loggers
 import openfactory.config as Config
+
+
+DEFAULT_MAX_REQUESTS_PER_CONNECTION = 1000
 
 
 class KSQLDBClientException(Exception):
@@ -66,16 +70,6 @@ class KSQLDBClient:
         self.retry_delay = retry_delay
         self.timeout = httpx.Timeout(timeout)
 
-        # single HTTP/2-only client
-        self._client = httpx.Client(
-            headers={"Content-Type": "application/json"},
-            http2=True,
-            http1=False,
-            timeout=self.timeout,
-        )
-
-        self._register_cleanup()
-
         # Set up logging
         setup_third_party_loggers()
         self.logger = configure_prefixed_logger(
@@ -83,7 +77,39 @@ class KSQLDBClient:
             prefix="KSQL",
             level=loglevel)
 
+        self._request_count = 0
+        self._max_requests_per_connection = DEFAULT_MAX_REQUESTS_PER_CONNECTION
+
+        # single HTTP/2-only client
+        self._client = self._create_client()
+
+        self._register_cleanup()
+
         self.logger.info(f"Connected to ksqlDB at {self.ksqldb_url}")
+
+    def _create_client(self) -> httpx.Client:
+        """ Create a new HTTP/2 client configured for ksqlDB. """
+        return httpx.Client(
+            headers={"Content-Type": "application/json"},
+            http2=True,
+            http1=False,
+            timeout=self.timeout,
+        )
+
+    def _request_completed(self) -> None:
+        """
+        Record a completed request and periodically recreate the
+        underlying HTTP/2 client to prevent long-lived connections
+        from accumulating state.
+        """
+        self._request_count += 1
+
+        if self._request_count >= self._max_requests_per_connection:
+            self.logger.debug("Recycling HTTP client")
+
+            self._client.close()
+            self._client = self._create_client()
+            self._request_count = 0
 
     def _register_cleanup(self) -> None:
         atexit.register(self.close)
@@ -96,9 +122,9 @@ class KSQLDBClient:
         self,
         method: str,
         path: str,
-        json_payload: dict = None,
+        json_payload: dict[str, Any] | None = None,
         stream: bool = False,
-        headers: dict = None,
+        headers: dict[str, str] | None = None,
         content: bytes = None,
     ) -> httpx.Response:
         """
@@ -113,7 +139,7 @@ class KSQLDBClient:
             content (bytes): Raw byte content to send in the request body. Defaults to None.
 
         Returns:
-            httpx.Response: The HTTP response object.
+            The HTTP response returned by the ksqlDB server.
 
         Raises:
             KSQLDBClientException: If all retry attempts fail due to request or HTTP status errors.
@@ -147,7 +173,7 @@ class KSQLDBClient:
                     raise KSQLDBClientException(f"Failed {method} {url}: {e}")
                 time.sleep(self.retry_delay)
 
-    def info(self) -> dict:
+    def info(self) -> dict[str, Any]:
         """
         Retrieve server information.
 
@@ -155,7 +181,9 @@ class KSQLDBClient:
             dict: A dictionary containing server information.
         """
         resp = self._request('GET', 'info')
-        return resp.json()
+        result = resp.json()
+        self._request_completed()
+        return result
 
     def get_kafka_topic(self, stream_name: str) -> str:
         """
@@ -173,6 +201,8 @@ class KSQLDBClient:
         payload = {"ksql": f"DESCRIBE {stream_name} EXTENDED;"}
         resp = self._request('POST', '/ksql', json_payload=payload)
         data = resp.json()
+        self._request_completed()
+
         try:
             return data[0]['sourceDescription']['topic']
         except (KeyError, IndexError):
@@ -188,6 +218,7 @@ class KSQLDBClient:
         payload = {"ksql": "SHOW STREAMS;", "streamsProperties": {}}
         resp = self._request('POST', '/ksql', json_payload=payload)
         data = resp.json()
+        self._request_completed()
         entry = data[0]
         return [r['name'] for r in entry.get('streams', [])]
 
@@ -201,14 +232,15 @@ class KSQLDBClient:
         payload = {"ksql": "SHOW TABLES;", "streamsProperties": {}}
         resp = self._request('POST', '/ksql', json_payload=payload)
         data = resp.json()
+        self._request_completed()
         entry = data[0]
         return [r['name'] for r in entry.get('tables', [])]
 
-    def query(self, ksql: str) -> list[dict]:
+    def query(self, ksql: str) -> list[dict[str, Any]]:
         """
-        Execute a KSQL pull query and return the results as a list of dictionaries.
+        Execute a KSQL query and return the results as a list of row dictionaries.
 
-        Each dictionary represents a row, with column names as keys.
+        Each dictionary maps column names to their corresponding values.
 
         Args:
             ksql (str): The KSQL pull query string to execute.
@@ -222,6 +254,8 @@ class KSQLDBClient:
         payload = {"ksql": ksql, "streamsProperties": {}}
         with self._request('POST', '/query', json_payload=payload, stream=True) as resp:
             raw = resp.read()
+
+        self._request_completed()
         text = raw.decode(errors='ignore')
 
         if resp.status_code != 200:
@@ -241,7 +275,7 @@ class KSQLDBClient:
         result = [dict(zip(cols, row)) for row in rows]
         return result
 
-    def statement_query(self, sql: str) -> dict:
+    def statement_query(self, sql: str) -> httpx.Response:
         """
         Execute a KSQL statement query (e.g., CREATE, DROP).
 
@@ -252,22 +286,24 @@ class KSQLDBClient:
             sql (str): The KSQL statement to execute.
 
         Returns:
-            dict: The JSON response from the server as a dictionary.
+            The HTTP response returned by the ksqlDB server.
 
         Raises:
             KSQLDBClientException: If the request fails or returns an error status.
         """
         payload = {"ksql": sql}
         headers = {"Accept": "application/vnd.ksql.v1+json"}
-        return self._request('POST', '/ksql', json_payload=payload, headers=headers)
+        resp = self._request('POST', '/ksql', json_payload=payload, headers=headers)
+        self._request_completed()
+        return resp
 
-    def insert_into_stream(self, stream_name: str, rows: list[dict]) -> list[dict]:
+    def insert_into_stream(self, stream_name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Insert rows into a stream over HTTP/2.
 
         Args:
             stream_name (str): The name of the KSQL stream to insert data into.
-            rows (list[dict]): A list of dictionaries representing the rows to be inserted.
+            rows (list[dict]): A list of row dictionaries. Each dictionary must map stream column names to their corresponding values.
 
         Returns:
             list[dict]: A list of dictionaries containing the response from the insert operation.
@@ -283,6 +319,7 @@ class KSQLDBClient:
         headers = {"Content-Type": "application/vnd.ksql.v1+json"}
         with self._request('POST', urlpath, stream=True, headers=headers, content=content) as resp:
             text = b"".join(resp.iter_bytes()).decode(errors='ignore')
+        self._request_completed()
         if resp.status_code != 200:
             raise KSQLDBClientException(f"Insert error: {text}")
         return [json.loads(line) for line in text.splitlines()]
@@ -305,7 +342,7 @@ class KSQLDBClient:
 
         Args:
             signum (int): The signal number (e.g., SIGINT or SIGTERM).
-            frame (signal.Frame): The current stack frame when the signal was received.
+            frame (frame): The current stack frame when the signal was received.
 
         Raises:
             SystemExit: Always raises `SystemExit` after handling the termination signal.
@@ -318,7 +355,7 @@ class KSQLDBClient:
         self.close()
         raise SystemExit
 
-    def __enter__(self):
+    def __enter__(self) -> "KSQLDBClient":
         """
         Initialize resources when entering a context manager.
 

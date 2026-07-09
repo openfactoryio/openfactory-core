@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock, AsyncMock
 import asyncio
 from flask import Flask
+from openfactory.apps.ofa_flask_app import QuietWSGIRequestHandler
 
 from openfactory.apps import OpenFactoryFlaskApp
 
@@ -10,6 +11,22 @@ class _TestApp(OpenFactoryFlaskApp):
 
     async def async_main_loop(self):
         await asyncio.sleep(0.01)
+
+
+class TestQuietWSGIRequestHandler(unittest.TestCase):
+    """
+    Tests for class QuietWSGIRequestHandler
+    """
+
+    @patch("werkzeug.serving.WSGIRequestHandler.log_request")
+    def test_log_request_is_suppressed(self, mock_log_request):
+        """ QuietWSGIRequestHandler should suppress HTTP request logging. """
+
+        handler = QuietWSGIRequestHandler.__new__(QuietWSGIRequestHandler)
+
+        handler.log_request()
+
+        mock_log_request.assert_not_called()
 
 
 class TestOpenFactoryFlaskApp(unittest.TestCase):
@@ -358,6 +375,7 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
             await asyncio.to_thread(app._run_flask)
             _, kwargs = mock_make_server.call_args
             self.assertEqual(kwargs["port"], 4000)
+            self.assertIsNone(kwargs["request_handler"])
 
     @patch("openfactory.apps.ofa_flask_app.make_server")
     async def test_run_flask_env_port(self, mock_make_server):
@@ -377,6 +395,7 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
             await asyncio.to_thread(app._run_flask)
             _, kwargs = mock_make_server.call_args
             self.assertEqual(kwargs["port"], 5555)
+            self.assertIsNone(kwargs["request_handler"])
 
     async def test_thread_wrapper_captures_exception(self):
         """ Thread wrapper should propagate exceptions """
@@ -414,3 +433,58 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
         await app.async_run()
 
         app.shutdown.assert_called_once()
+
+    @patch("openfactory.apps.ofa_flask_app.make_server")
+    async def test_run_flask_logs_http_requests_by_default(self, mock_make_server):
+        """ Should enable HTTP request logging by default. """
+
+        mock_make_server.return_value = MagicMock()
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+        )
+
+        await asyncio.to_thread(app._run_flask)
+
+        _, kwargs = mock_make_server.call_args
+        self.assertIsNone(kwargs["request_handler"])
+
+    @patch("openfactory.apps.ofa_flask_app.make_server")
+    async def test_run_flask_disables_http_request_logging(self, mock_make_server):
+        """ Should disable HTTP request logging when requested. """
+
+        from openfactory.apps.ofa_flask_app import QuietWSGIRequestHandler
+
+        mock_make_server.return_value = MagicMock()
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            log_http_requests=False,
+        )
+
+        await asyncio.to_thread(app._run_flask)
+
+        _, kwargs = mock_make_server.call_args
+        self.assertIs(kwargs["request_handler"], QuietWSGIRequestHandler)
+
+    def test_log_http_requests_configuration(self):
+        """ Should store HTTP request logging configuration. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+        )
+        self.assertTrue(app.log_http_requests)
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            log_http_requests=False,
+        )
+        self.assertFalse(app.log_http_requests)

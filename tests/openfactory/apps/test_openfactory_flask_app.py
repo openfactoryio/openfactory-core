@@ -172,6 +172,23 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
         self.assertIs(app.app.ofa_app, app)
 
+    def test_create_flask_app_default(self):
+        """ Default implementation should create a Flask app using the module name. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        flask_app = app.create_flask_app()
+
+        self.assertIsInstance(flask_app, Flask)
+        self.assertEqual(
+            flask_app.import_name,
+            OpenFactoryFlaskApp.__module__,
+        )
+
     def test_run_invokes_async_run(self):
         """ Test run invokes async_run """
 

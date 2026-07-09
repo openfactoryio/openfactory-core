@@ -282,6 +282,13 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             - Customizing template or static paths
             - Applying testing configuration
 
+        The default implementation creates the Flask application using the OpenFactory
+        module name rather than the subclass module. This ensures Flask locates the
+        framework's bundled templates and static resources correctly.
+        Subclasses should normally customize the returned application instead of
+        creating a new Flask instance unless a completely custom application object
+        is required.
+
         Returns:
             flask.Flask: Configured Flask application instance.
 
@@ -292,21 +299,18 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
                 class DemoFlaskApp(OpenFactoryFlaskApp):
 
                     def create_flask_app(self):
-                        app = Flask(__name__)
+                        app = super().create_flask_app()
                         app.config["SECRET_KEY"] = "my-secret"
                         return app
 
         Note:
-            The returned Flask application is automatically exposed through:
+            - The returned Flask application is automatically exposed through ``self.app``
+              allowing subclasses to configure routes, Blueprints, extensions, and Flask application settings
 
-            .. code-block:: python
-
-                self.app
-
-            allowing subclasses to configure routes, Blueprints,
-            extensions, and Flask application settings
+            - ``create_flask_app()`` is invoked before ``configure_routes()``,
+              allowing subclasses to configure the Flask application prior to route registration.
         """
-        return Flask(__name__)
+        return Flask(__class__.__module__)
 
     def configure_routes(self):
         """

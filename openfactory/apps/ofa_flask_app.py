@@ -11,8 +11,15 @@ import asyncio
 import threading
 from werkzeug.serving import make_server
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.serving import WSGIRequestHandler
 from openfactory.apps import OpenFactoryApp
 from openfactory.kafka import KSQLDBClient
+
+
+class QuietWSGIRequestHandler(WSGIRequestHandler):
+
+    def log_request(self, code="-", size="-"):
+        pass
 
 
 class OpenFactoryFlaskApp(OpenFactoryApp):
@@ -39,7 +46,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         - Override :meth:`create_flask_app` to customize the Flask application.
         - Override :meth:`configure_routes` to register routes or Blueprints.
         - Override :meth:`async_main_loop` to implement asynchronous background tasks.
-        - The synchronous `main_loop()` is intentionally not supported.
+        - The synchronous :meth:`OpenFactoryApp.main_loop() <openfactory.apps.ofaapp.OpenFactoryApp.main_loop>` is intentionally not supported.
 
     Attributes:
         app (flask.Flask): Flask application instance attached to the OpenFactory app.
@@ -164,6 +171,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
 
     Note:
       - The Flask application is accessible via :attr:`app` and behaves like a standard Flask instance.
+      - HTTP access logging can be enabled or disabled using the ``log_http_requests`` constructor parameter.
       - Routes can be registered directly using :meth:`flask.Flask.route` or through Flask Blueprints (:class:`flask.Blueprint`).
       - Only asynchronous execution is supported. Subclasses should implement :meth:`async_main_loop`
         for background tasks.
@@ -192,6 +200,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         bootstrap_servers: str | None = None,
         asset_router_url: str | None = None,
         loglevel: str = "INFO",
+        log_http_requests: bool = True,
         test_mode: bool = False,
     ):
         """
@@ -215,6 +224,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             bootstrap_servers: Kafka bootstrap server address.
             asset_router_url: Asset Router URL.
             loglevel: Logging level (e.g., ``INFO``, ``DEBUG``).
+            log_http_requests: Enables logging of incoming HTTP requests handled by the embedded Flask server.
             test_mode: Enables test mode (disables live Kafka/ksql interaction).
 
         See also:
@@ -228,6 +238,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             loglevel=loglevel,
             test_mode=test_mode
         )
+
+        self.log_http_requests = log_http_requests
 
         # Flask application
         self.app = self.create_flask_app()
@@ -358,14 +370,18 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         variable is not set.
 
         Note:
-            This method is intended for internal use and is called automatically
-            by :meth:`async_run`.
+            - Logging of incoming HTTP requests is controlled by the
+              ``log_http_requests`` constructor parameter.
+            - This method is intended for internal use and is called automatically
+              by :meth:`async_run`.
         """
         port = int(os.getenv("PORT", "4000"))
+        handler = None if self.log_http_requests else QuietWSGIRequestHandler
         self._server = make_server(
             host="0.0.0.0",
             port=port,
-            app=self.app
+            app=self.app,
+            request_handler=handler,
         )
 
         self.logger.info(f"Starting Flask server on port {port}")

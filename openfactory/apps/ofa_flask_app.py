@@ -27,20 +27,19 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
     The Flask application is available via the :attr:`app` attribute and
     can be used exactly as in a standard Flask project.
 
-    Runtime behavior:
-        - Calling :meth:`run` starts both the OpenFactory application and an embedded HTTP server.
-        - The Flask server runs in a dedicated background thread using Werkzeug.
-        - The OpenFactory logic runs asynchronously inside the asyncio event loop.
-        - The server listens on all network interfaces (``0.0.0.0``).
-        - The listening port is defined by the ``PORT`` environment variable, or defaults to ``4000`` if unset.
-        - Unhandled exceptions in the Flask thread are propagated to the main asyncio runtime.
+    Execution model:
+        - :meth:`run` starts both the OpenFactory runtime and an embedded Flask server.
+        - Flask executes in a dedicated background thread.
+        - OpenFactory application logic executes asynchronously in the asyncio event loop.
+        - The HTTP server listens on 0.0.0.0.
+        - The listening port is taken from PORT or defaults to 4000.
+        - Exceptions from the Flask thread are propagated to the asyncio runtime.
 
-    Architecture:
-        - Flask runs in a dedicated thread
-        - OpenFactory logic runs in asyncio
-        - User applications implement :meth:`async_main_loop`
-        - The synchronous :meth:`OpenFactoryApp.main_loop() <openfactory.apps.ofaapp.OpenFactoryApp.main_loop>`
-          is intentionally not supported
+    Customization:
+        - Override :meth:`create_flask_app` to customize the Flask application.
+        - Override :meth:`configure_routes` to register routes or Blueprints.
+        - Override :meth:`async_main_loop` to implement asynchronous background tasks.
+        - The synchronous `main_loop()` is intentionally not supported.
 
     Attributes:
         app (flask.Flask): Flask application instance attached to the OpenFactory app.
@@ -144,7 +143,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             class DemoFlaskApp(OpenFactoryFlaskApp):
 
                 def create_flask_app(self):
-                    app = Flask(__name__)
+                    app = super().create_flask_app()
                     app.config["SECRET_KEY"] = "my-secret-key"
                     return app
 
@@ -282,12 +281,11 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             - Customizing template or static paths
             - Applying testing configuration
 
-        The default implementation creates the Flask application using the OpenFactory
-        module name rather than the subclass module. This ensures Flask locates the
-        framework's bundled templates and static resources correctly.
-        Subclasses should normally customize the returned application instead of
-        creating a new Flask instance unless a completely custom application object
-        is required.
+        The default implementation creates the Flask application using the OpenFactory module
+        instead of the subclass module. This ensures Flask can correctly locate the framework's
+        bundled templates and static resources. Subclasses should normally customize the returned
+        application rather than creating a new Flask instance unless a completely custom application
+        object is required.
 
         Returns:
             flask.Flask: Configured Flask application instance.
@@ -305,10 +303,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
 
         Note:
             - The returned Flask application is automatically exposed through ``self.app``
-              allowing subclasses to configure routes, Blueprints, extensions, and Flask application settings
-
             - ``create_flask_app()`` is invoked before ``configure_routes()``,
-              allowing subclasses to configure the Flask application prior to route registration.
+              allowing subclasses to configure the application before routes and Blueprints are registered.
         """
         return Flask(__class__.__module__)
 

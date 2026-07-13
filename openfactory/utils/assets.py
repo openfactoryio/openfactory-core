@@ -93,29 +93,6 @@ def deregister_asset(asset_uuid: str,
     """
     producer = AssetProducer(ksqlClient, bootstrap_servers)
 
-    # REMOVED message
-    producer.send_asset_attribute(
-        asset_uuid,
-        AssetAttribute(id="avail", value="REMOVED", type="Events", tag="Availability")
-    )
-    producer.flush()
-
-    # Make sure ksqlDB toloplogy did fully run
-    while True:
-        query = f"SELECT AVAILABILITY FROM assets_avail WHERE ASSET_UUID='{asset_uuid}';"
-        res = ksqlClient.query(query)
-        # res could be empty in case a none existing asset is deregistered
-        if res:
-            if res[0]['AVAILABILITY'] == "REMOVED":
-                break
-            if res[0]['AVAILABILITY'] == "UNAVAILABLE":
-                # some assets may send UNAVAILABLE
-                producer.send_asset_attribute(
-                    asset_uuid,
-                    AssetAttribute(id="avail", value="REMOVED", type="Events", tag="Availability")
-                )
-                producer.flush()
-
     # remove references
     for ref_id in ["references_below", "references_above"]:
         producer.send_asset_attribute(

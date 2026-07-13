@@ -19,7 +19,7 @@ from openfactory.connectors.base_connector import Connector
 from openfactory.assets import Asset
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy
 from openfactory.kafka.ksql import KSQLDBClient
-from openfactory.utils import register_asset, deregister_asset
+from openfactory.utils import register_asset
 from openfactory.schemas.devices import Device
 from openfactory.schemas.connectors.opcua import OPCUAConnectorSchema
 from openfactory.exceptions import OFAException
@@ -126,12 +126,5 @@ class OPCUAConnector(Connector):
         except TypeError:
             raise OFAException(f"Asset {coordinator.asset_uuid} does not appear to be a valid OPC UA coordinator")
         user_notify.success(f"OPC UA device {device_uuid} deregistered successfully")
-
-        # De-register device asset
-        deregister_asset(
-            asset_uuid=device_uuid,
-            ksqlClient=self.ksql,
-            bootstrap_servers=self.bootstrap_servers
-        )
 
         return

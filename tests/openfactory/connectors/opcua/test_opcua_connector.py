@@ -131,9 +131,8 @@ class TestOPCUAConnector(unittest.TestCase):
         )
 
     @patch("openfactory.connectors.opcua.opcua_connector.user_notify")
-    @patch("openfactory.connectors.opcua.opcua_connector.deregister_asset")
     @patch.object(OPCUAConnector, "_get_coordinator")
-    def test_tear_down_success(self, mock_get_coordinator, mock_deregister, mock_notify):
+    def test_tear_down_success(self, mock_get_coordinator, mock_notify):
         """ Test successful tear down. """
         coordinator = MagicMock()
         mock_get_coordinator.return_value = coordinator
@@ -145,12 +144,6 @@ class TestOPCUAConnector(unittest.TestCase):
         coordinator.deregister_device.assert_called_once_with(
             sender_uuid="opcua-connector",
             device_uuid=self.device.uuid
-        )
-
-        mock_deregister.assert_called_once_with(
-            asset_uuid=self.device.uuid,
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers="kafka:9092"
         )
 
         mock_notify.success.assert_called_once_with(

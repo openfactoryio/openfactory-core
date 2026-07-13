@@ -155,10 +155,9 @@ class TestSHDRConnector(unittest.TestCase):
 
         self.assertIn("does not appear to be a valid SHDR coordinator", str(cm.exception))
 
-    @patch("openfactory.connectors.shdr.shdr_connector.deregister_asset")
     @patch("openfactory.connectors.shdr.shdr_connector.user_notify")
     @patch.object(SHDRConnector, "_get_coordinator")
-    def test_tear_down(self, mock_get_coordinator, mock_notify, mock_deregister_asset):
+    def test_tear_down(self, mock_get_coordinator, mock_notify):
         """ Test tear_down flow. """
         mock_coordinator = MagicMock()
         mock_get_coordinator.return_value = mock_coordinator
@@ -172,13 +171,6 @@ class TestSHDRConnector(unittest.TestCase):
         mock_coordinator.deregister_device.assert_called_once_with(
             sender_uuid='shdr-connector',
             device_uuid=self.device.uuid
-        )
-
-        # Assert asset deregistration
-        mock_deregister_asset.assert_called_once_with(
-            asset_uuid=self.device.uuid,
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers="kafka:9092"
         )
 
         # Assert success notification

@@ -213,6 +213,14 @@ class OpenFactoryManager(OpenFactory):
                f"ASSET_ROUTER_URL={config.ASSET_ROUTER_URL}",
                f"DOCKER_SERVICE={application.uuid.lower()}"]
 
+        # add logging configuration if configured
+        backend = getattr(config, "OPENFACTORY_LOG_BACKEND", None)
+        if backend:
+            env.append(f"OPENFACTORY_LOG_BACKEND={config.OPENFACTORY_LOG_BACKEND}")
+        directory = getattr(config, "OPENFACTORY_TEXT_LOG_DIRECTORY", None)
+        if directory:
+            env.append(f"OPENFACTORY_TEXT_LOG_DIRECTORY={config.OPENFACTORY_TEXT_LOG_DIRECTORY}")
+
         # if routing section is defined export PORT variable
         routing = application.routing
         if routing:

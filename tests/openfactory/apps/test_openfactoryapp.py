@@ -244,7 +244,7 @@ class TestOpenFactoryApp(unittest.TestCase):
                 self.assertEqual(attr.type, 'Events', "Type mismatch for openfactory_version")
                 self.assertEqual(attr.tag, 'Library.Version', "Tag mismatch for openfactory_version")
 
-    @patch('openfactory.apps.ofaapp.configure_prefixed_logger')
+    @patch('openfactory.apps.ofaapp.configure_logger')
     def test_logger_is_configured_correctly(self, mock_configure_logger):
         """ Test that logger is configured with correct prefix and level. """
         mock_logger = MagicMock()

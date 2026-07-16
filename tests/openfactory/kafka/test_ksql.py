@@ -35,6 +35,17 @@ class TestKSQLDBClient(unittest.TestCase):
         mock_configure_logger.assert_called_once_with("openfactory.ksqlDB", prefix="KSQL", level="MOCK_LEVEL")
         mock_logger.info.assert_called_once_with(f"Connected to ksqlDB at {ksqldb_url}")
 
+    def test_custom_max_requests_per_connection(self):
+        """ Test that a custom recycle threshold is stored. """
+
+        client = KSQLDBClient(
+            self.ksqldb_url,
+            max_requests_per_connection=42,
+        )
+
+        self.assertEqual(client._max_requests_per_connection, 42)
+        client.close()
+
     @patch("openfactory.kafka.ksql.KSQLDBClient._request")
     def test_info_success(self, mock_request):
         """ Test info method of KSQLDBClient """

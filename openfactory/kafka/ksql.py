@@ -11,9 +11,6 @@ from openfactory.setup_logging import configure_prefixed_logger, setup_third_par
 import openfactory.config as Config
 
 
-DEFAULT_MAX_REQUESTS_PER_CONNECTION = 1000
-
-
 class KSQLDBClientException(Exception):
     """ A general error in OpenFactory. """
     pass
@@ -53,6 +50,7 @@ class KSQLDBClient:
         max_retries: int = 3,
         retry_delay: float = 2.0,
         timeout: float = 10.0,
+        max_requests_per_connection: int = 1000,
         loglevel: str = Config.KSQLDB_LOG_LEVEL,
     ):
         """
@@ -63,6 +61,7 @@ class KSQLDBClient:
             max_retries (int): Number of retry attempts on network failure. Defaults to 3.
             retry_delay (float): Seconds to wait between retries. Defaults to 2.0.
             timeout (float): Request timeout in seconds. Defaults to 10.0.
+            max_requests_per_connection (int): Number of requests to send before recreating the underlying HTTP client. Defaults to 1000.
             loglevel (str): Logging level for the client. Defaults to Config.KSQLDB_LOG_LEVEL.
         """
         self.ksqldb_url = ksqldb_url.rstrip("/")
@@ -78,7 +77,7 @@ class KSQLDBClient:
             level=loglevel)
 
         self._request_count = 0
-        self._max_requests_per_connection = DEFAULT_MAX_REQUESTS_PER_CONNECTION
+        self._max_requests_per_connection = max_requests_per_connection
 
         # single HTTP/2-only client
         self._client = self._create_client()

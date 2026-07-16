@@ -33,7 +33,7 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
         self.addCleanup(self.add_attribute_patch.stop)
 
         # Patch logger
-        self.logger_patch = patch('openfactory.apps.ofaapp.configure_prefixed_logger', return_value=MagicMock())
+        self.logger_patch = patch('openfactory.apps.ofaapp.configure_logger', return_value=MagicMock())
         self.mock_logger = self.logger_patch.start()
         self.addCleanup(self.logger_patch.stop)
 

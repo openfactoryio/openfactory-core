@@ -8,6 +8,7 @@ API Reference
    assets/index
    connectors/index
    apps/index
+   logging/index
    filelayer/index
    monitoring/index
    kafka/index

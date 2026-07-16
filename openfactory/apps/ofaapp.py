@@ -12,7 +12,7 @@ from openfactory import __version__
 from openfactory.kafka import KSQLDBClient
 from openfactory.utils.assets import deregister_asset
 from openfactory.assets import Asset, AssetAttribute
-from openfactory.setup_logging import configure_prefixed_logger
+from openfactory.logging import configure_logger
 from openfactory.schemas.filelayer.storage import StorageBackendSchema
 from openfactory.schemas.command_header import CommandEnvelope
 from openfactory.monitoring.utils import discover_prometheus_registry
@@ -34,7 +34,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         openfactory_manufacturer (AssetAttribute): OpenFactory vendor (``"OpenFactoryIO"``)
         openfactory_license (AssetAttribute): OpenFactory license (``"Polyform Noncommercial License 1.0.0"``)
         openfactory_version (AssetAttribute): OpenFactory version
-        logger (logging.Logger): Prefixed logger instance configured with the app UUID.
+        logger (OpenFactoryLogger): Application logger
         storage (dict[str, FileBackend]): Dictionary mapping storage names to initialized FileBackend instances created from the ``STORAGE`` environment variable. Empty if no storage is configured.
 
     .. admonition:: Usage Example
@@ -70,11 +70,17 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                     if data_storage is None:
                         raise RuntimeError("Required storage backend 'data' is not configured")
 
+                    # Create a logger that automatically adds context to every log entry.
+                    worker_logger = self.logger.with_context(
+                        worker="background-task",
+                    )
+
                     # Open file inside mounted storage
                     with data_storage.open("counter.txt", "w") as counter_file:
 
                         while True:
-                            self.logger.info(f"Counter: {counter}")
+                            # Log with additional context specific to this log entry
+                            worker_logger.info(f"Counter: {counter}", extra={"sample": counter})
 
                             # Persist counter value to storage
                             counter_file.write(f"{counter}\\n")
@@ -100,6 +106,9 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
       - The ``UUID`` of the App is set based on the OpenFactory configuration file of the App during the deployment process.
       - Subclasses must implement either :meth:`main_loop` (synchronous) or :meth:`async_main_loop` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
+      - Use :meth:`OpenFactoryLogger.with_context <openfactory.logging.loggers.OpenFactoryLogger.with_context>` to create loggers
+        with persistent context. Additional context specific to individual log entries can be supplied using the ``extra``
+        argument of the standard Python logging methods.
 
     .. seealso::
         - The schema of OpenFactory Apps is :class:`openfactory.schemas.apps.OpenFactoryAppSchema`.
@@ -138,7 +147,13 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         Note:
             - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
             - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
-            - Configures logging with the application UUID as prefix.
+            - Configures the application logger.
+
+              The logging backend is selected automatically from the deployment
+              configuration. Applications continue to use ``self.logger`` regardless
+              of the selected backend.
+
+              Components may create child loggers with persistent context using ``self.logger.with_context(...)``.
             - Mounts configured storage backends from the ``STORAGE`` environment variable.
             - Registers signal handlers for ``SIGINT`` and ``SIGTERM``.
 
@@ -154,10 +169,11 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
         self._shutdown_completed = False
 
         # setup logging
-        self.logger = configure_prefixed_logger(
+        self.logger = configure_logger(
             app_uuid,
             prefix=app_uuid.upper(),
-            level=loglevel)
+            level=loglevel,
+        )
         self.logger.debug(f"Setup OpenFactory App {app_uuid}")
 
         # attach storage

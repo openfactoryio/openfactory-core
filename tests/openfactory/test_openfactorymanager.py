@@ -449,6 +449,8 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Setup config constants
         mock_config.KSQLDB_LOG_LEVEL = "INFO"
         mock_config.ASSET_ROUTER_URL = "mocker_asset_router_url"
+        mock_config.OPENFACTORY_LOG_BACKEND = None
+        mock_config.OPENFACTORY_TEXT_LOG_DIRECTORY = None
 
         # Application dict without explicit KSQLDB_LOG_LEVEL in environment
         app = OpenFactoryAppSchema(
@@ -668,6 +670,47 @@ class TestOpenFactoryManager(unittest.TestCase):
 
         self.assertIn("open_files", kwargs)
         self.assertIsNone(kwargs["open_files"])
+
+    @patch("openfactory.openfactory_manager.config")
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_adds_logging_configuration(self, mock_user_notify, mock_register_asset, mock_config):
+        """ Configured logging environment variables should be forwarded. """
+
+        mock_config.KSQLDB_LOG_LEVEL = "INFO"
+        mock_config.ASSET_ROUTER_URL = "mock_asset_router_url"
+        mock_config.OPENFACTORY_LOG_BACKEND = "loki"
+        mock_config.OPENFACTORY_TEXT_LOG_DIRECTORY = "/var/log/openfactory"
+
+        app = OpenFactoryAppSchema(uuid="APP123", image="app_image")
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        env = deploy_call.kwargs["env"]
+
+        self.assertIn("OPENFACTORY_LOG_BACKEND=loki", env)
+        self.assertIn("OPENFACTORY_TEXT_LOG_DIRECTORY=/var/log/openfactory", env)
+
+    @patch("openfactory.openfactory_manager.config")
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_does_not_inject_logging_configuration(self, mock_user_notify, mock_register_asset, mock_config):
+        """Logging environment variables should not be injected when not configured."""
+
+        mock_config.KSQLDB_LOG_LEVEL = "INFO"
+        mock_config.ASSET_ROUTER_URL = "mock_asset_router_url"
+        mock_config.OPENFACTORY_LOG_BACKEND = None
+        mock_config.OPENFACTORY_TEXT_LOG_DIRECTORY = None
+
+        app = OpenFactoryAppSchema(uuid="APP123", image="app_image")
+
+        self.manager.deploy_openfactory_application(app)
+
+        env = self.manager.deployment_strategy.deploy.call_args.kwargs["env"]
+
+        self.assertFalse(any(var.startswith("OPENFACTORY_LOG_BACKEND=") for var in env))
+        self.assertFalse(any(var.startswith("OPENFACTORY_TEXT_LOG_DIRECTORY=") for var in env))
 
     @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.register_asset")

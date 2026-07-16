@@ -34,7 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 fastapi = [
     "fastapi>=0.139.0,<1.0",
-    "uvicorn[standard]>=0.50.2,<1.0"
+    "uvicorn[standard]>=0.51.0,<1.0"
 ]
 
 flask = [

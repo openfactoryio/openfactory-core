@@ -43,6 +43,10 @@ class MetricsRegistry(OpenFactoryFastAPIApp):
                 Default:
                     ``/prometheus/targets``
 
+            LOG_HTTP_REQUESTS: Enables HTTP request logging when set to one
+                of ``1``, ``true``, ``yes``, or ``on`` (case-insensitive).
+                Defaults to ``false``.
+
         Args:
             ksqlClient: KSQL client instance.
             bootstrap_servers: Kafka bootstrap server address.
@@ -54,7 +58,10 @@ class MetricsRegistry(OpenFactoryFastAPIApp):
             :class:`OpenFactoryFastAPIApp <openfactory.apps.ofa_fastapi_app.OpenFactoryFastAPIApp>`
             for full initialization details and environment variable handling.
         """
-        super().__init__(*args, **kwargs)
+        _log_http_requests = os.getenv("LOG_HTTP_REQUESTS", "false").strip().lower() in {
+            "1", "true", "yes", "on"
+            }
+        super().__init__(*args, **kwargs, log_http_requests=_log_http_requests)
 
         self.api.state.ofa_app = self
 

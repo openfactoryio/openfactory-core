@@ -18,6 +18,29 @@ class TestMetricsRegistry(TestCase):
             test_mode=True
         )
 
+    def test_log_http_requests_truthy_values(self):
+        """ Should enable HTTP request logging for supported truthy values. """
+
+        for value in ["1", "true", "yes", "on", "TRUE", " Yes ", "ON"]:
+            with self.subTest(value=value):
+                with patch.dict(os.environ, {"LOG_HTTP_REQUESTS": value}):
+                    registry = MetricsRegistry(
+                        ksqlClient=MagicMock(),
+                        bootstrap_servers="broker:9092",
+                        test_mode=True
+                    )
+                    self.assertTrue(registry.log_http_requests)
+
+    @patch.dict(os.environ, {"LOG_HTTP_REQUESTS": "false"})
+    def test_log_http_requests_disabled(self):
+        """ Should disable HTTP request logging. """
+        registry = MetricsRegistry(
+            ksqlClient=MagicMock(),
+            bootstrap_servers="broker:9092",
+            test_mode=True
+        )
+        self.assertFalse(registry.log_http_requests)
+
     @patch.dict(os.environ, {"PROMETHEUS_SD_ENDPOINT": "/custom-targets"})
     def test_custom_prometheus_sd_endpoint(self):
         registry = MetricsRegistry(

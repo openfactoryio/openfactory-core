@@ -6,6 +6,7 @@ from fastapi import Response
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
 from openfactory.kafka import KSQLDBClient
 from openfactory.apps import OpenFactoryApp
+from openfactory.assets import AssetAttribute
 
 try:
     from fastapi import FastAPI
@@ -408,7 +409,13 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         """
 
         self.welcome_banner()
-        self.avail = 'AVAILABLE'
+        if not self._test_mode:
+            self.producer.send_asset_attribute(
+                asset_uuid=self.asset_uuid,
+                assetAttribute=AssetAttribute(
+                    id='avail', value='AVAILABLE', tag='Availability', type='Events'
+                )
+            )
         self.logger.info("Starting async main loop")
 
         task_fastapi = asyncio.create_task(self._run_fastapi(), name="FastAPI")

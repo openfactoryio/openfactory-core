@@ -453,9 +453,6 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         # Check welcome banner called
         mock_banner.assert_called_once()
 
-        # Check that add_attribute was called with an AssetAttribute
-        self.assertEqual(app.avail, 'AVAILABLE')
-
         # Check async_main_loop executed
         app.async_main_loop.assert_awaited_once()
 

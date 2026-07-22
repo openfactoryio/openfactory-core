@@ -14,6 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.serving import WSGIRequestHandler
 from openfactory.apps import OpenFactoryApp
 from openfactory.kafka import KSQLDBClient
+from openfactory.assets import AssetAttribute
 
 
 class QuietWSGIRequestHandler(WSGIRequestHandler):
@@ -453,7 +454,13 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
                 triggers :meth:`OpenFactoryApp.app_event_loop_stopped() <openfactory.apps.ofaapp.OpenFactoryApp.app_event_loop_stopped>`.
         """
         self.welcome_banner()
-        self.avail = "AVAILABLE"
+        if not self._test_mode:
+            self.producer.send_asset_attribute(
+                asset_uuid=self.asset_uuid,
+                assetAttribute=AssetAttribute(
+                    id='avail', value='AVAILABLE', tag='Availability', type='Events'
+                )
+            )
 
         flask_thread = threading.Thread(
             target=lambda: self._thread_wrapper(self._run_flask),

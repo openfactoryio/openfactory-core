@@ -24,6 +24,11 @@ class TestOpenFactoryApp(unittest.TestCase):
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
+        # Patch wait_until
+        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
+        self.mock_wait_until = self.wait_until_patcher.start()
+        self.addCleanup(self.wait_until_patcher.stop)
+
         # Patch deregister_asset
         self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
         self.mock_deregister = self.deregister_patcher.start()

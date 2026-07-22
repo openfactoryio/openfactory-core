@@ -42,6 +42,11 @@ class TestDeclarativeAttributes(unittest.TestCase):
         self.MockAssetProducer = self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
+        # Patch wait_until
+        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
+        self.wait_until_patcher.start()
+        self.addCleanup(self.wait_until_patcher.stop)
+
         self.app = TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker", asset_router_url="mocked_url")
 
     def test_declared_attributes_collection(self):

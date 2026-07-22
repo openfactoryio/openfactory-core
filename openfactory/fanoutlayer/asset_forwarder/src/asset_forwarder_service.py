@@ -531,14 +531,14 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
 
             try:
                 assignment = self.consumer.assignment()
-                self.logger.debug("Current assignment: %s", assignment)
+                self.logger.debug("[Kafka Watchdog] Current assignment: %s", assignment)
             except Exception as e:
-                self.logger.exception("Kafka watchdog failed. Exception=%s: %s", type(e).__name__, e)
+                self.logger.exception("[Kafka Watchdog] Kafka watchdog failed. Exception=%s: %s", type(e).__name__, e)
                 os._exit(1)
 
             if assignment:
                 if unassigned_since is not None:
-                    self.logger.info("Kafka consumer has received a partition assignment again.")
+                    self.logger.info("[Kafka Watchdog] Kafka consumer has received a partition assignment again.")
                 unassigned_since = None
                 self.consumer_has_been_assigned = True
                 continue
@@ -547,15 +547,12 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
 
             if unassigned_since is None:
                 unassigned_since = now
-                self.logger.warning(
-                    "Kafka consumer has no partition assignment. "
-                    "Waiting for rebalance..."
-                )
+                self.logger.warning("[Kafka Watchdog] Kafka consumer has no partition assignment. Waiting for rebalance...")
                 continue
 
             if now - unassigned_since >= max_unassigned_time:
                 self.logger.critical(
-                    "Kafka consumer has had no partition assignment for %.0f seconds. "
+                    "[Kafka Watchdog] Kafka consumer has had no partition assignment for %.0f seconds. "
                     "Terminating so the container can be restarted.",
                     max_unassigned_time,
                 )

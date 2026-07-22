@@ -1,4 +1,6 @@
+import hashlib
 import unittest
+from unittest.mock import patch
 from openfactory.fanoutlayer import ConsistentHashRing
 
 
@@ -24,8 +26,19 @@ class TestConsistentHashRing(unittest.TestCase):
         self.assertEqual(len(self.ring._sorted_keys), expected_vnodes)
 
     def test_sorted_keys_are_sorted(self):
-        """ Test that the ring’s sorted keys are in ascending order. """
+        """ Test that the ring's sorted keys are in ascending order. """
         self.assertEqual(sorted(self.ring._sorted_keys), self.ring._sorted_keys)
+
+    def test_hash_uses_sha256(self):
+        """ Test that ring positions are computed using SHA-256. """
+        key = b"test-key"
+
+        expected = int.from_bytes(
+            hashlib.sha256(key).digest(),
+            byteorder="big",
+        )
+
+        self.assertEqual(ConsistentHashRing._hash(key), expected)
 
     def test_get_returns_node_from_list(self):
         """ Test that get() always returns a node from the provided list. """
@@ -41,35 +54,52 @@ class TestConsistentHashRing(unittest.TestCase):
         self.assertEqual(node1, node2)
 
     def test_get_wraps_around_ring(self):
-        """ Test that when hash > max vnode, lookup wraps to first node. """
-        import bisect
-
-        # Force idx to be len(sorted_keys), simulating wrap-around
-        idx = bisect.bisect(self.ring._sorted_keys, max(self.ring._sorted_keys))
-        self.assertEqual(idx, len(self.ring._sorted_keys))
-
-        # In wrap-around case, get() should return first node
+        """ Test that a hash beyond the last vnode wraps to the first vnode. """
+        hash_beyond_ring = self.ring._sorted_keys[-1] + 1
         expected_node = self.ring._ring[self.ring._sorted_keys[0]]
 
-        # Manually simulate the wrap-around
-        wrapped_idx = 0
-        actual_node = self.ring._ring[self.ring._sorted_keys[wrapped_idx]]
+        with patch.object(ConsistentHashRing, "_hash", return_value=hash_beyond_ring):
+            actual_node = self.ring.get(b"any-key")
 
         self.assertEqual(actual_node, expected_node)
 
     def test_reassignment_minimized_when_adding_node(self):
-        """ Test that adding a node only reassigns keys if necessary. """
+        """ Test that adding a node only reassigns keys to the new node. """
         key = b"customer123"
         old_node = self.ring.get(key)
 
-        # Add a new node and reinitialize
         new_nodes = self.nodes + ["node4"]
         new_ring = ConsistentHashRing(new_nodes, replicas=10)
         new_node = new_ring.get(key)
 
         self.assertIn(new_node, new_nodes)
+
         if new_node != old_node:
             self.assertEqual(new_node, "node4")
+
+    def test_adding_node_only_reassigns_keys_to_new_node(self):
+        """ Test across many keys that reassignments only target the new node. """
+        keys = [f"key-{i}".encode() for i in range(1000)]
+
+        old_assignments = {
+            key: self.ring.get(key)
+            for key in keys
+        }
+
+        new_nodes = self.nodes + ["node4"]
+        new_ring = ConsistentHashRing(new_nodes, replicas=10)
+
+        reassigned = 0
+
+        for key in keys:
+            old_node = old_assignments[key]
+            new_node = new_ring.get(key)
+
+            if new_node != old_node:
+                reassigned += 1
+                self.assertEqual(new_node, "node4")
+
+        self.assertGreater(reassigned, 0)
 
     def test_get_accepts_non_bytes_input(self):
         """ Test that get() accepts str and int keys in addition to bytes. """

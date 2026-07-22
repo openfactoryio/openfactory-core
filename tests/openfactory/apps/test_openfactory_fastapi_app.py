@@ -22,6 +22,10 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
         self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
 
+        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
+        self.wait_until_patcher.start()
+        self.addCleanup(self.wait_until_patcher.stop)
+
         self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
         self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
@@ -125,6 +129,10 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
         self.asset_producer_patcher.start()
         self.addCleanup(self.asset_producer_patcher.stop)
+
+        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
+        self.wait_until_patcher.start()
+        self.addCleanup(self.wait_until_patcher.stop)
 
         self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
         self.deregister_patcher.start()

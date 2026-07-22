@@ -72,7 +72,7 @@ class TestAssetForwarderWatchdog(unittest.IsolatedAsyncioTestCase):
         self.service.consumer.assignment.assert_called_once()
 
         self.service.logger.warning.assert_called_once_with(
-            "Kafka consumer has no partition assignment. "
+            "[Kafka Watchdog] Kafka consumer has no partition assignment. "
             "Waiting for rebalance..."
         )
 
@@ -98,12 +98,12 @@ class TestAssetForwarderWatchdog(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.service.consumer.assignment.call_count, 2)
 
         self.service.logger.warning.assert_called_once_with(
-            "Kafka consumer has no partition assignment. "
+            "[Kafka Watchdog] Kafka consumer has no partition assignment. "
             "Waiting for rebalance..."
         )
 
         self.service.logger.info.assert_called_once_with(
-            "Kafka consumer has received a partition assignment again."
+            "[Kafka Watchdog] Kafka consumer has received a partition assignment again."
         )
 
     @patch("openfactory.fanoutlayer.asset_forwarder.src.asset_forwarder_service.os._exit", side_effect=SystemExit(1))
@@ -161,12 +161,12 @@ class TestAssetForwarderWatchdog(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.service.consumer.assignment.call_count, 2)
 
         self.service.logger.warning.assert_called_once_with(
-            "Kafka consumer has no partition assignment. "
+            "[Kafka Watchdog] Kafka consumer has no partition assignment. "
             "Waiting for rebalance..."
         )
 
         self.service.logger.critical.assert_called_once_with(
-            "Kafka consumer has had no partition assignment for %.0f seconds. "
+            "[Kafka Watchdog] Kafka consumer has had no partition assignment for %.0f seconds. "
             "Terminating so the container can be restarted.",
             2.0,
         )

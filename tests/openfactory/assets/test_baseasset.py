@@ -558,6 +558,73 @@ class TestBaseAsset(TestCase):
         expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|a_method';"
         ksqlMock.query.assert_any_call(expected_query)
 
+    def test_add_attribute_sends_asset_attribute(self, MockAssetProducer):
+        """ Test add_attribute sends the new AssetAttribute to the producer """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        asset.wait_until = MagicMock(return_value=True)
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.add_attribute(attr)
+
+        asset.producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
+
+    def test_add_attribute_in_test_mode_adds_to_mocked_attributes(self, MockAssetProducer):
+        """ Test add_attribute stores the attribute locally when in test mode """
+        asset = ValidAsset.__new__(ValidAsset)
+        BaseAsset.__init__(asset, ksqlClient=MagicMock(), test_mode=True)
+
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.add_attribute(attr)
+
+        self.assertIn(attr, asset._mocked_attributes)
+
+    def test_add_attribute_waits_until_available_by_default(self, MockAssetProducer):
+        """ Test add_attribute waits until the new attribute is available by default """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        asset.wait_until = MagicMock(return_value=True)
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.add_attribute(attr)
+
+        asset.producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
+        asset.wait_until.assert_called_once_with(
+            attribute_id="temperature",
+            value=42,
+            use_ksqlDB=True,
+        )
+
+    def test_add_attribute_does_not_wait_when_disabled(self, MockAssetProducer):
+        """ Test add_attribute does not wait when wait_to_become_available=False """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        asset.wait_until = MagicMock()
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.add_attribute(attr, wait_to_become_available=False)
+
+        asset.producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
+        asset.wait_until.assert_not_called()
+
     def test_get_reference_list_not_implemented(self, MockAssetProducer):
         """ Test if _get_reference_list raises NotImplementedError when not implemented in subclass """
 
@@ -748,9 +815,13 @@ class TestBaseAsset(TestCase):
         attribute_id = "test_attribute"
         expected_value = 42
 
-        # Mock __getattr__ to return a dummy attribute initially
-        mock_attribute = MagicMock()
-        mock_attribute.value = "not_expected_value"
+        # Mock __getattr__ to return an initially non-matching asset attribute
+        mock_attribute = AssetAttribute(
+            id=attribute_id,
+            value="not_expected_value",
+            type="Samples",
+            tag="TestAttribute",
+        )
         asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
         # Patch the NATS consumer start/stop
@@ -778,9 +849,13 @@ class TestBaseAsset(TestCase):
         attribute_id = "temperature"
         expected_value = 42.0
 
-        # Mock __getattr__ to simulate initial mismatch
-        mock_attribute = MagicMock()
-        mock_attribute.value = "not_expected_value"
+        # Mock __getattr__ to return an initially non-matching asset attribute
+        mock_attribute = AssetAttribute(
+            id=attribute_id,
+            value=10.0,
+            type="Samples",
+            tag="Temperature",
+        )
         asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
         # Patch NATS start/stop
@@ -810,7 +885,13 @@ class TestBaseAsset(TestCase):
     def test_wait_until_ksqldb_timeout(self, MockAssetProducer):
         """ Test wait_until with use_ksqlDB=True returns False after timeout when no match is found """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
-        asset.__getattr__ = MagicMock(return_value=MagicMock(value="initial"))
+        mock_attribute = AssetAttribute(
+            id="test_attribute",
+            value="initial",
+            type="Events",
+            tag="TestAttribute",
+        )
+        asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
         # Test timeout when use_ksqlDB is True
         result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=1, use_ksqlDB=True)

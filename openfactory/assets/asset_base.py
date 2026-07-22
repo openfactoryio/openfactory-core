@@ -564,18 +564,21 @@ class BaseAsset:
                 type=attr.type)
             )
 
-    def add_attribute(self, asset_attribute: AssetAttribute) -> None:
+    def add_attribute(self, asset_attribute: AssetAttribute, wait_to_become_available: bool = True) -> None:
         """
         Adds a new attribute to the asset.
 
         Args:
             asset_attribute (AssetAttribute): The attribute to be added.
+            wait_to_become_available (bool): If true, will wait until the Attribute is available in ksqlDB
         """
         if getattr(self, "_test_mode", False):
             # add to internal mock list
             self._mocked_attributes.append(asset_attribute)
             return
         self.producer.send_asset_attribute(self.asset_uuid, asset_attribute)
+        if wait_to_become_available:
+            self.wait_until(attribute_id=asset_attribute.id, value=asset_attribute.value, use_ksqlDB=True)
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> List[str | Self]:
         """
@@ -695,7 +698,13 @@ class BaseAsset:
             bool: `True` if the attribute value matches the expected value within the timeout, `False` otherwise.
         """
         # First, check the current attribute value
-        if self.__getattr__(attribute_id).value == value:
+        attribute = self.__getattr__(attribute_id)
+        if type(attribute) is AssetAttribute:
+            if attribute.value == value:
+                return True
+
+        # If an OpenFactory method, wait_until is not applicable
+        if callable(attribute):
             return True
 
         start_time = time.time()

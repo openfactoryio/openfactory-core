@@ -5,7 +5,7 @@ Consistent Hash Ring
 This module provides the ``ConsistentHashRing`` class, which maps arbitrary
 keys (e.g., asset UUIDs) to nodes (e.g., NATS clusters) using consistent hashing.
 
-It uses MD5 hashing and virtual nodes to:
+It uses SHA-256 hashing and virtual nodes to:
 
 - Ensure an even distribution of keys across nodes.
 - Minimize key reassignment when nodes are added or removed.
@@ -29,6 +29,7 @@ Features
 """
 
 import hashlib
+import bisect
 from typing import Dict, List
 
 
@@ -36,7 +37,7 @@ class ConsistentHashRing:
     """
     Consistent Hash Ring for mapping keys to nodes.
 
-    This implementation uses MD5 hashing and virtual nodes to distribute keys
+    This implementation uses SHA-256 hashing and virtual nodes to distribute keys
     evenly across a set of nodes. It ensures that each key is always mapped to
     the same node unless the set of nodes changes, and minimizes reassignments
     when nodes are added or removed.
@@ -68,11 +69,17 @@ class ConsistentHashRing:
         for node in nodes:
             for r in range(replicas):
                 vnode_key = f"{node}::{r}".encode()
-                h = int(hashlib.md5(vnode_key).hexdigest(), 16)
+                h = self._hash(vnode_key)
+
                 self._ring[h] = node
                 self._sorted_keys.append(h)
 
         self._sorted_keys.sort()
+
+    @staticmethod
+    def _hash(key: bytes) -> int:
+        """ Return a deterministic integer hash for ring positioning. """
+        return int.from_bytes(hashlib.sha256(key).digest(), byteorder="big")
 
     def get(self, key: bytes) -> str:
         """
@@ -84,12 +91,10 @@ class ConsistentHashRing:
         Returns:
             str: The node identifier that the key maps to.
         """
-        import bisect
-
         if not isinstance(key, (bytes, bytearray)):
             key = str(key).encode()
 
-        h = int(hashlib.md5(key).hexdigest(), 16)
+        h = self._hash(key)
         idx = bisect.bisect(self._sorted_keys, h)
         if idx == len(self._sorted_keys):
             idx = 0

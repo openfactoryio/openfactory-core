@@ -439,7 +439,13 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             Exception: If any exception occurs during the execution of the main loop, it is caught and logged, and the app is stopped.
         """
         self.welcome_banner()
-        self.avail = 'AVAILABLE'
+        if not self._test_mode:
+            self.producer.send_asset_attribute(
+                asset_uuid=self.asset_uuid,
+                assetAttribute=AssetAttribute(
+                    id='avail', value='AVAILABLE', tag='Availability', type='Events'
+                )
+            )
         self.logger.info("Starting main loop")
         try:
             self.main_loop()
@@ -486,7 +492,12 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             Exception: Any exception raised by :meth:`async_main_loop` is caught, logged, and triggers a graceful shutdown.
         """
         self.welcome_banner()
-        self.avail = 'AVAILABLE'
+        if not self._test_mode:
+            self.producer.send_asset_attribute(
+                AssetAttribute(
+                    id='avail', value='AVAILABLE', tag='Availability', type='Events'
+                )
+            )
         self.logger.info("Starting async main loop")
         try:
             await self.async_main_loop()

@@ -789,22 +789,36 @@ class TestBaseAsset(TestCase):
         )
         asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
-    @patch('openfactory.assets.asset_base.uuid.uuid4')
-    @patch('openfactory.assets.asset_base.time.time')
-    def test_wait_until_attribute_matches_initially(self, mock_time, mock_uuid, MockAssetProducer):
-        """ Test wait_until when the attribute matches initially """
-        # Mock the Asset object
+    def test_wait_until_callable_attribute(self, MockAssetProducer):
+        """ Test wait_until returns True when the attribute is an OpenFactory method """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
 
-        # Mock the attribute value to match
-        mock_attribute = MagicMock()
-        mock_attribute.value = "expected_value"
-        asset.__getattr__ = MagicMock(return_value=mock_attribute)
+        def mock_method(**kwargs):
+            pass
 
-        # Call the method
+        asset.__getattr__ = MagicMock(return_value=mock_method)
+
+        result = asset.wait_until(attribute_id="test_method", value=None)
+
+        self.assertTrue(result)
+        asset.__getattr__.assert_called_once_with("test_method")
+
+    def test_wait_until_attribute_matches_initially(self, MockAssetProducer):
+        """ Test wait_until returns True when the attribute matches initially """
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+
+        # Attribute already available in ksqlDB with the expected value
+        attribute = AssetAttribute(
+            id="test_attribute",
+            value="expected_value",
+            type="Events",
+            tag="TestAttribute",
+            timestamp="MockedTimeStamp",
+        )
+        asset.__getattr__ = MagicMock(return_value=attribute)
+
         result = asset.wait_until(attribute_id="test_attribute", value="expected_value")
 
-        # Assert the result is True
         self.assertTrue(result)
         asset.__getattr__.assert_called_once_with("test_attribute")
 
@@ -876,11 +890,63 @@ class TestBaseAsset(TestCase):
     def test_wait_until_ksqldb_matches(self, MockAssetProducer):
         """ Test wait_until with use_ksqlDB=True returns True when ksqlDB eventually matches """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
-        asset.__getattr__ = MagicMock(side_effect=[MagicMock(value="initial"), MagicMock(value="target")])
 
-        # Test when use_ksqlDB is True
+        initial_attribute = AssetAttribute(
+            id="test_attribute",
+            value="initial",
+            type="Events",
+            tag="TestAttribute",
+            timestamp="MockedTimeStamp",
+        )
+        matching_attribute = AssetAttribute(
+            id="test_attribute",
+            value="target",
+            type="Events",
+            tag="TestAttribute",
+            timestamp="MockedTimeStamp",
+        )
+
+        asset.__getattr__ = MagicMock(
+            side_effect=[initial_attribute, matching_attribute]
+        )
+
         result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=10, use_ksqlDB=True)
+
         self.assertTrue(result)
+        self.assertEqual(asset.__getattr__.call_count, 2)
+
+    def test_wait_until_ksqldb_waits_until_timestamp_available(self, MockAssetProducer):
+        """ Test wait_until waits until the matching attribute is available in ksqlDB """
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+
+        unavailable_attribute = AssetAttribute(
+            id="test_attribute",
+            value="target",
+            type="Events",
+            tag="TestAttribute",
+            timestamp="UNAVAILABLE",
+        )
+        available_attribute = AssetAttribute(
+            id="test_attribute",
+            value="target",
+            type="Events",
+            tag="TestAttribute",
+            timestamp="MockedTimeStamp",
+        )
+
+        asset.__getattr__ = MagicMock(
+            side_effect=[unavailable_attribute, available_attribute]
+        )
+
+        result = asset.wait_until(
+            attribute_id="test_attribute",
+            value="target",
+            timeout=10,
+            use_ksqlDB=True,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(asset.__getattr__.call_count, 2)
 
     def test_wait_until_ksqldb_timeout(self, MockAssetProducer):
         """ Test wait_until with use_ksqlDB=True returns False after timeout when no match is found """

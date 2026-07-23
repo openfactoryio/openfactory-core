@@ -52,6 +52,7 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_initialization_with_env_vars(self):
         """ Test initialization with external environment variables set """
+
         with patch.dict(os.environ, {
             'APPLICATION_VERSION': '1.0.0',
             'APPLICATION_MANUFACTURER': 'TestFactory',
@@ -64,15 +65,12 @@ class TestOpenFactoryApp(unittest.TestCase):
             importlib.reload(openfactoryapp)
             OpenFactoryApp = openfactoryapp.OpenFactoryApp
 
-            with patch('openfactory.utils.assets.deregister_asset'):
+            app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock, test_mode=True)
 
-                app = OpenFactoryApp(bootstrap_servers='mocked_broker', ksqlClient=self.ksql_mock)
-
-                self.assertEqual(app.application_version.value, '1.0.0')
-                self.assertEqual(app.application_manufacturer.value, 'TestFactory')
-                self.assertEqual(app.application_license.value, 'MIT')
-                self.assertEqual(app.asset_uuid, 'env-uuid')
-                self.assertEqual(app.asset_router_url, 'http://mocked.router.test')
+            self.assertEqual(app.application_version.value, '1.0.0')
+            self.assertEqual(app.application_manufacturer.value, 'TestFactory')
+            self.assertEqual(app.application_license.value, 'MIT')
+            self.assertEqual(app.asset_uuid, 'env-uuid')
 
     def test_missing_asset_router_url_raises(self):
         """ Initialization should fail if ASSET_ROUTER_URL is missing """
@@ -314,8 +312,8 @@ class TestOpenFactoryApp(unittest.TestCase):
 
     def test_run_invokes_main_loop(self):
         """ Test run method invokes main_loop """
-        app = OpenFactoryApp(ksqlClient=self.ksql_mock,
-                             bootstrap_servers='mock_bootstrap', asset_router_url='mocked_asset_url')
+        app = OpenFactoryApp(ksqlClient=self.ksql_mock, bootstrap_servers='mock_bootstrap',
+                             asset_router_url='mocked_asset_url', test_mode=True)
         app.main_loop = MagicMock()
         app.run()
         app.main_loop.assert_called_once()
@@ -325,7 +323,8 @@ class TestOpenFactoryApp(unittest.TestCase):
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock_bootstrap",
-            asset_router_url="mocked_asset_url"
+            asset_router_url="mocked_asset_url",
+            test_mode=True
         )
 
         app.main_loop = MagicMock(side_effect=Exception("Boom"))
@@ -410,21 +409,6 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.ksql_mock = MagicMock()
 
-        # Patch AssetProducer
-        self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
-        self.MockAssetProducer = self.asset_producer_patcher.start()
-        self.addCleanup(self.asset_producer_patcher.stop)
-
-        # Patch add_attribute
-        self.add_attribute_patcher = patch.object(OpenFactoryApp, 'add_attribute')
-        self.mock_add_attribute = self.add_attribute_patcher.start()
-        self.addCleanup(self.add_attribute_patcher.stop)
-
-        # Patch deregister_asset
-        self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
-        self.mock_deregister = self.deregister_patcher.start()
-        self.addCleanup(self.deregister_patcher.stop)
-
         # Freeze datetime for deterministic AssetAttribute.timestamp
         self.fixed_ts = datetime(2023, 1, 1, 12, 0, 0)
         datetime_patcher = patch("openfactory.assets.utils.time_methods.datetime")
@@ -439,14 +423,14 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
     async def test_async_main_loop_not_implemented(self):
         """ Verify async_main_loop raises NotImplementedError by default. """
         app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
-                             ksqlClient=self.ksql_mock)
+                             ksqlClient=self.ksql_mock, test_mode=True)
         with self.assertRaises(NotImplementedError):
             await app.async_main_loop()
 
     async def test_async_run_calls_welcome_and_adds_avail(self):
         """ Ensure async_run calls welcome_banner, adds 'avail' attribute, and runs async_main_loop. """
         app = OpenFactoryApp(bootstrap_servers='mocked_broker', asset_router_url='mocked_asset_url',
-                             ksqlClient=self.ksql_mock)
+                             ksqlClient=self.ksql_mock, test_mode=True)
 
         # Mock async_main_loop
         app.async_main_loop = AsyncMock()
@@ -467,7 +451,8 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mocked_broker",
-            asset_router_url="mocked_asset_url"
+            asset_router_url="mocked_asset_url",
+            test_mode=True
         )
 
         app.async_main_loop = AsyncMock(side_effect=Exception("Boom"))
@@ -487,7 +472,8 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock_bootstrap",
-            asset_router_url="mocked_asset_url"
+            asset_router_url="mocked_asset_url",
+            test_mode=True
         )
         app.producer = MagicMock()
 

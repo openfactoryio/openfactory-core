@@ -18,24 +18,13 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
     def setUp(self):
         self.ksql_mock = MagicMock()
 
-        self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
-        self.asset_producer_patcher.start()
-        self.addCleanup(self.asset_producer_patcher.stop)
-
-        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
-        self.wait_until_patcher.start()
-        self.addCleanup(self.wait_until_patcher.stop)
-
-        self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
-        self.deregister_patcher.start()
-        self.addCleanup(self.deregister_patcher.stop)
-
     def test_initialization_creates_fastapi(self):
         """" Test initialization creates FastAPI app """
         app = OpenFactoryFastAPIApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         self.assertIsInstance(app.api, FastAPI)
@@ -49,7 +38,8 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
         app = App(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         self.assertTrue(hasattr(app, "called"))
@@ -126,18 +116,6 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.ksql_mock = MagicMock()
 
-        self.asset_producer_patcher = patch("openfactory.assets.asset_base.AssetProducer")
-        self.asset_producer_patcher.start()
-        self.addCleanup(self.asset_producer_patcher.stop)
-
-        self.wait_until_patcher = patch("openfactory.assets.asset_base.BaseAsset.wait_until", return_value=True)
-        self.wait_until_patcher.start()
-        self.addCleanup(self.wait_until_patcher.stop)
-
-        self.deregister_patcher = patch('openfactory.apps.ofaapp.deregister_asset')
-        self.deregister_patcher.start()
-        self.addCleanup(self.deregister_patcher.stop)
-
     async def test_run_openfactory_calls_async_main_loop(self):
         """ Should call async_main_loop when user overrides it """
 
@@ -148,7 +126,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = App(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         await app._run_openfactory()
@@ -161,7 +140,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryFastAPIApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         task = asyncio.create_task(app._run_openfactory())
@@ -185,7 +165,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = App(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         with self.assertRaises(RuntimeError):
@@ -196,7 +177,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryFastAPIApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         app.async_run = AsyncMock()
@@ -248,7 +230,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = _TestApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         class FakeServer:
@@ -267,7 +250,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryFastAPIApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers='mock',
-            asset_router_url='mock'
+            asset_router_url='mock',
+            test_mode=True
         )
 
         task = asyncio.create_task(app.async_main_loop())
@@ -287,7 +271,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
             app = OpenFactoryFastAPIApp(
                 ksqlClient=self.ksql_mock,
                 bootstrap_servers='mock',
-                asset_router_url='mock'
+                asset_router_url='mock',
+                test_mode=True
             )
 
             # avoid real serve loop
@@ -307,7 +292,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
             app = OpenFactoryFastAPIApp(
                 ksqlClient=self.ksql_mock,
                 bootstrap_servers='mock',
-                asset_router_url='mock'
+                asset_router_url='mock',
+                test_mode=True
             )
 
             mock_server.return_value.serve = AsyncMock()
@@ -325,7 +311,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
         app = OpenFactoryFastAPIApp(
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock",
-            asset_router_url="mock"
+            asset_router_url="mock",
+            test_mode=True
         )
 
         mock_server.return_value.serve = AsyncMock()
@@ -344,7 +331,8 @@ class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
             ksqlClient=self.ksql_mock,
             bootstrap_servers="mock",
             asset_router_url="mock",
-            log_http_requests=False
+            log_http_requests=False,
+            test_mode=True
         )
 
         mock_server.return_value.serve = AsyncMock()

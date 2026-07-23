@@ -95,3 +95,45 @@ class TestDeclarativeAttributes(unittest.TestCase):
             self.assertEqual(asset_dict["temp"].value, "UNAVAILABLE")
             self.assertEqual(asset_dict["temp"].tag, "Temperature")
             self.assertEqual(asset_dict["temp"].type, "Samples")
+
+    def test_attribute_access_from_class_returns_descriptor(self):
+        """ Check that class access returns the declared attribute descriptor itself. """
+        self.assertIs(TestApp.app_version, TestApp._declared_attributes["app_version"])
+        self.assertIs(TestApp.license_type, TestApp._declared_attributes["license_type"])
+        self.assertIs(TestApp.sample_rate, TestApp._declared_attributes["sample_rate"])
+        self.assertIs(TestApp.temp, TestApp._declared_attributes["temp"])
+
+        self.assertIsInstance(TestApp.app_version, EventAttribute)
+        self.assertIsInstance(TestApp.license_type, EventAttribute)
+        self.assertIsInstance(TestApp.sample_rate, SampleAttribute)
+        self.assertIsInstance(TestApp.temp, SampleAttribute)
+
+    def test_attribute_access_from_instance_delegates_to_getattr(self):
+        """ Check that accessing declarative attributes delegates to __getattr__. """
+        with patch.object(TestApp, "__getattr__", autospec=True) as mock_getattr:
+            mock_getattr.side_effect = lambda instance, name: f"value-for-{name}"
+
+            self.assertEqual(self.app.app_version, "value-for-app_version")
+            self.assertEqual(self.app.license_type, "value-for-license_type")
+            self.assertEqual(self.app.sample_rate, "value-for-sample_rate")
+            self.assertEqual(self.app.temp, "value-for-temp")
+
+            self.assertEqual(
+                [call.args[1] for call in mock_getattr.call_args_list],
+                ["app_version", "license_type", "sample_rate", "temp"],
+            )
+
+    def test_descriptor_names_are_set_by_metaclass(self):
+        """ Check that the metaclass assigns the declared attribute name to each descriptor. """
+        self.assertEqual(TestApp.app_version.name, "app_version")
+        self.assertEqual(TestApp.license_type.name, "license_type")
+        self.assertEqual(TestApp.sample_rate.name, "sample_rate")
+        self.assertEqual(TestApp.temp.name, "temp")
+
+    def test_declarative_attribute_instance_access_delegates_to_getattr(self):
+        """ Access through an instance delegates to __getattr__. """
+        with patch.object(TestApp, "__getattr__", return_value="resolved") as mock_getattr:
+            result = self.app.temp
+
+            mock_getattr.assert_called_once_with("temp")
+            self.assertEqual(result, "resolved")

@@ -700,7 +700,7 @@ class BaseAsset:
         # First, check the current attribute value
         attribute = self.__getattr__(attribute_id)
         if type(attribute) is AssetAttribute:
-            if attribute.value == value:
+            if attribute.value == value and attribute.timestamp != 'UNAVAILABLE':
                 return True
 
         # If an OpenFactory method, wait_until is not applicable
@@ -714,8 +714,10 @@ class BaseAsset:
                 # Check for timeout
                 if (time.time() - start_time) > timeout:
                     return False
-                if self.__getattr__(attribute_id).value == value:
-                    return True
+                attribute = self.__getattr__(attribute_id)
+                if type(attribute) is AssetAttribute:
+                    if attribute.value == value and attribute.timestamp != 'UNAVAILABLE':
+                        return True
                 time.sleep(0.1)
 
         event = threading.Event()

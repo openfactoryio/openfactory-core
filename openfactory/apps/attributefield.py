@@ -31,6 +31,12 @@ class AttributeField:
         self.tag = tag
         self.name = None  # will be set by metaclass
 
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        return instance.__getattr__(self.name)
+
 
 class EventAttribute(AttributeField):
     """

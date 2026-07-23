@@ -280,7 +280,8 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                 value=json.dumps(method_contract),
                 type="Method",
                 tag="Method"
-            )
+            ),
+            wait_to_become_available=False
         )
 
     def _execute_ofa_method(self, method, envelope: CommandEnvelope):

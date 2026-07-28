@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 from unittest.mock import Mock
 from openfactory.kafka import KSQLDBClient
@@ -50,8 +51,11 @@ class TestOpenFactoryAppTestMode(TestCase):
         self.assertEqual(self.app.status.tag, 'App.Status')
 
     def test_ofa_methods_attributes(self):
-        """ Test ofa_methods command attributes """
-        self.assertEqual(self.app.stop_axis_CMD.value, '')
+        """ Test ofa methods command attributes """
+        correlation_id = self.app.method('stop_axis', sender_uuid='test', args=[])
+        cmd_value = json.loads(self.app.stop_axis_CMD.value)
+        self.assertEqual(cmd_value['header']['sender_uuid'], 'test')
+        self.assertEqual(cmd_value['header']['correlation_id'], correlation_id)
         self.assertEqual(self.app.stop_axis_CMD.type, 'OpenFactory')
         self.assertEqual(self.app.stop_axis_CMD.tag, 'Method.Command')
 

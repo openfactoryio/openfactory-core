@@ -5,11 +5,11 @@ import os
 import json
 import re
 import time
-import uuid
 import threading
 import asyncio
+from operator import eq
 from uuid import uuid4
-from typing import Literal, List, Dict, Any, Callable, Self, Tuple, Optional
+from typing import Literal, List, Dict, Any, Callable, Self
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient, KafkaAssetConsumer, KafkaAssetUNSConsumer, AssetProducer, CaseInsensitiveDict
 from openfactory.assets.utils import AssetAttribute, AssetNATSCallback, AsyncLoopThread, NATSSubscriber, get_nats_cluster_url
@@ -21,7 +21,7 @@ class BaseAsset:
     Base class for OpenFactory Assets.
 
     Warning:
-        This is an abstract class not intented to be used.
+        This is an abstract base class and should not be instantiated directly.
         From this class, two classes are derived (:class:`Asset <openfactory.assets.asset_class.Asset>`
         and :class:`AssetUNS <openfactory.assets.asset_uns_class.AssetUNS>`) for actual usage.
 
@@ -30,7 +30,7 @@ class BaseAsset:
 
     Note:
         - All write operations to the asset take place in the ``assets`` stream.
-        - NATS subscribers allow filtering messages by TYPE (``Samples``, ``Events``, ``Condition``).
+        - A single NATS subscriber keeps the asset state synchronized and dispatches registered callbacks.
 
     Attributes:
         KSQL_ASSET_TABLE (str): Name of ksqlDB table of asset states (``assets`` or ``assets_uns``).
@@ -42,7 +42,15 @@ class BaseAsset:
         ASSET_CONSUMER_CLASS (KafkaAssetConsumer|KafkaAssetUNSConsumer): Kafka consumer class for reading messages from asset stream.
         producer (AssetProducer): Shared Kafka producer instance used to publish asset messages (singleton across all BaseAsset subclasses).
         loop_thread (AsyncLoopThread): Async event loop thread used for NATS subscriptions.
-        subscribers (dict): Mapping of subscription keys to NATSSubscriber instances.
+        ofa_attributes (Dict[str, AssetAttribute]): Dictionary mapping attribute IDs to their current AssetAttribute.
+        ofa_methods (Dict[str, dict | None]): Dictionary mapping method IDs to their parsed method contracts.
+        _condition (threading.Condition): Condition variable used by wait_until() to wait for attribute updates.
+        _subscriber (NATSSubscriber): Permanent NATS subscriber responsible for synchronizing the internal state.
+        _attribute_callbacks (Dict[str, AssetNATSCallback]): Registered callbacks invoked when a specific attribute changes.
+        _messages_callback (AssetNATSCallback | None): Callback invoked for every received asset message.
+        _samples_callback (AssetNATSCallback | None): Callback invoked for every received sample message.
+        _events_callback (AssetNATSCallback | None): Callback invoked for every received event message.
+        _conditions_callback (AssetNATSCallback | None): Callback invoked for every received condition message.
     """
 
     # Instance attributes
@@ -51,7 +59,6 @@ class BaseAsset:
     asset_router_url: str | None
     producer: AssetProducer | None
     loop_thread: AsyncLoopThread | None
-    subscribers: dict[str, NATSSubscriber]
 
     _test_mode: bool
     _mocked_attributes: list[str]
@@ -94,17 +101,23 @@ class BaseAsset:
           - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
           - When used in an :class:`OpenFactoryApp <openfactory.apps.ofaapp.OpenFactoryApp>` deployed on the OpenFactory cluster, the environment variables ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set.
         """
-        super().__setattr__("_test_mode", test_mode)
+        super().__setattr__('ofa_attributes', {})
+        super().__setattr__('ofa_methods', {})
+        self._condition: threading.Condition = threading.Condition()
+        self._attribute_callbacks: dict[str, AssetNATSCallback] = {}
+        self._messages_callback: AssetNATSCallback | None = None
+        self._samples_callback: AssetNATSCallback | None = None
+        self._events_callback: AssetNATSCallback | None = None
+        self._conditions_callback: AssetNATSCallback | None = None
+        self._test_mode = test_mode
 
         # If in test mode, skip all runtime checks and producer setup
         if test_mode:
-            super().__setattr__("_mocked_attributes", [])
-            super().__setattr__("ksql", ksqlClient)
-            super().__setattr__("loop_thread", None)
-            super().__setattr__("subscribers", {})
-            super().__setattr__("bootstrap_servers", bootstrap_servers)
-            super().__setattr__("asset_router_url", asset_router_url)
-            super().__setattr__("producer", None)
+            self.ksql = ksqlClient
+            self.loop_thread = None
+            self.bootstrap_servers = bootstrap_servers
+            self.asset_router_url = asset_router_url
+            self.producer = None
             return
 
         if not hasattr(self, 'KSQL_ASSET_TABLE') or self.KSQL_ASSET_TABLE is None:
@@ -118,9 +131,8 @@ class BaseAsset:
         if not issubclass(self.ASSET_CONSUMER_CLASS, (KafkaAssetConsumer, KafkaAssetUNSConsumer)):
             raise TypeError("ASSET_CONSUMER_CLASS must be a subclass of KafkaAssetConsumer or KafkaAssetUNSConsumer.")
 
-        super().__setattr__('ksql', ksqlClient)
-        super().__setattr__('loop_thread', AsyncLoopThread())
-        super().__setattr__('subscribers', {})
+        self.ksql = ksqlClient
+        self.loop_thread = AsyncLoopThread()
 
         if bootstrap_servers is None:
             bootstrap_servers = os.getenv("KAFKA_BROKER")
@@ -129,7 +141,7 @@ class BaseAsset:
                 "OpenFactory BaseAsset requires 'bootstrap_servers' to be provided "
                 "either explicitly or via the KAFKA_BROKER environment variable."
             )
-        super().__setattr__('bootstrap_servers', bootstrap_servers)
+        self.bootstrap_servers = bootstrap_servers
 
         if asset_router_url is None:
             asset_router_url = os.getenv("ASSET_ROUTER_URL")
@@ -138,7 +150,7 @@ class BaseAsset:
                 "OpenFactory BaseAsset requires 'asset_router_url' to be provided "
                 "either explicitly or via the ASSET_ROUTER_URL environment variable."
             )
-        super().__setattr__('asset_router_url', asset_router_url)
+        self.asset_router_url = asset_router_url
 
         # Initialize the shared producer once
         if BaseAsset._shared_producer is None:
@@ -148,27 +160,35 @@ class BaseAsset:
             )
 
         # Use shared producer
-        super().__setattr__('producer', BaseAsset._shared_producer)
+        self.producer = BaseAsset._shared_producer
+
+        # Retrieve current state from ksqlDB
+        self._fetch_attributes()
+        self._fetch_methods()
+
+        # Start NATS subscription to update internal state
+        self.__start_nats_consumer()
 
     def close(self):
         """
-        Gracefully closes the Asset and frees ressources.
+        Closes the permanent NATS subscription and releases all resources owned by this BaseAsset.
 
         Steps performed:
-            1. Stops all NATS subscribers (unsubscribe + close NATS connection).
+            1. Stops the asset's NATS subscriber (unsubscribe + close NATS connection).
             2. Cancels any remaining tasks in the AsyncLoopThread.
             3. Stops the AsyncLoopThread and joins the thread.
 
         .. warning::
             After calling this method, the Asset instance should not be used again.
         """
-        # Stop all NATS subscribers
-        for key, sub in list(self.subscribers.items()):
-            try:
-                sub.stop()
-            except Exception as e:
-                print(f"Warning: failed to close NATS subscriber {key}: {e}")
-        self.subscribers.clear()
+        if self._test_mode:
+            return
+
+        # Stop NATS subscriber
+        try:
+            self._subscriber.stop()
+        except Exception as e:
+            print(f"Warning: failed to close NATS subscriber: {e}")
 
         # Cancel any remaining pending tasks in the loop
         loop = self.loop_thread.loop
@@ -185,21 +205,112 @@ class BaseAsset:
         if self.loop_thread:
             self.loop_thread.stop()
 
-    def _get_mocked_attribute_by_id(self, target_id: str) -> AssetAttribute | None:
+    def _parse_method_value(self, value: Any) -> Any:
         """
-        Retrieve a mocked AssetAttribute by its ID.
+        Parses the VALUE field of a Method attribute.
 
-        Args:
-            target_id (str): The ID of the AssetAttribute to retrieve.
-
-        Returns:
-            AssetAttribute | None: The matching AssetAttribute if found,
-            otherwise None.
+        Method contracts are stored as JSON strings in ksqlDB and converted
+        to their Python dictionary representation.
         """
-        return next(
-            (attr for attr in self._mocked_attributes if attr.id == target_id),
-            None
-        )
+
+        if value is None:
+            return None
+
+        if isinstance(value, dict):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+
+        return value
+
+    def _on_message(self, subject: str, msg: dict[str, Any]) -> None:
+        """
+        Processes an incoming NATS message.
+
+        Updates the internal asset state, notifies waiting threads, and
+        dispatches all registered callbacks.
+        """
+        msg = CaseInsensitiveDict(msg)
+        attribute_id = subject.split(".", 1)[1]
+
+        if msg['TYPE'] in {'Samples', 'Condition', 'Events', 'OpenFactory'}:
+            attr = AssetAttribute(
+                id=attribute_id,
+                value=msg['VALUE'],
+                type=msg['TYPE'],
+                tag=msg['TAG'],
+                timestamp=msg['attributes']['timestamp']
+            )
+            with self._condition:
+                self.ofa_attributes[attribute_id] = attr
+                self._condition.notify_all()
+
+            # Attribute callback
+            callback = self._attribute_callbacks.get(attribute_id)
+            if callback is not None:
+                callback(subject, msg)
+
+            # Global callback
+            if self._messages_callback is not None:
+                self._messages_callback(subject, msg)
+
+            # Samples callback
+            if (self._samples_callback is not None and msg["TYPE"] == "Samples"):
+                self._samples_callback(subject, msg)
+
+            # Events callback
+            if (self._events_callback is not None and msg["TYPE"] == "Events"):
+                self._events_callback(subject, msg)
+
+            # Conditions callback
+            if (self._conditions_callback is not None and msg["TYPE"] == "Condition"):
+                self._conditions_callback(subject, msg)
+
+        if msg["TYPE"] == "Method":
+            self.ofa_methods[attribute_id] = self._parse_method_value(msg["VALUE"])
+
+    def _fetch_attributes(self):
+        """ Retrieves all non-method attributes from ksqlDB and initializes the internal ``ofa_attributes`` dictionary. """
+        # test_mode
+        if getattr(self, "_test_mode", False):
+            return
+
+        # in production query ksqlDB
+        query = f"SELECT ID, VALUE, TYPE, TAG, TIMESTAMP FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE != 'Method';"
+        result = self.ksql.query(query)
+        for row in result:
+            attr_value = row["VALUE"]
+            if row["TYPE"] == "Samples" and attr_value is not None:
+                try:
+                    attr_value = float(attr_value)
+                except (TypeError, ValueError):
+                    pass
+
+            attr = AssetAttribute(
+                id=row['ID'],
+                value=attr_value,
+                type=row['TYPE'],
+                tag=row['TAG'],
+                timestamp=row['TIMESTAMP']
+            )
+            self.ofa_attributes[row['ID']] = attr
+
+    def _fetch_methods(self):
+        """ Retrieves the current methods of the asset from ksqlDB and initializes the internal ``ofa_methods`` dictionary. """
+        # test_mode
+        if getattr(self, "_test_mode", False):
+            return
+
+        # in production query ksqlDB
+        query = f"SELECT ID, VALUE, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='Method';"
+        result = self.ksql.query(query)
+
+        for row in result:
+            self.ofa_methods[row["ID"]] = self._parse_method_value(row["VALUE"])
 
     @property
     def asset_uuid(self) -> str:
@@ -240,23 +351,16 @@ class BaseAsset:
 
     def attributes(self) -> List[str]:
         """
-        Returns all non-``Method`` attribute IDs associated with this asset.
+        Returns the IDs of all attributes currently associated with this asset.
 
         Returns:
             List[str]: A list of attribute IDs.
         """
-        # return internal mock list in test_mode
-        if getattr(self, "_test_mode", False):
-            return [attr.id for attr in self._mocked_attributes]
-
-        # in production query ksqlDB
-        query = f"SELECT ID FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE != 'Method';"
-        result = self.ksql.query(query)
-        return [row['ID'] for row in result]
+        return [attr.id for attr in self.ofa_attributes.values()]
 
     def _get_attributes_by_type(self, attr_type: str) -> List[Dict[str, Any]]:
         """
-        Generic method to retrieve all attributes from the `KSQL_ASSET_TABLE` of a given TYPE.
+        Returns all asset attributes of the specified type.
 
         Args:
             attr_type (str): The type of the asset attribute ('Samples', 'Events', 'Condition').
@@ -264,26 +368,13 @@ class BaseAsset:
         Returns:
             List[Dict]: A list of dictionaries containing 'ID', 'VALUE', and cleaned 'TAG'.
         """
-        if getattr(self, "_test_mode", False):
-            return [
-                {
-                    "ID": attr.id,
-                    "VALUE": attr.value,
-                    "TAG": attr.tag,
-                }
-                for attr in self._mocked_attributes
-                if attr.type == attr_type
-            ]
-
-        query = f"SELECT ID, VALUE, TAG, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='{attr_type}';"
-        result = self.ksql.query(query)
         return [
             {
-                "ID": row["ID"],
-                "VALUE": row["VALUE"],
-                "TAG": re.sub(r'\{.*?\}', '', row["TAG"]).strip()
+                "ID": attr.id,
+                "VALUE": attr.value,
+                "TAG": re.sub(r'\{.*?\}', '', attr.tag).strip()
             }
-            for row in result
+            for attr in self.ofa_attributes.values() if attr.type == attr_type
         ]
 
     def samples(self) -> List[Dict[str, Any]]:
@@ -324,7 +415,7 @@ class BaseAsset:
 
     def methods(self) -> Dict[str, dict | None]:
         """
-        Returns method-type attributes for this asset.
+        Returns all methods associated with the asset.
 
         Returns:
             Dict[str, dict | None]:
@@ -355,36 +446,9 @@ class BaseAsset:
                 }
              }
         """
-        query = f"SELECT ID, VALUE, TYPE FROM {self.KSQL_ASSET_TABLE} WHERE {self.KSQL_ASSET_ID}='{self.ASSET_ID}' AND TYPE='Method';"
-        result = self.ksql.query(query)
-        parsed: Dict[str, Any] = {}
+        return self.ofa_methods
 
-        for row in result:
-            value = row.get("VALUE")
-
-            if value is None:
-                parsed[row["ID"]] = None
-                continue
-
-            # If already parsed (rare but possible depending on driver)
-            if isinstance(value, dict):
-                parsed[row["ID"]] = value
-                continue
-
-            # If JSON string → parse
-            if isinstance(value, str):
-                try:
-                    parsed[row["ID"]] = json.loads(value)
-                except json.JSONDecodeError:
-                    parsed[row["ID"]] = value
-                continue
-
-            # Fallback
-            parsed[row["ID"]] = value
-
-        return parsed
-
-    def method(self, method: str, sender_uuid: str, args: Optional[List[Tuple[str, str]]] = None) -> str:
+    def method(self, method: str, sender_uuid: str, args: list[tuple[str, str]] | None) -> str:
         """
         Requests the execution of a method for the asset.
 
@@ -413,7 +477,7 @@ class BaseAsset:
         Args:
             method (str): Name of the method to be executed.
             sender_uuid (str): Asset UUID of the asset sending the request.
-            args (Optional[List[Tuple[str, str]]]): List of (argument_name, value) pairs.
+            args (list[tuple[str, str]] | None): List of (argument_name, value) pairs.
 
                 All values must be strings. Defaults to empty list if not provided.
 
@@ -437,12 +501,11 @@ class BaseAsset:
 
         return str(correlation_id)
 
-    def __getattr__(self, attribute_id: str) -> AssetAttribute | Callable[..., Any]:
+    def __getattr__(self, attribute_id: str) -> AssetAttribute | Callable[..., str]:
         """
         Allows access to samples, events, conditions, and methods as attributes.
 
-        Dynamically retrieves asset attributes (e.g. events, conditions, or methods)
-        based on the `attribute_id` and returns them as an `AssetAttribute`.
+        Returns an attribute or method from the internal asset state.
         If the attribute is a method, it returns a callable function to execute that method.
 
         Args:
@@ -453,26 +516,9 @@ class BaseAsset:
                 - If the attribute is a sample, event, or condition, returns an AssetAttribute.
                 - If the attribute is a method, returns a callable method caller function.
         """
-        if getattr(self, "_test_mode", False):
-            return self._get_mocked_attribute_by_id(attribute_id)
+        if attribute_id in self.ofa_methods:
 
-        query = f"SELECT VALUE, TYPE, TAG, TIMESTAMP FROM {self.KSQL_ASSET_TABLE} WHERE key='{self.ASSET_ID}|{attribute_id}';"
-        result = self.ksql.query(query)
-
-        if not result:
-            return AssetAttribute(
-                id=attribute_id,
-                value='UNAVAILABLE',
-                type='UNAVAILABLE',
-                tag='UNAVAILABLE',
-                timestamp='UNAVAILABLE'
-            )
-
-        first_row = result[0]
-
-        if first_row['TYPE'] == 'Method':
-
-            def method_caller(**kwargs) -> str:
+            def method_caller(**kwargs: Any) -> str:
                 """
                 Executes the asset method with named string arguments.
 
@@ -492,21 +538,27 @@ class BaseAsset:
 
             return method_caller
 
-        return AssetAttribute(
-            id=attribute_id,
-            value=float(first_row['VALUE']) if first_row['TYPE'] == 'Samples' and first_row['VALUE'] != 'UNAVAILABLE' else first_row['VALUE'],
-            type=first_row['TYPE'],
-            tag=first_row['TAG'],
-            timestamp=first_row['TIMESTAMP']
-        )
+        if attribute_id not in self.ofa_attributes:
+            return AssetAttribute(
+                id=attribute_id,
+                value='UNAVAILABLE',
+                type='UNAVAILABLE',
+                tag='UNAVAILABLE',
+                timestamp='UNAVAILABLE'
+            )
+
+        return self.ofa_attributes[attribute_id]
 
     def __setattr__(self, name: str, value: Any) -> None:
         """
-        Sets attributes on the Asset object and sends updates to Kafka.
+        Updates the local asset state and publishes attribute changes to Kafka.
 
-        Overrides the default attribute setting behavior. If the attribute name
-        exists in the asset's defined attributes (`self.attributes()`), it updates the attribute's
-        value and sends the update to Kafka using the asset's producer.
+        Asset attributes are immediately reflected in the local asset state before being
+        published to the OpenFactory event stream.
+
+        Overrides the default attribute setting behavior. If the attribute name corresponds
+        to an existing asset attribute, its value is updated and published to the OpenFactory
+        event stream.
 
         If the attribute is **not** a defined Asset attribute:
         - It is treated as a regular class attribute and set normally.
@@ -532,8 +584,11 @@ class BaseAsset:
         Raises:
             OFAException: If the attribute is not defined in the asset but the value is an `AssetAttribute`.
         """
+        if name in self.ofa_methods:
+            raise OFAException(f"{name} is an Asset method. It can not be assigned.")
+
         # if not an Asset attributes, handle it as a class attribute
-        if name not in self.attributes():
+        if name not in self.ofa_attributes:
             if isinstance(value, AssetAttribute):
                 raise OFAException(f"The attribute {name} is not defined in the asset {self.ASSET_ID}. Use the `add_attribute` method to define a new asset attribute.")
             super().__setattr__(name, value)
@@ -543,39 +598,42 @@ class BaseAsset:
         if isinstance(value, AssetAttribute):
             if value.id != name:
                 raise OFAException(f"The AssetAttribute.id {value.id} does not match the attribute {name}")
-            self.producer.send_asset_attribute(self.asset_uuid, value)
+            self.ofa_attributes[name] = value
+            if not self._test_mode:
+                self.producer.send_asset_attribute(self.asset_uuid, value)
             return
 
         # get the current AssetAttribute
-        attr = self.__getattr__(name)
+        attr = self.ofa_attributes[name]
 
-        if getattr(self, "_test_mode", False):
-            # update its value
-            attr.value = value
-            return
+        new_attr = AssetAttribute(
+            id=name,
+            value=value,
+            tag=attr.tag,
+            type=attr.type
+        )
+        self.ofa_attributes[name] = new_attr
 
         # send kafka message
-        self.producer.send_asset_attribute(
-            self.asset_uuid,
-            AssetAttribute(
-                id=name,
-                value=value,
-                tag=attr.tag,
-                type=attr.type)
-            )
+        if not self._test_mode:
+            self.producer.send_asset_attribute(self.asset_uuid, new_attr)
 
     def add_attribute(self, asset_attribute: AssetAttribute, wait_to_become_available: bool = True) -> None:
         """
-        Adds a new attribute to the asset.
+        Adds a new attribute to the local asset state and publishes it to the OpenFactory event stream.
+
+        The attribute is immediately added to the local asset state before being published
+        to the OpenFactory event stream.
 
         Args:
             asset_attribute (AssetAttribute): The attribute to be added.
-            wait_to_become_available (bool): If true, will wait until the Attribute is available in ksqlDB
+            wait_to_become_available (bool): If True, waits until the newly added attribute has been materialized in ksqlDB before returning.
         """
-        if getattr(self, "_test_mode", False):
-            # add to internal mock list
-            self._mocked_attributes.append(asset_attribute)
+        self.ofa_attributes[asset_attribute.id] = asset_attribute
+
+        if self._test_mode:
             return
+
         self.producer.send_asset_attribute(self.asset_uuid, asset_attribute)
         if wait_to_become_available:
             self.wait_until(attribute_id=asset_attribute.id, value=asset_attribute.value, use_ksqlDB=True)
@@ -681,184 +739,237 @@ class BaseAsset:
         """
         self._add_reference(direction="below", new_reference=below_asset_reference)
 
-    def wait_until(self, attribute_id: str, value: Any, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
+    def wait_until(self, attribute_id: str, value: Any, comparison: Callable[[Any, Any], bool] = eq, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
         """
-        Waits until the asset attribute has a specific value or times out.
+        Waits until an asset attribute satisfies a comparison or times out.
 
-        Monitors either the NATS cluster or ksqlDB to check if the attribute value matches the expected value.
-        Returns True if the value is found within the given timeout, False otherwise.
+        Waits until the specified asset attribute satisfies the given comparison
+        against ``value``. By default, the comparison is performed against the
+        asset's locally cached state, which is continuously updated from the
+        OpenFactory event stream. If ``use_ksqlDB=True``, the comparison is instead
+        performed against the distributed state materialized in ksqlDB, ensuring
+        that the complete stream-processing pipeline has propagated the update.
+
+        .. admonition:: Example usage:
+
+            .. code-block:: python
+
+                from operator import gt, ge, lt, le
+
+                asset.wait_until("Execution", "ACTIVE")
+                asset.wait_until("Temperature", 42)
+                asset.wait_until("Temperature", 42, gt)
+                asset.wait_until("Temperature", 42, ge)
+                asset.wait_until("Temperature", 100, lt)
+                asset.wait_until("Temperature", 100, le)
 
         Args:
             attribute_id (str): The attribute ID of the asset to monitor.
-            value (Any): The value to wait for the attribute to match.
+            value (Any): The reference value used for the comparison.
+            comparison (Callable[[Any, Any], bool]):
+                Function used to compare the current attribute value with
+                ``value``. Defaults to :func:`operator.eq`.
             timeout (int): The maximum time to wait, in seconds. Default is 30 seconds.
-            use_ksqlDB (bool): If `True`, uses ksqlDB instead of NATS to check the attribute value. Default is `False`.
+            use_ksqlDB (bool):
+                If ``False`` (default), waits for the local cached state to satisfy
+                the comparison. If ``True``, waits until the distributed state
+                materialized in ksqlDB satisfies the comparison.
 
         Returns:
-            bool: `True` if the attribute value matches the expected value within the timeout, `False` otherwise.
+            bool: `True` if the comparison is satisfied before the timeout expires, otherwise ``False``.
         """
-        # First, check the current attribute value
-        attribute = self.__getattr__(attribute_id)
-        if type(attribute) is AssetAttribute:
-            if attribute.value == value and attribute.timestamp != 'UNAVAILABLE':
-                return True
+        # If not an attribute  raise
+        if attribute_id not in self.ofa_attributes:
+            raise OFAException(f"'{attribute_id}' is not an Attribute of Asset '{self.asset_uuid}'")
 
-        # If an OpenFactory method, wait_until is not applicable
-        if callable(attribute):
+        # First, check the current attribute value
+        if comparison(self.ofa_attributes[attribute_id].value, value):
             return True
 
-        start_time = time.time()
-
+        # Checks that the full stream-processing pipeline has completed
         if use_ksqlDB:
+            start_time = time.time()
+
             while True:
-                # Check for timeout
                 if (time.time() - start_time) > timeout:
                     return False
-                attribute = self.__getattr__(attribute_id)
-                if type(attribute) is AssetAttribute:
-                    if attribute.value == value and attribute.timestamp != 'UNAVAILABLE':
+
+                query = (f"SELECT VALUE, TYPE, TIMESTAMP FROM {self.KSQL_ASSET_TABLE} WHERE key='{self.ASSET_ID}|{attribute_id}';")
+                result = self.ksql.query(query)
+
+                if result:
+                    row = result[0]
+                    current = row["VALUE"]
+                    if row["TYPE"] == "Samples":
+                        try:
+                            current = float(current)
+                        except (TypeError, ValueError):
+                            pass
+                    if comparison(current, value):
                         return True
+
                 time.sleep(0.1)
 
-        event = threading.Event()
-        result = {"found": False}
+        with self._condition:
+            return self._condition.wait_for(
+                lambda: comparison(
+                    self.ofa_attributes[attribute_id].value,
+                    value
+                ),
+                timeout=timeout,
+            )
 
-        def on_message(subject: str, msg_value: dict):
-            msg_value = CaseInsensitiveDict(msg_value)
-            if msg_value.get("type") == "Samples" and msg_value.get("value") != "UNAVAILABLE":
-                try:
-                    if float(msg_value["value"]) == value:
-                        result["found"] = True
-                        event.set()
-                except ValueError:
-                    pass
-            else:
-                if msg_value.get("value") == value:
-                    result["found"] = True
-                    event.set()
-
-        sub_key = f"wait_{attribute_id}_{uuid.uuid4()}"
-        self.__start_nats_consumer(f"{self.asset_uuid.upper()}.{attribute_id}", on_message, sub_key=sub_key)
-
-        finished = event.wait(timeout=timeout)
-
-        self.__stop_subscription(sub_key)
-
-        return finished and result["found"]
-
-    def __start_nats_consumer(self, subject: str, on_message, sub_key: str):
-        """
-        Starts a NATS subscriber and stores it in self.subscribers with a unique key.
-        """
-        sub = NATSSubscriber(
+    def __start_nats_consumer(self):
+        """ Starts the asset's NATS subscriber. """
+        asset_uuid = self.asset_uuid
+        self._subscriber = NATSSubscriber(
             self.loop_thread,
-            get_nats_cluster_url(self.asset_uuid, self.asset_router_url),
-            subject, on_message)
-        sub.start()
-        self.subscribers[sub_key] = sub
+            get_nats_cluster_url(asset_uuid, self.asset_router_url),
+            f"{asset_uuid.upper()}.*",
+            self._on_message,
+        )
+        self._subscriber.start()
 
-    def __stop_subscription(self, subject: str) -> None:
+    def _restart_nats_subscription(self):
         """
-        Stops a NATS subscription and cleans up associated resources.
+        Restarts the asset's NATS subscriber.
 
-        Args:
-            subject (str): Subject of NATS subsription to stop
+        This method is used when the asset UUID changes after construction
+        (for example, during initialization of derived classes).
+        The subscriber is recreated using the new subject so that the internal state
+        continues to receive updates for the correct asset.
         """
-        sub = self.subscribers.pop(subject, None)
-        if sub:
-            sub.stop()
+
+        # Nothing to do in test mode
+        if self._test_mode:
+            return
+
+        # Stop current subscriber
+        try:
+            self._subscriber.stop()
+        except Exception as e:
+            print(f"Warning: failed to close NATS subscriber: {e}")
+
+        # Cancel any remaining pending tasks in the loop
+        loop = self.loop_thread.loop
+        pending = asyncio.all_tasks(loop=loop)
+        for task in pending:
+            task.cancel()
+
+        if pending:
+            try:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            except Exception:
+                pass
+
+        # Recreate subscriber with the current asset UUID
+        asset_uuid = self.asset_uuid
+        self._subscriber = NATSSubscriber(
+            self.loop_thread,
+            get_nats_cluster_url(asset_uuid, self.asset_router_url),
+            f"{asset_uuid.upper()}.*",
+            self._on_message,
+        )
+        self._subscriber.start()
 
     def subscribe_to_attribute(self, attribute_id: str, on_message: AssetNATSCallback) -> None:
         """
-        Subscribes to changes of an asset attribute using a NATS consumer.
+        Registers a callback invoked whenever the specified asset attribute changes.
 
         Args:
             attribute_id (str): The attribute ID to monitor.
             on_message (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict) and handles messages.
         """
-        subject = f"{self.asset_uuid.upper()}.{attribute_id}"
-        sub_key = f"subscribe_to_attribute_{attribute_id}"
-        self.__start_nats_consumer(subject, on_message, sub_key=sub_key)
+        if attribute_id in self._attribute_callbacks:
+            raise OFAException(
+                f"A callback is already registered for attribute '{attribute_id}'. "
+                f"Call stop_attribute_subscription('{attribute_id}') before registering a new callback."
+            )
+        self._attribute_callbacks[attribute_id] = on_message
 
     def subscribe_to_messages(self, on_message: AssetNATSCallback) -> None:
         """
-        Subscribes to asset messages using a NATS consumer.
+        Registers a callback invoked for every incoming asset message.
 
         Args:
             on_message (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict) and handles messages.
         """
-        subject = f"{self.asset_uuid.upper()}.*"
-        self.__start_nats_consumer(subject, on_message, sub_key="messages")
+        if self._messages_callback is not None:
+            raise OFAException(
+                "A callback is already registered for asset messages. "
+                "Call stop_messages_subscription() before registering a new callback."
+            )
+
+        self._messages_callback = on_message
 
     def stop_attribute_subscription(self, attribute_id: str) -> None:
         """
-        Stops the NATS consumer and gracefully shuts down the subscription.
+        Unregisters the callback associated with the specified attribute.
 
         Args:
             attribute_id (str): The attribute ID to for which to stop the subscription.
         """
-        self.__stop_subscription(f"subscribe_to_attribute_{attribute_id}")
+        self._attribute_callbacks.pop(attribute_id, None)
 
     def stop_messages_subscription(self) -> None:
-        """ Stops the NATS consumer and gracefully shuts down the subscription. """
-        self.__stop_subscription("messages")
+        """ Unregisters the callback for asset messages. """
+        self._messages_callback = None
 
     def subscribe_to_samples(self, on_sample: AssetNATSCallback) -> None:
         """
-        Subscribes to asset samples using a NATS consumer.
+        Registers a callback invoked for incoming sample messages.
 
         Args:
             on_sample (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        subject = f"{self.asset_uuid.upper()}.*"
+        if self._samples_callback is not None:
+            raise OFAException(
+                "A callback is already registered for asset samples. "
+                "Call stop_samples_subscription() before registering a new callback."
+            )
 
-        def _filter_samples(msg_subject: str, msg_value: dict):
-            msg_value = CaseInsensitiveDict(msg_value)
-            if msg_value.get("TYPE").upper() == "SAMPLES":
-                on_sample(msg_subject, msg_value)
-
-        self.__start_nats_consumer(subject, _filter_samples, sub_key="samples")
+        self._samples_callback = on_sample
 
     def stop_samples_subscription(self) -> None:
-        """ Stops the NATS consumer and gracefully shuts down the subscription for samples. """
-        self.__stop_subscription("samples")
+        """ Unregisters the callback for sample messages. """
+        self._samples_callback = None
 
     def subscribe_to_events(self, on_event: AssetNATSCallback) -> None:
         """
-        Subscribes to asset events using a NATS consumer.
+        Registers a callback invoked for incoming event messages.
 
         Args:
             on_event (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        subject = f"{self.asset_uuid.upper()}.*"
+        if self._events_callback is not None:
+            raise OFAException(
+                "A callback is already registered for asset events. "
+                "Call stop_events_subscription() before registering a new callback."
+            )
 
-        def _filter_events(msg_subject: str, msg_value: dict):
-            msg_value = CaseInsensitiveDict(msg_value)
-            if msg_value.get("TYPE").upper() == "EVENTS":
-                on_event(msg_subject, msg_value)
-
-        self.__start_nats_consumer(subject, _filter_events, sub_key="events")
+        self._events_callback = on_event
 
     def stop_events_subscription(self) -> None:
-        """ Stops the NATS consumer and gracefully shuts down the subscription for events. """
-        self.__stop_subscription("events")
+        """ Unregisters the callback for event messages. """
+        self._events_callback = None
 
     def subscribe_to_conditions(self, on_condition: AssetNATSCallback) -> None:
         """
-        Subscribes to asset conditions using a NATS consumer.
+        Registers a callback invoked for incoming condition messages.
 
         Args:
             on_condition (AssetNATSCallback): Callable that takes (msg_subject: str, msg_value: dict).
         """
-        subject = f"{self.asset_uuid.upper()}.*"
+        if self._conditions_callback is not None:
+            raise OFAException(
+                "A callback is already registered for asset conditions. "
+                "Call stop_conditions_subscription() before registering a new callback."
+            )
 
-        def _filter_conditions(msg_subject: str, msg_value: dict):
-            msg_value = CaseInsensitiveDict(msg_value)
-            if msg_value.get("TYPE").upper() == "CONDITION":
-                on_condition(msg_subject, msg_value)
-
-        self.__start_nats_consumer(subject, _filter_conditions, sub_key="conditions")
+        self._conditions_callback = on_condition
 
     def stop_conditions_subscription(self) -> None:
-        """ Stops the NATS consumer and gracefully shuts down the subscription for conditions. """
-        self.__stop_subscription("conditions")
+        """ Unregisters the callback for condition messages. """
+        self._conditions_callback = None

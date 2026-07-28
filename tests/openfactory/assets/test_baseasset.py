@@ -177,6 +177,19 @@ class TestBaseAsset(TestCase):
         with self.assertRaises(TypeError):
             InvalidConsumer('some_id', self.ksql_mock)
 
+    def test_resync_state_refreshes_attributes_and_methods(self, MockAssetProducer):
+        """ Test resync_state() reloads attributes and methods from ksqlDB. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset._fetch_attributes = MagicMock()
+        asset._fetch_methods = MagicMock()
+
+        asset.resync_state()
+
+        asset._fetch_attributes.assert_called_once_with()
+        asset._fetch_methods.assert_called_once_with()
+
     def test_close_stops_subscriber(self, MockAssetProducer):
         """ Test close() stops the asset's NATS subscriber. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())

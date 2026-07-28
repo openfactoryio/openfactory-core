@@ -384,7 +384,7 @@ class BaseAsset:
         Returns:
             List[Dict]: A list of dictionaries, each containing:
                 - ``ID`` (str): The attribute ID.
-                - ``VALUE`` (Any): The value of the sample.
+                - ``VALUE`` (float): The value of the sample.
                 - ``TAG`` (str): The cleaned tag name with placeholders removed.
         """
         return self._get_attributes_by_type('Samples')

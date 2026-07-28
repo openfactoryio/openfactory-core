@@ -227,7 +227,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
                                 self._execute_ofa_method(meth, envelope)
                             except Exception as e:
                                 self.logger.error(
-                                    f"[{self.asset_uuid}] Failed to execute {meth.__name__}: {type(e).__name__}: {e}",
+                                    f"[{self.asset_uuid}] Failed to execute {meth.__name__} with '{msg_value['VALUE']}': {type(e).__name__}: {e}",
                                     exc_info=True
                                 )
                         return on_cmd

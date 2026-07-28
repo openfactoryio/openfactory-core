@@ -166,6 +166,24 @@ class BaseAsset:
         self.__start_nats_consumer()
 
         # Retrieve current state from ksqlDB
+        self.resync_state()
+
+    def resync_state(self) -> None:
+        """
+        Resynchronizes the local asset state with the distributed state stored in ksqlDB.
+
+        This method reloads all asset attributes and methods from ksqlDB and updates
+        the local cache accordingly. Existing entries are overwritten with the latest
+        values, while newly discovered attributes and methods are added. Existing
+        entries that are not present in the retrieved state are left unchanged.
+
+        This method is useful for recovering from missed updates or forcing the local
+        cache to resynchronize with the distributed asset state.
+
+        Note:
+            This method does not restart the NATS subscription. It only refreshes
+            the local cache from the current state materialized in ksqlDB.
+        """
         self._fetch_attributes()
         self._fetch_methods()
 

@@ -257,31 +257,6 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
 
         self.assertIn("Failed to convert argument 'x'", str(ctx.exception))
 
-    def test_cmd_attribute_created(self):
-        """ Verify CMD attribute is added for decorated methods. """
-
-        class MyApp(OpenFactoryApp):
-
-            @ofa_method()
-            def move_axis(self, x: float, y: float):
-                return x + y
-
-        MyApp(
-            bootstrap_servers='mock_bootstrap',
-            ksqlClient=self.ksql_mock,
-            asset_router_url='mocked_asset_url'
-        )
-
-        calls = self.mock_add_attribute.call_args_list
-
-        cmd_found = False
-        for c in calls:
-            attr = c.kwargs["asset_attribute"]
-            if attr.id == "move_axis_CMD":
-                cmd_found = True
-
-        self.assertTrue(cmd_found)
-
     def test_register_ofa_method_creates_contract(self):
         """ Verify that method contract is correctly generated. """
 

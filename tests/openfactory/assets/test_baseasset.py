@@ -708,31 +708,28 @@ class TestBaseAsset(TestCase):
 
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
 
-        # Spy on __setattr__
-        asset.__setattr__ = MagicMock()
+        # Spy on send_asset_attribute
+        asset.producer.send_asset_attribute = MagicMock()
 
         correlation_id = asset.method(
-            method="start",
-            sender_uuid="SENDER-1",
-            args=[("param1", "value1"), ("param2", "value2")]
-        )
+                    method="start",
+                    sender_uuid="SENDER-1",
+                    args=[("param1", "value1"), ("param2", "value2")]
+                )
 
-        # Ensure attribute was set correctly
-        asset.__setattr__.assert_called_once()
+        asset.producer.send_asset_attribute.assert_called_once()
 
-        attr_name, payload = asset.__setattr__.call_args.args
+        # Get arguments of send_asset_attribute
+        asset_uuid, asset_attribute = asset.producer.send_asset_attribute.call_args.args
+        cmd_headder = json.loads(asset_attribute.value)["header"]
+        cmd_args = json.loads(asset_attribute.value)["arguments"]
 
-        assert attr_name == "start_CMD"
-
-        # Parse payload
-        parsed = json.loads(payload)
-
-        assert parsed["header"]["correlation_id"] == correlation_id
-        assert parsed["header"]["sender_uuid"] == "SENDER-1"
-        assert parsed["arguments"] == {
-            "param1": "value1",
-            "param2": "value2"
-        }
+        # Ensure send_asset_attribute was called correctly
+        self.assertEqual(asset_uuid, "uuid-123")
+        self.assertEqual(asset_attribute.id, "start_CMD")
+        self.assertEqual(cmd_headder["correlation_id"], correlation_id)
+        self.assertEqual(cmd_headder["sender_uuid"], "SENDER-1")
+        self.assertEqual(cmd_args, {"param1": "value1", "param2": "value2"})
 
     def test_setattr_non_asset_attribute(self, MockAssetProducer):
         """ Test setting a non-asset attribute (not in attributes list) """

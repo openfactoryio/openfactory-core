@@ -162,12 +162,12 @@ class BaseAsset:
         # Use shared producer
         self.producer = BaseAsset._shared_producer
 
+        # Start NATS subscription to update internal state
+        self.__start_nats_consumer()
+
         # Retrieve current state from ksqlDB
         self._fetch_attributes()
         self._fetch_methods()
-
-        # Start NATS subscription to update internal state
-        self.__start_nats_consumer()
 
     def close(self):
         """

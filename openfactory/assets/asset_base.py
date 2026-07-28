@@ -497,7 +497,18 @@ class BaseAsset:
         )
 
         # Set the attribute to trigger the command
-        self.__setattr__(f"{method}_CMD", envelope.model_dump_json())
+        cmd_id = f"{method}_CMD"
+        if cmd_id not in self.ofa_attributes:
+            self.add_attribute(
+                asset_attribute=AssetAttribute(
+                    id=cmd_id,
+                    value=envelope.model_dump_json(),
+                    type='OpenFactory',
+                    tag='Method.Command'
+                )
+            )
+        else:
+            self.__setattr__(cmd_id, envelope.model_dump_json())
 
         return str(correlation_id)
 
@@ -570,7 +581,7 @@ class BaseAsset:
         - If the value is a raw value (e.g., int, str, etc.), it wraps the value in an
         `AssetAttribute` using the current attribute’s metadata (tag, type) and sends it.
 
-        **Notes**:
+        Notes:
             If a new class attribute has to be defined in the constructor of the child class, one has to use
             ```python
             object.__setattr__(self, 'new_class_attribute', <some value>)

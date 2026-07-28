@@ -9,10 +9,14 @@ from openfactory.kafka import KafkaAssetConsumer, KSQLDBClient
 
 class Asset(BaseAsset):
     """
-    Represents an OpenFactory Asset using the ``ASSET_UUID`` as identifier.
+    Represents an OpenFactory asset using the ``ASSET_UUID`` as identifier.
 
-    This class encapsulates Asset metadata and a Kafka producer responsible for sending asset data.
-    It uses the ksqlDB topology based on the ``ASSETS_STREAM`` stream to handle Asset data.
+    This class represents an OpenFactory asset. It maintains a locally cached view of the
+    asset state synchronized with the OpenFactory platform while providing methods
+    to publish attribute updates and invoke asset methods.
+
+    It uses the OpenFactory data model to retrieve the initial asset state from ksqlDB
+    while keeping the local cache synchronized through the OpenFactory event stream.
 
     Attributes:
         asset_uuid (str): Unique identifier of the Asset.
@@ -55,23 +59,24 @@ class Asset(BaseAsset):
             def on_condition(msg_key, msg_value):
                 print(f"[Condition] [{msg_key}] {msg_value}")
 
-            cnc.subscribe_to_messages(on_messages, 'demo_messages_group')
-            cnc.subscribe_to_samples(on_sample, 'demo_samples_group')
-            cnc.subscribe_to_events(on_event, 'demo_events_group')
-            cnc.subscribe_to_conditions(on_condition, 'demo_conditions_group')
+            cnc.subscribe_to_messages(on_messages)
+            cnc.subscribe_to_samples(on_sample)
+            cnc.subscribe_to_events(on_event)
+            cnc.subscribe_to_conditions(on_condition)
 
             # run a main loop while subscriptions remain active
             try:
                 while True:
                     time.sleep(1)
             except KeyboardInterrupt:
-                print("Stopping consumer threads ...")
+                print("Stopping subscriptions ...")
                 cnc.stop_messages_subscription()
                 cnc.stop_samples_subscription()
                 cnc.stop_events_subscription()
                 cnc.stop_conditions_subscription()
-                print("Consumers stopped")
+                print("Subscriptions stopped")
             finally:
+                cnc.close()
                 ksql.close()
     """
 
@@ -85,7 +90,7 @@ class Asset(BaseAsset):
                  asset_router_url: str | None = None,
                  test_mode: bool = False) -> None:
         """
-        Initializes the Asset with metadata and a Kafka producer.
+        Initializes the Asset, its local state cache, and the communication infrastructure.
 
         Args:
             asset_uuid (str): UUID identifier of the asset.
@@ -126,14 +131,14 @@ class Asset(BaseAsset):
 
     def _get_reference_list(self, direction: str, as_assets: bool = False) -> list[str | Asset]:
         """
-        Retrieves a list of asset references (UUIDs or AssetUNS objects) in the given direction.
+        Retrieves a list of asset references (UUIDs or Asset objects) in the given direction.
 
         Args:
             direction (str): Either 'above' or 'below', indicating reference direction.
-            as_assets (bool): If True, returns AssetUNS instances instead of UUID strings.
+            as_assets (bool): If True, returns Asset instances instead of UUID strings.
 
         Returns:
-            List: List of asset UUIDs or AssetUNS objects.
+            list[str | Asset]: Asset UUIDs or Asset objects.
         """
         key = f"{self.asset_uuid}|references_{direction}"
         query = f"SELECT VALUE FROM assets WHERE key='{key}';"
@@ -183,22 +188,22 @@ if __name__ == "__main__":
         """ Callback to process received conditions. """
         print(f"[Condition] [{msg_key}] {msg_value}")
 
-    cnc.subscribe_to_messages(on_messages, 'demo_messages_group')
-    cnc.subscribe_to_samples(on_sample, 'demo_samples_group')
-    cnc.subscribe_to_events(on_event, 'demo_events_group')
-    cnc.subscribe_to_conditions(on_condition, 'demo_conditions_group')
+    cnc.subscribe_to_messages(on_messages)
+    cnc.subscribe_to_samples(on_sample)
+    cnc.subscribe_to_events(on_event)
+    cnc.subscribe_to_conditions(on_condition)
 
     # run a main loop while subscriptions remain active
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Stopping consumer threads ...")
+        print("Stopping subscriptions ...")
         cnc.stop_messages_subscription()
         cnc.stop_samples_subscription()
         cnc.stop_events_subscription()
         cnc.stop_conditions_subscription()
-        print("Consumers stopped")
+        print("Subscriptions stopped")
     finally:
+        cnc.close()
         ksql.close()
-        print("Closed conection to ksqlDB server")

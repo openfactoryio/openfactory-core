@@ -33,7 +33,7 @@ def click_inspect(asset_uuid: str) -> None:
     samples = asset.samples()
     for sample in samples:
         table.add_row(sample['ID'],
-                      sample['VALUE'],
+                      str(sample['VALUE']),
                       'Sample',
                       sample['TAG'])
 

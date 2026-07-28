@@ -91,11 +91,20 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
             loglevel: Logging level (e.g., ``INFO``, ``DEBUG``).
             test_mode: Enables test mode (disables live Kafka/ksql interaction).
 
+        Environment variables:
+            LOG_HTTP_REQUESTS: Enables HTTP request logging when set to one
+                of ``1``, ``true``, ``yes``, or ``on`` (case-insensitive).
+                Defaults to ``false``.
+            ASSET_FORWARDER_QUEUE_SIZE: Size of the queue of the forwarder (defaults to 10000)
+
         See also:
             :class:`OpenFactoryFastAPIApp <openfactory.apps.ofa_fastapi_app.OpenFactoryFastAPIApp>` for full initialization
             details and environment variable handling.
         """
-        super().__init__(*args, **kwargs)
+        log_http_requests = os.getenv("LOG_HTTP_REQUESTS", "false").strip().lower() in {
+            "1", "true", "yes", "on"
+            }
+        super().__init__(*args, **kwargs, log_http_requests=log_http_requests)
 
         # Consumer assignment flag
         self.consumer_has_been_assigned = False
@@ -104,7 +113,8 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
         self.queue = asyncio.Queue(maxsize=int(os.getenv("ASSET_FORWARDER_QUEUE_SIZE", "10000")))
 
         # setup NATS clusters
-        self.setup_nats_clusters()
+        if not self._test_mode:
+            self.setup_nats_clusters()
 
         # setup Kafka consumer
         self.consumer: Optional[Consumer] = None

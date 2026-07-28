@@ -234,14 +234,6 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
                     # Register command as asset attributes
                     self._register_ofa_method(method)
-                    self.add_attribute(
-                        asset_attribute=AssetAttribute(
-                            id=cmd_attribute,
-                            value="",
-                            type='OpenFactory',
-                            tag='Method.Command'
-                        )
-                    )
 
                     if not self._test_mode:
                         self.subscribe_to_attribute(cmd_attribute, make_callback(method))

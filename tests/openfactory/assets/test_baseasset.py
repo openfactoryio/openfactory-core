@@ -1,7 +1,9 @@
 import json
+import threading
 from unittest import TestCase
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
+from operator import gt
 from openfactory.exceptions import OFAException
 from openfactory.kafka import KSQLDBClient
 from openfactory.assets import AssetAttribute
@@ -51,8 +53,16 @@ class TestBaseAsset(TestCase):
         self.MockNATSSubscriber = nats_patcher.start()
         self.addCleanup(nats_patcher.stop)
 
+        url_patcher = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mocked_cluster"
+        )
+        self.mock_get_nats_cluster_url = url_patcher.start()
+        self.addCleanup(url_patcher.stop)
+
     def test_valid_subclass(self, MockAssetProducer):
         """ Test valid subclass """
+        self.ksql_mock.query.return_value = []
         asset = ValidAsset('some_id', self.ksql_mock)
         self.assertEqual(asset.ksql, self.ksql_mock)
         self.assertEqual(asset.bootstrap_servers, 'MockedBroker')
@@ -66,6 +76,7 @@ class TestBaseAsset(TestCase):
 
     def test_asset_router_url_explicit(self, MockAssetProducer):
         """ Test explicite definition of asset_router_url """
+        self.ksql_mock.query.return_value = []
         asset = ValidAsset(
             "some_id",
             self.ksql_mock,
@@ -77,6 +88,7 @@ class TestBaseAsset(TestCase):
     @patch.dict("os.environ", {"ASSET_ROUTER_URL": "http://env-router"})
     def test_asset_router_url_from_env(self, MockAssetProducer):
         """ Test environment variable fallback for asset_router_url """
+        self.ksql_mock.query.return_value = []
         asset = ValidAsset("some_id", self.ksql_mock, asset_router_url=None)
 
         self.assertEqual(asset.asset_router_url, "http://env-router")
@@ -91,6 +103,7 @@ class TestBaseAsset(TestCase):
 
     def test_bootstrap_servers_explicit(self, MockAssetProducer):
         """ Test explicite definition of bootstrap_servers """
+        self.ksql_mock.query.return_value = []
         asset = ValidAsset(
             "some_id",
             self.ksql_mock,
@@ -102,6 +115,7 @@ class TestBaseAsset(TestCase):
     @patch.dict("os.environ", {"KAFKA_BROKER": "mocked-broker"})
     def test_bootstrap_servers_from_env(self, MockAssetProducer):
         """ Test environment variable fallback for bootstrap_servers """
+        self.ksql_mock.query.return_value = []
         asset = ValidAsset("some_id", self.ksql_mock, bootstrap_servers=None)
 
         self.assertEqual(asset.bootstrap_servers, "mocked-broker")
@@ -163,23 +177,16 @@ class TestBaseAsset(TestCase):
         with self.assertRaises(TypeError):
             InvalidConsumer('some_id', self.ksql_mock)
 
-    def test_close_stops_all_subscribers(self, MockAssetProducer):
-        """ Test close stops all NATS subscribers """
+    def test_close_stops_subscriber(self, MockAssetProducer):
+        """ Test close() stops the asset's NATS subscriber. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
 
-        # Register fake subscribers
-        mock_sub1 = MagicMock()
-        mock_sub2 = MagicMock()
-        asset.subscribers = {"s1": mock_sub1, "s2": mock_sub2}
-
-        # Patch loop thread functions to avoid real async interaction
+        asset._subscriber = MagicMock()
         asset.loop_thread.stop = MagicMock()
 
         asset.close()
 
-        mock_sub1.stop.assert_called_once()
-        mock_sub2.stop.assert_called_once()
-        self.assertEqual(asset.subscribers, {})  # should be cleared
+        asset._subscriber.stop.assert_called_once()
 
     @patch("asyncio.all_tasks")
     @patch("asyncio.gather")
@@ -208,6 +215,292 @@ class TestBaseAsset(TestCase):
 
         asset.loop_thread.stop.assert_called_once()
 
+    def test_parse_method_value_none(self, MockAssetProducer):
+        """ Test _parse_method_value returns None unchanged. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        self.assertIsNone(asset._parse_method_value(None))
+
+    def test_parse_method_value_dict(self, MockAssetProducer):
+        """ Test _parse_method_value returns dictionaries unchanged. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        payload = {
+            "description": "GenerateCode",
+            "arguments": [],
+        }
+
+        self.assertIs(asset._parse_method_value(payload), payload)
+
+    def test_parse_method_value_json(self, MockAssetProducer):
+        """ Test _parse_method_value parses valid JSON strings. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        payload = {
+            "description": "GenerateCode",
+            "arguments": [],
+        }
+
+        self.assertEqual(asset._parse_method_value(json.dumps(payload)), payload)
+
+    def test_parse_method_value_invalid_json(self, MockAssetProducer):
+        """ Test _parse_method_value returns invalid JSON strings unchanged. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        self.assertEqual(asset._parse_method_value("not json"), "not json")
+
+    def test_parse_method_value_other_type(self, MockAssetProducer):
+        """ Test _parse_method_value returns unsupported types unchanged. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        self.assertEqual(asset._parse_method_value(42), 42)
+
+    def test_on_message_updates_attribute_cache(self, MockAssetProducer):
+        """ Test _on_message updates the cached AssetAttribute. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.temperature",
+            {
+                "TYPE": "Samples",
+                "VALUE": 42,
+                "TAG": "Temperature",
+                "attributes": {"timestamp": "MockedTimeStamp"},
+            },
+        )
+
+        self.assertEqual(asset.temperature.value, 42)
+        self.assertEqual(asset.temperature.tag, "Temperature")
+        self.assertEqual(asset.temperature.type, "Samples")
+
+    def test_on_message_updates_method_definition(self, MockAssetProducer):
+        """ Test _on_message updates cached methods. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        payload = {
+            "description": "Generate code",
+            "arguments": []
+        }
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.GenerateCode",
+            {
+                "TYPE": "Method",
+                "VALUE": json.dumps(payload),
+            },
+        )
+
+        self.assertEqual(asset.methods()["GenerateCode"], payload)
+
+    def test_on_message_updates_method_definition_from_string(self, MockAssetProducer):
+        """ Test _on_message keeps invalid JSON method definitions as strings. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.GenerateCode",
+            {
+                "TYPE": "Method",
+                "VALUE": "not json",
+            },
+        )
+
+        self.assertEqual(asset.methods()["GenerateCode"], "not json")
+
+    def test_on_message_updates_method_definition_from_dict(self, MockAssetProducer):
+        """ Test _on_message accepts already parsed method definitions. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        payload = {
+            "description": "GenerateCode",
+            "arguments": []
+        }
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.GenerateCode",
+            {
+                "TYPE": "Method",
+                "VALUE": payload,
+            },
+        )
+
+        self.assertIs(asset.methods()["GenerateCode"], payload)
+
+    def test_on_message_replaces_existing_method_definition(self, MockAssetProducer):
+        """ Test _on_message replaces an existing cached method definition. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset.ofa_methods["GenerateCode"] = {
+            "description": "Old description",
+            "arguments": ["old"],
+        }
+
+        payload = {
+            "description": "New description",
+            "arguments": [],
+        }
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.GenerateCode",
+            {
+                "TYPE": "Method",
+                "VALUE": json.dumps(payload),
+            },
+        )
+
+        self.assertEqual(asset.methods()["GenerateCode"], payload)
+
+    def test_on_message_ignores_unknown_message_type(self, MockAssetProducer):
+        """ Test _on_message ignores unsupported message types. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.ofa_attributes["temperature"] = attr
+
+        asset.ofa_methods["GenerateCode"] = {
+            "description": "GenerateCode",
+            "arguments": [],
+        }
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.temperature",
+            {
+                "TYPE": "SomethingUnexpected",
+                "VALUE": "new value",
+                "TAG": "Temperature",
+                "attributes": {"timestamp": "MockedTimeStamp"},
+            },
+        )
+
+        self.assertIs(asset.ofa_attributes["temperature"], attr)
+
+        self.assertEqual(
+            asset.ofa_methods["GenerateCode"],
+            {
+                "description": "GenerateCode",
+                "arguments": [],
+            },
+        )
+
+    def test_fetch_attributes_converts_samples_to_float(self, MockAssetProducer):
+        """ Test _fetch_attributes converts sample values to float. """
+
+        ksqlMock = MagicMock()
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return [{
+                    "ID": "temperature",
+                    "VALUE": "42.5",
+                    "TYPE": "Samples",
+                    "TAG": "Temperature",
+                    "TIMESTAMP": "MockedTimeStamp",
+                }]
+
+            if "TYPE='Method'" in query:
+                return []
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
+
+        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
+
+        self.assertEqual(asset.temperature.value, 42.5)
+        self.assertIsInstance(asset.temperature.value, float)
+
+    def test_fetch_methods_parses_json(self, MockAssetProducer):
+        """ Test _fetch_methods parses JSON method definitions. """
+
+        ksqlMock = MagicMock()
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return [{
+                    "ID": "GenerateCode",
+                    "VALUE": json.dumps({
+                        "description": "GenerateCode",
+                        "arguments": []
+                    }),
+                    "TYPE": "Method",
+                }]
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
+
+        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
+
+        self.assertEqual(
+            asset.methods()["GenerateCode"],
+            {
+                "description": "GenerateCode",
+                "arguments": []
+            }
+        )
+
+    def test_fetch_methods_accepts_dict(self, MockAssetProducer):
+        """ Test _fetch_methods accepts already parsed method definitions. """
+
+        payload = {
+            "description": "GenerateCode",
+            "arguments": []
+        }
+
+        ksqlMock = MagicMock()
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return [{
+                    "ID": "GenerateCode",
+                    "VALUE": payload,
+                    "TYPE": "Method",
+                }]
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
+
+        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
+
+        self.assertIs(asset.methods()["GenerateCode"], payload)
+
+    def test_fetch_methods_accepts_none(self, MockAssetProducer):
+        """ Test _fetch_methods stores None method definitions. """
+
+        ksqlMock = MagicMock()
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return [{
+                    "ID": "GenerateCode",
+                    "VALUE": None,
+                    "TYPE": "Method",
+                }]
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
+
+        asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
+
+        self.assertIsNone(asset.methods()["GenerateCode"])
+
     def test_type_returns_unavailable_when_empty(self, MockAssetProducer):
         """ Test if asset.type returns 'UNAVAILABLE' when the ksql query yields no results """
 
@@ -221,14 +514,20 @@ class TestBaseAsset(TestCase):
 
         # Check if the correct query was executed
         expected_query = "SELECT TYPE FROM assets_type WHERE ASSET_UUID='some_id';"
-        self.ksql_mock.query.assert_called_once_with(expected_query)
+        self.ksql_mock.query.assert_any_call(expected_query)
 
     def test_type_returns_value_when_present(self, MockAssetProducer):
         """ Test if asset.type returns the correct value when the ksql query returns data """
 
         # Simulate a valid result from ksqlDB with type 'Condition'
         ksql_mock = Mock(spec=KSQLDBClient)
-        ksql_mock.query.return_value = [{'TYPE': 'Condition'}]
+
+        def query_side_effect(query):
+            if query.startswith("SELECT TYPE FROM assets_type"):
+                return [{"TYPE": "Condition"}]
+            return []
+
+        ksql_mock.query.side_effect = query_side_effect
 
         asset = ValidAsset('some_id', ksql_mock)
 
@@ -237,15 +536,33 @@ class TestBaseAsset(TestCase):
 
         # Check if the correct query was executed
         expected_query = "SELECT TYPE FROM assets_type WHERE ASSET_UUID='some_id';"
-        ksql_mock.query.assert_called_once_with(expected_query)
+        ksql_mock.query.assert_any_call(expected_query)
 
     def test_attributes_success(self, MockAssetProducer):
         """ Test attributes() returns correct attribute IDs """
         ksqlMock = MagicMock()
         ksqlMock.query.return_value = [
-            {"ID": 101},
-            {"ID": 102},
-            {"ID": 103}
+            {
+                "ID": 101,
+                "VALUE": 1,
+                "TYPE": "Samples",
+                "TAG": "Temperature",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
+                "ID": 102,
+                "VALUE": 2,
+                "TYPE": "Events",
+                "TAG": "Execution",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
+                "ID": 103,
+                "VALUE": 3,
+                "TYPE": "Condition",
+                "TAG": "Fault",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
         ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
@@ -270,18 +587,23 @@ class TestBaseAsset(TestCase):
             {
                 "ID": "id1",
                 "VALUE": "val1",
-                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
-            }
+                "TYPE": "Samples",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
+                "ID": "id2",
+                "VALUE": "val2",
+                "TYPE": "Events",
+                "TAG": "Execution",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
         ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         samples = asset._get_attributes_by_type('Samples')
 
         self.assertEqual(samples, [{'ID': 'id1', 'VALUE': 'val1', 'TAG': 'MockedTag'}])
-
-        # Ensure correct query was executed
-        expected_query = f"SELECT ID, VALUE, TAG, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Samples';"
-        ksqlMock.query.assert_any_call(expected_query)
 
     def test_samples(self, MockAssetProducer):
         """ Test samples() """
@@ -290,8 +612,17 @@ class TestBaseAsset(TestCase):
             {
                 "ID": "id1",
                 "VALUE": "val1",
-                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
-            }
+                "TYPE": "Samples",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
+                "ID": "event1",
+                "VALUE": "ACTIVE",
+                "TYPE": "Events",
+                "TAG": "Execution",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
         ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
@@ -299,18 +630,23 @@ class TestBaseAsset(TestCase):
 
         self.assertEqual(samples, [{'ID': 'id1', 'VALUE': 'val1', 'TAG': 'MockedTag'}])
 
-        # Ensure correct query was executed
-        expected_query = f"SELECT ID, VALUE, TAG, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Samples';"
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_events(self, MockAssetProducer):
         """ Test events() """
         ksqlMock = MagicMock()
         ksqlMock.query.return_value = [
             {
+                "ID": "id1",
+                "VALUE": "val1",
+                "TYPE": "Samples",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
                 "ID": "id2",
                 "VALUE": "val2",
-                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag"
+                "TYPE": "Events",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}MockedTag",
+                "TIMESTAMP": "MockedTimeStamp",
             }
         ]
 
@@ -319,10 +655,6 @@ class TestBaseAsset(TestCase):
 
         self.assertEqual(events, [{'ID': 'id2', 'VALUE': 'val2', 'TAG': 'MockedTag'}])
 
-        # Ensure correct query was executed
-        expected_query = f"SELECT ID, VALUE, TAG, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Events';"
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_conditions(self, MockAssetProducer):
         """ Test conditions() """
         ksqlMock = MagicMock()
@@ -330,8 +662,17 @@ class TestBaseAsset(TestCase):
             {
                 "ID": "id3",
                 "VALUE": "val3",
-                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}Fault"
-            }
+                "TYPE": "Condition",
+                "TAG": "{urn:mtconnect.org:MTConnectStreams:2.2}Fault",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
+            {
+                "ID": "id4",
+                "VALUE": "val4",
+                "TYPE": "Samples",
+                "TAG": "Temperature",
+                "TIMESTAMP": "MockedTimeStamp",
+            },
         ]
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
@@ -344,25 +685,23 @@ class TestBaseAsset(TestCase):
         }]
         self.assertEqual(conditions, expected_conditions)
 
-        # Ensure correct query was exectued
-        expected_query = f"SELECT ID, VALUE, TAG, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Condition';"
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_methods(self, MockAssetProducer):
         """ Test methods() """
         ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [
-            {"ID": "id4", "VALUE": "val4"}
-        ]
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+            elif "TYPE='Method'" in query:
+                return [{"ID": "id4", "VALUE": "val4"}]
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         methods = asset.methods()
 
         self.assertEqual(methods, {'id4': 'val4'})
-
-        # Ensure correct query was exectued
-        expected_query = f"SELECT ID, VALUE, TYPE FROM {asset.KSQL_ASSET_TABLE} WHERE {asset.KSQL_ASSET_ID}='{asset.ASSET_ID}' AND TYPE='Method';"
-        ksqlMock.query.assert_any_call(expected_query)
 
     def test_method_builds_correct_envelope(self, MockAssetProducer):
         """ Test that method() builds and sends a valid CommandEnvelope """
@@ -404,6 +743,19 @@ class TestBaseAsset(TestCase):
         asset.new_attr = "something"
         self.assertEqual(asset.new_attr, "something")
 
+    def test_setattr_method_raises_exception(self, MockAssetProducer):
+        """ Test assigning to a method raises OFAException. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        asset.ofa_methods["GenerateCode"] = {
+            "description": "GenerateCode",
+            "arguments": []
+        }
+
+        with self.assertRaises(OFAException):
+            asset.GenerateCode = 42
+
     def test_setattr_raises_exception_on_invalid_asset_attribute(self, MockAssetProducer):
         """ Test setting an AssetAttribute on undefined asset attribute raises exception """
         # Mock asset with a single 'temperature' attribute
@@ -421,12 +773,18 @@ class TestBaseAsset(TestCase):
         """ Test setting a defined asset attribute with AssetAttribute instance """
         mock_producer = MockAssetProducer.return_value
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock(), bootstrap_servers="mock_broker")
-        asset.attributes = MagicMock(return_value=["temperature"])
+        asset.ofa_attributes["temperature"] = AssetAttribute(
+            id="temperature",
+            value=None,
+            tag="Temperature",
+            type="Samples",
+        )
 
         attr = AssetAttribute(id='temperature', value=25, tag="Temperature", type="Samples")
         asset.temperature = attr
 
         mock_producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
+        self.assertIs(asset.ofa_attributes["temperature"], attr)
 
     def test_setattr_with_wrong_asset_attribute_id(self, MockAssetProducer):
         """ Test setting a defined asset attribute with AssetAttribute instance having wrong id raises exception """
@@ -455,22 +813,14 @@ class TestBaseAsset(TestCase):
         )
         self.assertEqual(attribute, expected)
 
-        # Ensure correct query was executed
-        expected_query = (
-            "SELECT VALUE, TYPE, TAG, TIMESTAMP "
-            "FROM assets WHERE key='uuid-123|some_missing_attribute';"
-        )
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_setattr_valid_asset_attribute_with_raw_value(self, MockAssetProducer):
         """ Test setting a defined asset attribute with a raw value (not an AssetAttribute) """
         mock_producer = MockAssetProducer.return_value
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock(), bootstrap_servers="mock_broker")
-        asset.attributes = MagicMock(return_value=["temperature"])
 
-        # Simulate current attribute with metadata
+        # Simulate current attribute
         current_attr = AssetAttribute(id="temperature", value=10, tag="Temperature", type="Samples")
-        asset.__getattr__ = MagicMock(return_value=current_attr)
+        asset.ofa_attributes["temperature"] = current_attr
 
         asset.temperature = 30
 
@@ -478,18 +828,34 @@ class TestBaseAsset(TestCase):
         expected = AssetAttribute(id="temperature", value=30, tag="Temperature", type="Samples")
         mock_producer.send_asset_attribute.assert_called_once_with("uuid-123", expected)
 
+        updated = asset.ofa_attributes["temperature"]
+        self.assertEqual(updated.id, "temperature")
+        self.assertEqual(updated.value, 30)
+        self.assertEqual(updated.tag, current_attr.tag)
+        self.assertEqual(updated.type, current_attr.type)
+
     def test_getattr_samples(self, MockAssetProducer):
         """ Test __getattr__ returns float for 'Samples' type """
         ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [
-            {
-                "ID": "id1",
-                "VALUE": "42.5",
-                "TYPE": "Samples",
-                "TAG": "MockedTag",
-                "TIMESTAMP": "MockedTimeStamp"
-            }
-        ]
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return [
+                    {
+                        "ID": "id1",
+                        "VALUE": "42.5",
+                        "TYPE": "Samples",
+                        "TAG": "MockedTag",
+                        "TIMESTAMP": "MockedTimeStamp",
+                    }
+                ]
+
+            if "TYPE='Method'" in query:
+                return []
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id1
@@ -497,32 +863,34 @@ class TestBaseAsset(TestCase):
         expected = AssetAttribute(id='id1', value=42.5, type='Samples', tag='MockedTag', timestamp='MockedTimeStamp')
         self.assertEqual(attribute, expected)
 
-        # Ensure correct query was exectued
-        expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|id1';"
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_getattr_string_value(self, MockAssetProducer):
         """ Test __getattr__ returns raw VALUE for non-'Samples' and non-'Method' types """
         ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [
-            {
-                "ID": "id2",
-                "VALUE": "val2",
-                "TYPE": "Events",
-                "TAG": "MockedTag",
-                "TIMESTAMP": "MockedTimeStamp"
-            }
-        ]
+
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return [
+                    {
+                        "ID": "id2",
+                        "VALUE": "val2",
+                        "TYPE": "Events",
+                        "TAG": "MockedTag",
+                        "TIMESTAMP": "MockedTimeStamp"
+                    }
+                ]
+
+            if "TYPE='Method'" in query:
+                return []
+
+            return []
+
+        ksqlMock.query.side_effect = query_side_effect
 
         asset = ValidAsset("uuid-123", ksqlClient=ksqlMock)
         attribute = asset.id2
 
         expected = AssetAttribute(id='id2', value='val2', type='Events', tag='MockedTag', timestamp='MockedTimeStamp')
         self.assertEqual(attribute, expected)
-
-        # Ensure correct query was exectued
-        expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|id2';"
-        ksqlMock.query.assert_any_call(expected_query)
 
     @patch("openfactory.assets.asset_base.BaseAsset.method")
     def test_getattr_method(self, mock_method, MockAssetProducer):
@@ -554,10 +922,6 @@ class TestBaseAsset(TestCase):
         expected_args_list = [("arg1", "value1"), ("arg2", "value2")]
         mock_method.assert_called_once_with("a_method", "TEST-ASSET", expected_args_list)
 
-        # Ensure the correct KSQL query was executed
-        expected_query = "SELECT VALUE, TYPE, TAG, TIMESTAMP FROM assets WHERE key='uuid-123|a_method';"
-        ksqlMock.query.assert_any_call(expected_query)
-
     def test_add_attribute_sends_asset_attribute(self, MockAssetProducer):
         """ Test add_attribute sends the new AssetAttribute to the producer """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
@@ -573,8 +937,25 @@ class TestBaseAsset(TestCase):
 
         asset.producer.send_asset_attribute.assert_called_once_with("uuid-123", attr)
 
-    def test_add_attribute_in_test_mode_adds_to_mocked_attributes(self, MockAssetProducer):
-        """ Test add_attribute stores the attribute locally when in test mode """
+    def test_add_attribute_updates_cache_immediately(self, MockAssetProducer):
+        """ Test add_attribute immediately updates the local cache. """
+
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        asset.wait_until = MagicMock(return_value=True)
+
+        attr = AssetAttribute(
+            id="temperature",
+            value=42,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        asset.add_attribute(attr)
+
+        self.assertIs(asset.temperature, attr)
+
+    def test_add_attribute_in_test_mode_adds_attribute(self, MockAssetProducer):
+        """ Test add_attribute stores the attribute locally in test mode. """
         asset = ValidAsset.__new__(ValidAsset)
         BaseAsset.__init__(asset, ksqlClient=MagicMock(), test_mode=True)
 
@@ -587,7 +968,9 @@ class TestBaseAsset(TestCase):
 
         asset.add_attribute(attr)
 
-        self.assertIn(attr, asset._mocked_attributes)
+        self.assertEqual(asset.temperature.value, 42)
+        self.assertEqual(asset.temperature.type, "Samples")
+        self.assertEqual(asset.temperature.tag, "Temperature")
 
     def test_add_attribute_waits_until_available_by_default(self, MockAssetProducer):
         """ Test add_attribute waits until the new attribute is available by default """
@@ -627,8 +1010,22 @@ class TestBaseAsset(TestCase):
 
     def test_get_reference_list_not_implemented(self, MockAssetProducer):
         """ Test if _get_reference_list raises NotImplementedError when not implemented in subclass """
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
 
-        asset = ValidAsset('some_id', self.ksql_mock)
+            if "TYPE='Method'" in query:
+                return []
+
+            if "SELECT VALUE FROM assets WHERE key=" in query:
+                return [{"VALUE": "existing_ref"}]
+
+            return []
+
+        ksqlMock = MagicMock()
+        ksqlMock.query.side_effect = query_side_effect
+
+        asset = ValidAsset('some_id', ksqlClient=ksqlMock)
 
         with self.assertRaises(NotImplementedError):
             asset._get_reference_list('above')
@@ -722,8 +1119,21 @@ class TestBaseAsset(TestCase):
 
     def test_add_reference_above_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_above when existing references are present """
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return []
+
+            if "SELECT VALUE FROM assets WHERE key='asset-001|references_above';" in query:
+                return [{"VALUE": "existing-ref1, existing-ref2"}]
+
+            return []
+
         ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [{"VALUE": "existing-ref1, existing-ref2", "ID": "ID1"}]
+        ksqlMock.query.side_effect = query_side_effect
+
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 
@@ -768,8 +1178,24 @@ class TestBaseAsset(TestCase):
 
     def test_add_reference_below_with_existing_reference(self, MockAssetProducer):
         """ Test add_reference_below when existing references are present """
+        def query_side_effect(query):
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return []
+
+            if "references_above" in query:
+                return [{"VALUE": "existing-ref1, existing-ref2"}]
+
+            if "references_below" in query:
+                return [{"VALUE": "existing-ref1, existing-ref2"}]
+
+            return []
+
         ksqlMock = MagicMock()
-        ksqlMock.query.return_value = [{"VALUE": "existing-ref1, existing-ref2", "ID": "ID1"}]
+        ksqlMock.query.side_effect = query_side_effect
+
         asset = ValidAsset("asset-001", ksqlClient=ksqlMock)
         asset.producer = MagicMock()
 
@@ -789,25 +1215,19 @@ class TestBaseAsset(TestCase):
         )
         asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
-    def test_wait_until_callable_attribute(self, MockAssetProducer):
-        """ Test wait_until returns True when the attribute is an OpenFactory method """
+    def test_wait_until_method_raises(self, MockAssetProducer):
+        """ wait_until cannot be used on methods. """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
 
-        def mock_method(**kwargs):
-            pass
+        asset.ofa_methods["test_method"] = {}
 
-        asset.__getattr__ = MagicMock(return_value=mock_method)
-
-        result = asset.wait_until(attribute_id="test_method", value=None)
-
-        self.assertTrue(result)
-        asset.__getattr__.assert_called_once_with("test_method")
+        with self.assertRaises(OFAException):
+            asset.wait_until(attribute_id="test_method", value=None)
 
     def test_wait_until_attribute_matches_initially(self, MockAssetProducer):
         """ Test wait_until returns True when the attribute matches initially """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
 
-        # Attribute already available in ksqlDB with the expected value
         attribute = AssetAttribute(
             id="test_attribute",
             value="expected_value",
@@ -815,127 +1235,165 @@ class TestBaseAsset(TestCase):
             tag="TestAttribute",
             timestamp="MockedTimeStamp",
         )
-        asset.__getattr__ = MagicMock(return_value=attribute)
+        asset.ofa_attributes["test_attribute"] = attribute
 
         result = asset.wait_until(attribute_id="test_attribute", value="expected_value")
 
         self.assertTrue(result)
-        asset.__getattr__.assert_called_once_with("test_attribute")
+
+    def test_wait_until_initial_comparison(self, MockAssetProducer):
+        """ Test wait_until uses the comparison function for the initial value. """
+
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+
+        asset.ofa_attributes["temperature"] = AssetAttribute(
+            id="temperature",
+            value=50,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        self.assertTrue(asset.wait_until(attribute_id="temperature", value=42, comparison=gt))
 
     def test_wait_until_matches_nats_message(self, MockAssetProducer):
-        """ Test wait_until returns True when a NATS message matches the desired attribute/value """
-
+        """ Test wait_until returns when a matching NATS message updates the cache. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        attribute_id = "test_attribute"
-        expected_value = 42
 
-        # Mock __getattr__ to return an initially non-matching asset attribute
-        mock_attribute = AssetAttribute(
-            id=attribute_id,
+        attribute = AssetAttribute(
+            id="test_attribute",
             value="not_expected_value",
             type="Samples",
             tag="TestAttribute",
         )
-        asset.__getattr__ = MagicMock(return_value=mock_attribute)
+        asset.ofa_attributes["test_attribute"] = attribute
 
-        # Patch the NATS consumer start/stop
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start, \
-             patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
+        result = None
 
-            def fake_start(subject, callback, sub_key):
-                # Simulate a NATS message with the expected value
-                callback(f"{asset.asset_uuid.upper()}.{attribute_id}", {"type": "Samples", "value": expected_value})
+        def waiter():
+            nonlocal result
+            result = asset.wait_until(attribute_id="test_attribute", value=42, timeout=1)
 
-            mock_start.side_effect = fake_start
+        thread = threading.Thread(target=waiter)
+        thread.start()
 
-            result = asset.wait_until(attribute_id=attribute_id, value=expected_value, timeout=1)
+        # simulate arrival of a NATS message
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.test_attribute",
+            {
+                "TYPE": "Samples",
+                "VALUE": 42,
+                "TAG": "TestAttribute",
+                "attributes": {
+                    "timestamp": "MockedTimeStamp"
+                }
+            }
+        )
 
-            # Assertions
-            assert result is True
-            asset.__getattr__.assert_called_with(attribute_id)
-            mock_start.assert_called_once()
-            mock_stop.assert_called_once()
+        thread.join()
 
-    def test_wait_until_times_out_nats(self, MockAssetProducer):
-        """ Test wait_until returns False on timeout when no NATS message matches """
+        self.assertTrue(result)
+        self.assertEqual(asset.ofa_attributes["test_attribute"].value, 42)
+
+    def test_wait_until_matches_comparison_after_nats_update(self, MockAssetProducer):
+        """ Test wait_until wakes up when the comparison becomes true. """
 
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        attribute_id = "temperature"
-        expected_value = 42.0
 
-        # Mock __getattr__ to return an initially non-matching asset attribute
-        mock_attribute = AssetAttribute(
-            id=attribute_id,
+        asset.ofa_attributes["temperature"] = AssetAttribute(
+            id="temperature",
+            value=20,
+            type="Samples",
+            tag="Temperature",
+        )
+
+        result = None
+
+        def waiter():
+            nonlocal result
+            result = asset.wait_until(
+                attribute_id="temperature",
+                value=42,
+                comparison=gt,
+                timeout=1,
+            )
+
+        thread = threading.Thread(target=waiter)
+        thread.start()
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.temperature",
+            {
+                "TYPE": "Samples",
+                "VALUE": 50,
+                "TAG": "Temperature",
+                "attributes": {"timestamp": "MockedTimeStamp"},
+            },
+        )
+
+        thread.join()
+
+        self.assertTrue(result)
+
+    def test_wait_until_times_out(self, MockAssetProducer):
+        """ Test wait_until returns False when the attribute never reaches the expected value. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
+        attribute = AssetAttribute(
+            id="temperature",
             value=10.0,
             type="Samples",
             tag="Temperature",
         )
-        asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
-        # Patch NATS start/stop
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start, \
-             patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
+        asset.ofa_attributes["temperature"] = attribute
 
-            # Do not call the callback, simulating no matching message
-            mock_start.side_effect = lambda subject, callback, sub_key: None
+        result = asset.wait_until(attribute_id="temperature", value=42.0, timeout=0.5)
 
-            result = asset.wait_until(attribute_id=attribute_id, value=expected_value, timeout=0.5)
+        self.assertFalse(result)
 
-            # Assertions
-            assert result is False
-            asset.__getattr__.assert_called_with(attribute_id)
-            mock_start.assert_called_once()
-            mock_stop.assert_called_once()
+        # Value should remain unchanged
+        self.assertEqual(asset.ofa_attributes["temperature"].value, 10.0)
 
     def test_wait_until_ksqldb_matches(self, MockAssetProducer):
-        """ Test wait_until with use_ksqlDB=True returns True when ksqlDB eventually matches """
-        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+        """ Test wait_until with use_ksqlDB=True returns True when ksqlDB eventually matches. """
 
-        initial_attribute = AssetAttribute(
+        ksql = MagicMock()
+
+        def query_side_effect(query):
+            # Constructor queries
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return []
+
+            # wait_until polling
+            query_side_effect.calls += 1
+
+            if query_side_effect.calls == 1:
+                return [{
+                    "VALUE": "initial",
+                    "TYPE": "Events",
+                    "TIMESTAMP": "MockedTimeStamp",
+                }]
+
+            return [{
+                "VALUE": "target",
+                "TYPE": "Events",
+                "TIMESTAMP": "MockedTimeStamp",
+            }]
+
+        query_side_effect.calls = 0
+        ksql.query.side_effect = query_side_effect
+
+        asset = ValidAsset("test_uuid", ksqlClient=ksql)
+
+        asset.ofa_attributes["test_attribute"] = AssetAttribute(
             id="test_attribute",
             value="initial",
             type="Events",
             tag="TestAttribute",
             timestamp="MockedTimeStamp",
-        )
-        matching_attribute = AssetAttribute(
-            id="test_attribute",
-            value="target",
-            type="Events",
-            tag="TestAttribute",
-            timestamp="MockedTimeStamp",
-        )
-
-        asset.__getattr__ = MagicMock(
-            side_effect=[initial_attribute, matching_attribute]
-        )
-
-        result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=10, use_ksqlDB=True)
-
-        self.assertTrue(result)
-        self.assertEqual(asset.__getattr__.call_count, 2)
-
-    def test_wait_until_ksqldb_waits_until_timestamp_available(self, MockAssetProducer):
-        """ Test wait_until waits until the matching attribute is available in ksqlDB """
-        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
-
-        unavailable_attribute = AssetAttribute(
-            id="test_attribute",
-            value="target",
-            type="Events",
-            tag="TestAttribute",
-            timestamp="UNAVAILABLE",
-        )
-        available_attribute = AssetAttribute(
-            id="test_attribute",
-            value="target",
-            type="Events",
-            tag="TestAttribute",
-            timestamp="MockedTimeStamp",
-        )
-
-        asset.__getattr__ = MagicMock(
-            side_effect=[unavailable_attribute, available_attribute]
         )
 
         result = asset.wait_until(
@@ -946,221 +1404,323 @@ class TestBaseAsset(TestCase):
         )
 
         self.assertTrue(result)
-        self.assertEqual(asset.__getattr__.call_count, 2)
+        self.assertEqual(query_side_effect.calls, 2)
 
     def test_wait_until_ksqldb_timeout(self, MockAssetProducer):
-        """ Test wait_until with use_ksqlDB=True returns False after timeout when no match is found """
-        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
-        mock_attribute = AssetAttribute(
+        """ Test wait_until with use_ksqlDB=True returns False after timeout when no match is found. """
+
+        ksql = MagicMock()
+
+        def query_side_effect(query):
+            # Constructor queries
+            if "TYPE != 'Method'" in query:
+                return []
+
+            if "TYPE='Method'" in query:
+                return []
+
+            # wait_until polling always returns the same value
+            query_side_effect.calls += 1
+            return [{
+                "VALUE": "initial",
+                "TYPE": "Events",
+                "TIMESTAMP": "MockedTimeStamp",
+            }]
+
+        query_side_effect.calls = 0
+        ksql.query.side_effect = query_side_effect
+
+        asset = ValidAsset("test_uuid", ksqlClient=ksql)
+
+        asset.ofa_attributes["test_attribute"] = AssetAttribute(
             id="test_attribute",
             value="initial",
             type="Events",
             tag="TestAttribute",
+            timestamp="MockedTimeStamp",
         )
-        asset.__getattr__ = MagicMock(return_value=mock_attribute)
 
-        # Test timeout when use_ksqlDB is True
-        result = asset.wait_until(attribute_id="test_attribute", value="target", timeout=1, use_ksqlDB=True)
+        result = asset.wait_until(
+            attribute_id="test_attribute",
+            value="target",
+            timeout=1,
+            use_ksqlDB=True,
+        )
+
         self.assertFalse(result)
+        self.assertGreater(query_side_effect.calls, 1)
 
-    def test___start_nats_consumer_starts_and_registers_subscriber(self, MockAssetProducer):
-        """ Test that `__start_nats_consumer` creates, starts, and registers a NATSSubscriber """
+    def test___start_nats_consumer(self, MockAssetProducer):
+        """ Test that __start_nats_consumer creates and starts the asset subscriber. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+
         mock_loop = MagicMock()
-        object.__setattr__(asset, "loop_thread", mock_loop)  # avoid recursion in __setattr__
-        callback = MagicMock()
-        sub_key = "test_sub"
+        object.__setattr__(asset, "loop_thread", mock_loop)
 
         with patch("openfactory.assets.asset_base.NATSSubscriber") as MockSubscriber, \
-             patch("openfactory.assets.asset_base.get_nats_cluster_url", return_value="nats://mocked_cluster"):
+            patch("openfactory.assets.asset_base.get_nats_cluster_url",
+                  return_value="nats://mocked_cluster"):
 
-            mock_sub_instance = MockSubscriber.return_value
+            mock_subscriber = MockSubscriber.return_value
 
-            # Call the private method
-            asset._BaseAsset__start_nats_consumer("subject.test", callback, sub_key=sub_key)
+            asset._BaseAsset__start_nats_consumer()
 
-            # Ensure NATSSubscriber initialized with correct args
-            MockSubscriber.assert_called_once_with(mock_loop, "nats://mocked_cluster", "subject.test", callback)
-            # Ensure subscriber start() is called
-            mock_sub_instance.start.assert_called_once()
-            # Ensure subscriber stored in self.subscribers
-            assert asset.subscribers[sub_key] == mock_sub_instance
-
-    def test___stop_subscription_stops_and_removes_subscriber(self, MockAssetProducer):
-        """ Test that `__stop_subscription` stops and removes a NATSSubscriber """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        mock_sub = MagicMock()
-        asset.subscribers["test_sub"] = mock_sub
-
-        # Call the private method
-        asset._BaseAsset__stop_subscription("test_sub")
-
-        # Ensure stop() is called
-        mock_sub.stop.assert_called_once()
-        # Ensure subscriber removed from self.subscribers
-        assert "test_sub" not in asset.subscribers
-
-    def test___stop_subscription_with_nonexistent_key_does_nothing(self, MockAssetProducer):
-        """ Test that `__stop_subscription` gracefully handles a missing subscriber key """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        # No subscriber registered
-        asset._BaseAsset__stop_subscription("nonexistent_key")
-        # Should not raise and self.subscribers remains empty
-        assert asset.subscribers == {}
-
-    def test_subscribe_to_attribute_starts_nats_consumer(self, MockAssetProducer):
-        """ Test that `subscribe_to_attribute` starts a NATS consumer correctly """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        callback = MagicMock()
-
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
-            asset.subscribe_to_attribute('mock_id', callback)
-            mock_start.assert_called_once_with(
-                f"{asset.asset_uuid.upper()}.mock_id",
-                callback,
-                sub_key="subscribe_to_attribute_mock_id"
+            MockSubscriber.assert_called_once_with(
+                mock_loop,
+                "nats://mocked_cluster",
+                "UUID-123.*",
+                asset._on_message,
             )
 
-    def test_stop_attribute_subscription_stops_nats_consumer(self, MockAssetProducer):
-        """ Test that `stop_attribute_subscription` stops the NATS consumer correctly """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+            mock_subscriber.start.assert_called_once()
 
-        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
-            asset.stop_attribute_subscription('mock_id')
-            mock_stop.assert_called_once_with("subscribe_to_attribute_mock_id")
+            self.assertIs(asset._subscriber, mock_subscriber)
 
-    def test_subscribe_to_messages_starts_nats_consumer(self, MockAssetProducer):
-        """ Test that `subscribe_to_messages` starts a NATS consumer correctly """
+    def test_subscribe_to_attribute_registers_callback(self, MockAssetProducer):
+        """ Test subscribe_to_attribute registers the callback. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
         callback = MagicMock()
 
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
-            asset.subscribe_to_messages(callback)
-            mock_start.assert_called_once_with(
-                f"{asset.asset_uuid.upper()}.*",
-                callback,
-                sub_key="messages"
-            )
+        asset.subscribe_to_attribute("mock_id", callback)
 
-    def test_stop_messages_subscription_stops_nats_consumer(self, MockAssetProducer):
-        """ Test that `stop_messages_subscription` stops the NATS consumer correctly """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        self.assertIs(asset._attribute_callbacks["mock_id"], callback)
 
-        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
-            asset.stop_messages_subscription()
-            mock_stop.assert_called_once_with("messages")
-
-    def test_subscribe_to_samples_starts_nats_consumer(self, MockAssetProducer):
-        """ Test that `subscribe_to_samples` starts a NATS consumer and filters messages by TYPE=='Samples' """
+    def test_subscribe_to_attribute_callback_invoked(self, MockAssetProducer):
+        """ Test registered callback is invoked when a matching message arrives. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
         callback = MagicMock()
 
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
-            asset.subscribe_to_samples(callback)
+        asset.subscribe_to_attribute("temperature", callback)
 
-            # Check correct subject and sub_key
-            subject_arg = f"{asset.asset_uuid.upper()}.*"
-            mock_start.assert_called_once()
-            args, kwargs = mock_start.call_args
-            assert args[0] == subject_arg
-            assert kwargs['sub_key'] == "samples"
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.temperature",
+            {
+                "TYPE": "Samples",
+                "VALUE": 42,
+                "TAG": "Temperature",
+                "attributes": {"timestamp": "MockedTimeStamp"},
+            },
+        )
 
-            # Extract the filter and test filtering
-            filter = args[1]
+        callback.assert_called_once()
 
-            # Should call callback for TYPE == 'Samples'
-            sample_msg = {"tYpe": "SampleS", "VALUE": 123}
-            filter("subject.test", sample_msg)
-            callback.assert_called_once_with("subject.test", sample_msg)
-
-            # Should NOT call callback for other types
-            callback.reset_mock()
-            other_msg = {"TYPE": "Events", "VALUE": 456}
-            filter("subject.test", other_msg)
-            callback.assert_not_called()
-
-    def test_stop_samples_subscription_stops_nats_consumer(self, MockAssetProducer):
-        """ Test that `stop_samples_subscription` stops the NATS consumer correctly """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-
-        with patch.object(asset, "_BaseAsset__stop_subscription") as mock_stop:
-            asset.stop_samples_subscription()
-            mock_stop.assert_called_once_with("samples")
-
-    def test_subscribe_to_events_starts_nats_consumer(self, MockAssetProducer):
-        """ Test that `subscribe_to_events` starts a NATS consumer and filters messages by TYPE=='Events' """
+    def test_stop_attribute_subscription_removes_callback(self, MockAssetProducer):
+        """ Test stop_attribute_subscription unregisters the callback. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
         callback = MagicMock()
 
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
-            asset.subscribe_to_events(callback)
+        asset.subscribe_to_attribute("mock_id", callback)
 
-            # Check correct subject and sub_key
-            subject_arg = f"{asset.asset_uuid.upper()}.*"
-            mock_start.assert_called_once()
-            args, kwargs = mock_start.call_args
-            assert args[0] == subject_arg
-            assert kwargs['sub_key'] == "events"
+        self.assertIn("mock_id", asset._attribute_callbacks)
 
-            # Extract the filter and test filtering
-            filter_fn = args[1]
+        asset.stop_attribute_subscription("mock_id")
 
-            # Should call callback for TYPE == 'Events'
-            event_msg = {"TYpe": "EvEnts", "VALUE": 123}
-            filter_fn("subject.test", event_msg)
-            callback.assert_called_once_with("subject.test", event_msg)
+        self.assertNotIn("mock_id", asset._attribute_callbacks)
 
-            # Should NOT call callback for other types
-            callback.reset_mock()
-            other_msg = {"TYPE": "Samples", "VALUE": 456}
-            filter_fn("subject.test", other_msg)
-            callback.assert_not_called()
-
-    def test_stop_events_subscription_stops_nats_consumer(self, MockAssetProducer):
-        """ Test that `stop_events_subscription` stops the NATS consumer """
+    def test_stop_attribute_subscription_unknown_id(self, MockAssetProducer):
+        """ Test stopping an unknown attribute subscription does nothing. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        mock_subscriber = MagicMock()
-        asset.subscribers["events"] = mock_subscriber
+        asset.stop_attribute_subscription("does_not_exist")
+        self.assertEqual(asset._attribute_callbacks, {})
+
+    def test_subscribe_to_messages_registers_callback(self, MockAssetProducer):
+        """ Test subscribe_to_messages registers the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_messages(callback)
+
+        self.assertIs(asset._messages_callback, callback)
+
+    def test_subscribe_to_messages_callback_invoked(self, MockAssetProducer):
+        """ Test registered callback is invoked when a matching message arrives. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_messages(callback)
+
+        asset._on_message(
+            f"{asset.asset_uuid.upper()}.temperature",
+            {
+                "TYPE": "Samples",
+                "VALUE": 42,
+                "TAG": "Temperature",
+                "attributes": {"timestamp": "MockedTimeStamp"},
+            },
+        )
+
+        callback.assert_called_once()
+
+    def test_stop_messages_subscription_removes_callback(self, MockAssetProducer):
+        """ Test stop_messages_subscription unregisters the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_messages(callback)
+        self.assertIs(asset._messages_callback, callback)
+
+        asset.stop_messages_subscription()
+
+        self.assertIsNone(asset._messages_callback)
+
+    def test_subscribe_to_samples_registers_callback(self, MockAssetProducer):
+        """ Test subscribe_to_samples registers the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_samples(callback)
+
+        self.assertIs(asset._samples_callback, callback)
+
+    def test_subscribe_to_samples_callback_invoked(self, MockAssetProducer):
+        """ Test registered callback is invoked only for sample messages. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_samples(callback)
+
+        # Sample message -> callback should be invoked
+        sample_msg = {
+            "TYPE": "Samples",
+            "VALUE": 42,
+            "TAG": "Temperature",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.temperature", sample_msg)
+
+        callback.assert_called_once_with(f"{asset.asset_uuid.upper()}.temperature", sample_msg)
+
+        callback.reset_mock()
+
+        # Event message -> callback should NOT be invoked
+        event_msg = {
+            "TYPE": "Events",
+            "VALUE": 123,
+            "TAG": "Execution",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.execution", event_msg)
+
+        callback.assert_not_called()
+
+    def test_stop_samples_subscription_removes_callback(self, MockAssetProducer):
+        """ Test stop_samples_subscription unregisters the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_samples(callback)
+        self.assertIs(asset._samples_callback, callback)
+
+        asset.stop_samples_subscription()
+
+        self.assertIsNone(asset._samples_callback)
+
+    def test_subscribe_to_events_registers_callback(self, MockAssetProducer):
+        """ Test subscribe_to_events registers the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_events(callback)
+
+        self.assertIs(asset._events_callback, callback)
+
+    def test_subscribe_to_events_callback_invoked(self, MockAssetProducer):
+        """ Test registered callback is invoked only for event messages. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_events(callback)
+
+        # Event message -> callback should be invoked
+        event_msg = {
+            "TYPE": "Events",
+            "VALUE": 123,
+            "TAG": "Execution",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.execution", event_msg)
+
+        callback.assert_called_once_with(f"{asset.asset_uuid.upper()}.execution", event_msg)
+
+        callback.reset_mock()
+
+        # Sample message -> callback should NOT be invoked
+        sample_msg = {
+            "TYPE": "Samples",
+            "VALUE": 42,
+            "TAG": "Temperature",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.temperature", sample_msg)
+
+        callback.assert_not_called()
+
+    def test_stop_events_subscription_removes_callback(self, MockAssetProducer):
+        """ Test stop_events_subscription unregisters the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_events(callback)
+        self.assertIs(asset._events_callback, callback)
 
         asset.stop_events_subscription()
-        mock_subscriber.stop.assert_called_once()
-        assert "events" not in asset.subscribers
 
-    def test_subscribe_to_conditions_starts_nats_consumer(self, MockAssetProducer):
-        """ Test that `subscribe_to_conditions` starts a NATS consumer and filters messages by TYPE=='Condition' """
+        self.assertIsNone(asset._events_callback)
+
+    def test_subscribe_to_conditions_registers_callback(self, MockAssetProducer):
+        """ Test subscribe_to_conditions registers the callback. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
         callback = MagicMock()
 
-        with patch.object(asset, "_BaseAsset__start_nats_consumer") as mock_start:
-            asset.subscribe_to_conditions(callback)
+        asset.subscribe_to_conditions(callback)
 
-            # Check correct subject and sub_key
-            subject_arg = f"{asset.asset_uuid.upper()}.*"
-            mock_start.assert_called_once()
-            args, kwargs = mock_start.call_args
-            assert args[0] == subject_arg
-            assert kwargs['sub_key'] == "conditions"
+        self.assertIs(asset._conditions_callback, callback)
 
-            # Extract the filter and test filtering
-            filter_fn = args[1]
-
-            # Should call callback for TYPE == 'Condition'
-            condition_msg = {"tyPE": "CondiTion", "VALUE": 123}
-            filter_fn("subject.test", condition_msg)
-            callback.assert_called_once_with("subject.test", condition_msg)
-
-            # Should NOT call callback for other types
-            callback.reset_mock()
-            other_msg = {"TYPE": "Samples", "VALUE": 456}
-            filter_fn("subject.test", other_msg)
-            callback.assert_not_called()
-
-    def test_stop_conditions_subscription_stops_nats_consumer(self, MockAssetProducer):
-        """ Test that `stop_conditions_subscription` stops the NATS consumer """
+    def test_subscribe_to_conditions_callback_invoked(self, MockAssetProducer):
+        """ Test registered callback is invoked only for condition messages. """
         asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
-        mock_subscriber = MagicMock()
-        asset.subscribers["conditions"] = mock_subscriber
+        callback = MagicMock()
+
+        asset.subscribe_to_conditions(callback)
+
+        # Condition message -> callback should be invoked
+        condition_msg = {
+            "TYPE": "Condition",
+            "VALUE": 123,
+            "TAG": "Execution",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.execution", condition_msg)
+
+        callback.assert_called_once_with(f"{asset.asset_uuid.upper()}.execution", condition_msg)
+
+        callback.reset_mock()
+
+        # Sample message -> callback should NOT be invoked
+        sample_msg = {
+            "TYPE": "Samples",
+            "VALUE": 42,
+            "TAG": "Temperature",
+            "attributes": {"timestamp": "MockedTimeStamp"},
+        }
+
+        asset._on_message(f"{asset.asset_uuid.upper()}.temperature", sample_msg)
+
+        callback.assert_not_called()
+
+    def test_stop_conditions_subscription_removes_callback(self, MockAssetProducer):
+        """ Test stop_conditions_subscription unregisters the callback. """
+        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        callback = MagicMock()
+
+        asset.subscribe_to_conditions(callback)
+        self.assertIs(asset._conditions_callback, callback)
 
         asset.stop_conditions_subscription()
-        mock_subscriber.stop.assert_called_once()
-        assert "conditions" not in asset.subscribers
+
+        self.assertIsNone(asset._conditions_callback)

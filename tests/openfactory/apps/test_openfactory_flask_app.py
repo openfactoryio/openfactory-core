@@ -50,6 +50,19 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
         self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
 
+        # Patch get_nats_cluster_url
+        self.get_nats_cluster_url_patcher = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mock"
+        )
+        self.mock_get_nats_cluster_url = self.get_nats_cluster_url_patcher.start()
+        self.addCleanup(self.get_nats_cluster_url_patcher.stop)
+
+        # Patch NATSSubscriber
+        self.nats_subscriber_patcher = patch("openfactory.assets.asset_base.NATSSubscriber")
+        self.mock_nats_subscriber = self.nats_subscriber_patcher.start()
+        self.addCleanup(self.nats_subscriber_patcher.stop)
+
     def test_initialization_creates_flask(self):
         """ Test initialization creates Flask app """
 
@@ -246,6 +259,19 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
         self.deregister_patcher = patch("openfactory.apps.ofaapp.deregister_asset")
         self.deregister_patcher.start()
         self.addCleanup(self.deregister_patcher.stop)
+
+        # Patch get_nats_cluster_url
+        self.get_nats_cluster_url_patcher = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mock"
+        )
+        self.mock_get_nats_cluster_url = self.get_nats_cluster_url_patcher.start()
+        self.addCleanup(self.get_nats_cluster_url_patcher.stop)
+
+        # Patch NATSSubscriber
+        self.nats_subscriber_patcher = patch("openfactory.assets.asset_base.NATSSubscriber")
+        self.mock_nats_subscriber = self.nats_subscriber_patcher.start()
+        self.addCleanup(self.nats_subscriber_patcher.stop)
 
     async def test_run_openfactory_calls_async_main_loop(self):
         """ Should call async_main_loop when user overrides it """

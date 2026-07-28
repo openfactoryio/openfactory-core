@@ -47,6 +47,19 @@ class TestDeclarativeAttributes(unittest.TestCase):
         self.wait_until_patcher.start()
         self.addCleanup(self.wait_until_patcher.stop)
 
+        # Patch get_nats_cluster_url
+        self.get_nats_cluster_url_patcher = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mock"
+        )
+        self.mock_get_nats_cluster_url = self.get_nats_cluster_url_patcher.start()
+        self.addCleanup(self.get_nats_cluster_url_patcher.stop)
+
+        # Patch NATSSubscriber
+        self.nats_subscriber_patcher = patch("openfactory.assets.asset_base.NATSSubscriber")
+        self.mock_nats_subscriber = self.nats_subscriber_patcher.start()
+        self.addCleanup(self.nats_subscriber_patcher.stop)
+
         self.app = TestApp(ksqlClient=self.ksql_mock, bootstrap_servers="mocked_broker", asset_router_url="mocked_url")
 
     def test_declared_attributes_collection(self):

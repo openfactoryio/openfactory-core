@@ -59,12 +59,12 @@ class TestOpenFactoryAppTestMode(TestCase):
         """ Test that add_attributes populates internal list in test_mode """
         # Add two AssetAttributes
         attribute1 = AssetAttribute(id='test_attribute1', value='attr1', type='Events', tag='test')
-        attribute2 = AssetAttribute(id='test_attribute2', value='attr1', type='Events', tag='test')
+        attribute2 = AssetAttribute(id='test_attribute2', value='attr2', type='Events', tag='test')
         self.app.add_attribute(attribute1)
         self.app.add_attribute(attribute2)
 
-        self.assertIn(attribute1, self.app._mocked_attributes)
-        self.assertIn(attribute2, self.app._mocked_attributes)
+        self.assertEqual(attribute1, self.app.test_attribute1)
+        self.assertEqual(attribute2, self.app.test_attribute2)
 
     def test_attributes(self):
         """ Test attributes() """
@@ -103,16 +103,6 @@ class TestOpenFactoryAppTestMode(TestCase):
         self.app.add_attribute(attr)
 
         self.assertIn({'ID': 'attribute', 'VALUE': 'some_value', 'TAG': 'test'}, self.app.events())
-
-    def test_get_mocked_attribute_by_id(self):
-        """ Test __get_mocked_attribute_by_id """
-        # Add an AssetAttribute
-        attr = AssetAttribute(id='attribute1', value='attr1', type='Events', tag='test')
-        self.app.add_attribute(attr)
-        self.assertEqual(self.app._get_mocked_attribute_by_id('attribute1'), attr)
-
-        # A none existing AssetAttribute should return None
-        self.assertEqual(self.app._get_mocked_attribute_by_id('does_not_exist'), None)
 
     def test_setattr_in_test_mode_bypasses_producer(self):
         """ Test AssetAttribute attributes """

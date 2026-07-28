@@ -21,6 +21,43 @@ class TestAssetForwarderService(unittest.TestCase):
         self.service.hash_ring = MagicMock()
         self.service.nats_clusters = {}
 
+    def test_log_http_requests_disabled_by_default(self):
+        """ Test HTTP request logging is disabled by default. """
+        with patch.dict("os.environ", {}, clear=True):
+            service = AssetForwarderService(
+                ksqlClient=MagicMock(),
+                bootstrap_servers="localhost:9092",
+                test_mode=True,
+            )
+
+        self.assertFalse(service.log_http_requests)
+
+    def test_log_http_requests_enabled(self):
+        """ Test accepted truthy values for HTTP request logging. """
+        for value in ("1", "true", "yes", "on", "TRUE", "Yes", "ON"):
+            with self.subTest(value=value):
+                with patch.dict("os.environ", {"LOG_HTTP_REQUESTS": value}):
+                    service = AssetForwarderService(
+                        ksqlClient=MagicMock(),
+                        bootstrap_servers="localhost:9092",
+                        test_mode=True,
+                    )
+
+                self.assertTrue(service.log_http_requests)
+
+    def test_log_http_requests_disabled(self):
+        """ Test rejected values for HTTP request logging. """
+        for value in ("0", "false", "no", "off", "", "foobar"):
+            with self.subTest(value=value):
+                with patch.dict("os.environ", {"LOG_HTTP_REQUESTS": value}):
+                    service = AssetForwarderService(
+                        ksqlClient=MagicMock(),
+                        bootstrap_servers="localhost:9092",
+                        test_mode=True,
+                    )
+
+                self.assertFalse(service.log_http_requests)
+
     def test_decode_message_value_bytes(self):
         """ Test decoding a JSON payload from bytes. """
         value = self.service.decode_message_value(b'{"ID":"123","name":"asset"}')

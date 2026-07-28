@@ -45,6 +45,19 @@ class TestOpenFactoryAppMethods(unittest.TestCase):
         self.mock_producer_cls = self.asset_producer_patch.start()
         self.addCleanup(self.asset_producer_patch.stop)
 
+        # Patch get_nats_cluster_url
+        self.get_nats_cluster_url_patcher = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mock"
+        )
+        self.mock_get_nats_cluster_url = self.get_nats_cluster_url_patcher.start()
+        self.addCleanup(self.get_nats_cluster_url_patcher.stop)
+
+        # Patch NATSSubscriber
+        self.nats_subscriber_patcher = patch("openfactory.assets.asset_base.NATSSubscriber")
+        self.mock_nats_subscriber = self.nats_subscriber_patcher.start()
+        self.addCleanup(self.nats_subscriber_patcher.stop)
+
     def test_ofa_method_decorator_metadata(self):
         """ Verify that @ofa_method stores correct metadata """
         class MyApp(OpenFactoryApp):

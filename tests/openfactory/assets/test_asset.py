@@ -11,6 +11,27 @@ class TestAsset(TestCase):
     Test class Asset
     """
 
+    def setUp(self):
+        self.patcher_fetch_attributes = patch.object(BaseAsset, "_fetch_attributes")
+        self.patcher_fetch_methods = patch.object(BaseAsset, "_fetch_methods")
+        self.patcher_get_nats_cluster_url = patch(
+            "openfactory.assets.asset_base.get_nats_cluster_url",
+            return_value="nats://mock"
+        )
+        self.patcher_nats_subscriber = patch(
+            "openfactory.assets.asset_base.NATSSubscriber"
+        )
+
+        self.patcher_fetch_attributes.start()
+        self.patcher_fetch_methods.start()
+        self.patcher_get_nats_cluster_url.start()
+        self.patcher_nats_subscriber.start()
+
+        self.addCleanup(self.patcher_fetch_attributes.stop)
+        self.addCleanup(self.patcher_fetch_methods.stop)
+        self.addCleanup(self.patcher_get_nats_cluster_url.stop)
+        self.addCleanup(self.patcher_nats_subscriber.stop)
+
     def test_inherits_from_baseasset(self, MockAssetProducer):
         """ Test AssetUNS derives from BaseAsset """
         self.assertTrue(issubclass(Asset, BaseAsset))

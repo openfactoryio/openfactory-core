@@ -768,7 +768,8 @@ class BaseAsset:
         """
         self._add_reference(direction="below", new_reference=below_asset_reference)
 
-    def wait_until(self, attribute_id: str, value: Any, comparison: Callable[[Any, Any], bool] = eq, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
+    def wait_until(self, attribute_id: str, value: Any, comparison: Callable[[Any, Any], bool] = eq,
+                   *, timeout: int = 30, use_ksqlDB: bool = False) -> bool:
         """
         Waits until an asset attribute satisfies a comparison or times out.
 
@@ -807,6 +808,14 @@ class BaseAsset:
         Returns:
             bool: `True` if the comparison is satisfied before the timeout expires, otherwise ``False``.
         """
+        if not callable(comparison):
+            raise TypeError(
+                f"comparison must be a callable (e.g. operator.eq or operator.gt), "
+                f"got {type(comparison).__name__}. "
+                f"Did you mean to specify the timeout? "
+                f"Use wait_until(..., timeout={comparison!r})."
+            )
+
         # If not an attribute  raise
         if attribute_id not in self.ofa_attributes:
             raise OFAException(f"'{attribute_id}' is not an Attribute of Asset '{self.asset_uuid}'")

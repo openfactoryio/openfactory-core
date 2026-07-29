@@ -321,13 +321,17 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
         Can be redefined by children
         """
-        print("==============================================================")
+        print("=================================================================")
         print(f"OpenFactory App {self.asset_uuid}")
-        print("--------------------------------------------------------------")
+        print("-----------------------------------------------------------------")
         print(f"Application version:         {self.application_version.value}")
         print(f"Application manufacturer:    {self.application_manufacturer.value}")
         print(f"Application license:         {self.application_license.value}")
-        print("==============================================================")
+        print("-----------------------------------------------------------------")
+        print(f"OpenFactory version:         {self.openfactory_version.value}")
+        print(f"OpenFactory manufacturer:    {self.openfactory_manufacturer.value}")
+        print(f"OpenFactory license:         {self.openfactory_license.value}")
+        print("=================================================================")
 
     def register_prometheus_metrics(self, metrics_port: int, metrics_path: str = '/metrics') -> None:
         """

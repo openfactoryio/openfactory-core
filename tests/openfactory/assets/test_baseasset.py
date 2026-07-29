@@ -1225,6 +1225,23 @@ class TestBaseAsset(TestCase):
         )
         asset.producer.send_asset_attribute.assert_called_once_with("asset-001", expected_attr)
 
+    def test_wait_until_invalid_comparison_raises(self, MockAssetProducer):
+        """ Test wait_until raises a helpful error when comparison is not callable. """
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+
+        with self.assertRaises(TypeError) as ctx:
+            asset.wait_until("temperature", 42, 5)
+
+        self.assertIn("comparison must be a callable", str(ctx.exception))
+        self.assertIn("timeout=5", str(ctx.exception))
+
+    def test_wait_until_timeout_is_keyword_only(self, MockAssetProducer):
+        """ Test wait_until requires timeout to be passed as a keyword. """
+        asset = ValidAsset("test_uuid", ksqlClient=MagicMock())
+
+        with self.assertRaises(TypeError):
+            asset.wait_until("temperature", 42, gt, 5)
+
     def test_wait_until_method_raises(self, MockAssetProducer):
         """ wait_until cannot be used on methods. """
         asset = ValidAsset("test_uuid", ksqlClient=MagicMock())

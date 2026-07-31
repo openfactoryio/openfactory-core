@@ -39,8 +39,8 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
         self.assertEqual(task["ContainerSpec"]["Command"], ["run"])
         self.assertEqual(task["Resources"]["Limits"]["NanoCPUs"], 500000000)
         self.assertEqual(task["Placement"]["Constraints"], ["node.role==manager"])
+        self.assertEqual(task["Networks"], [{"Target": "net1"}])
         self.assertEqual(kwargs["name"], "test-service")
-        self.assertEqual(kwargs["networks"], ["net1"])
         self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 2}})
         self.assertEqual(kwargs["labels"], {"role": "web"})
         self.assertEqual(

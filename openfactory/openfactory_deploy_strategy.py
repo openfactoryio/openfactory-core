@@ -194,7 +194,8 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         task = TaskTemplate(
             container,
             resources=resources,
-            placement=Placement(constraints=constraints) if constraints else None
+            placement=Placement(constraints=constraints) if constraints else None,
+            networks=networks,
         )
 
         dal.docker_client.api.create_service(
@@ -202,7 +203,6 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             name=name,
             labels=labels,
             mode=mode,
-            networks=networks,
             endpoint_spec=EndpointSpec(ports=ports) if ports else None
         )
 

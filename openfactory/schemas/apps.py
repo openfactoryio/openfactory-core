@@ -353,7 +353,7 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
     )
 
     deploy: Optional[Deploy] = Field(
-        default=None,
+        default_factory=Deploy,
         description="Deployment configuration including resources and placement."
     )
 

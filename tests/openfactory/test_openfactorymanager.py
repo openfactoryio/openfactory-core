@@ -526,6 +526,24 @@ class TestOpenFactoryManager(unittest.TestCase):
 
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_passes_replicas(self, mock_user_notify, mock_register_asset):
+        """ Configured replica count should be forwarded to the deployment strategy. """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP_REPLICAS",
+            image="app_image",
+            deploy=Deploy(replicas=3)
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertEqual(kwargs["mode"], {"Replicated": {"Replicas": 3}})
+
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_runtime_user(self, mock_user_notify, mock_register_asset):
         """ runtime UID/GID should be passed to deployment strategy """
         app = OpenFactoryAppSchema(

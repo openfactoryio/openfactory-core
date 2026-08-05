@@ -289,7 +289,7 @@ class OpenFactoryManager(OpenFactory):
                 image_pull_policy=application.image_pull_policy,
                 user=runtime_user,
                 name=application.uuid.lower(),
-                mode={"Replicated": {"Replicas": 1}},
+                mode={"Replicated": {"Replicas": application.deploy.replicas}},
                 env=env,
                 resources=resources(application.deploy),
                 open_files=open_files_limit(application.deploy),

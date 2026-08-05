@@ -216,7 +216,7 @@ class AssetUNS(BaseAsset):
     def close(self):
         """
         Stops the background mapping watcher and then delegates resource cleanup
-        to :meth:`BaseAsset.close`.
+        to :meth:`BaseAsset.close <openfactory.assets.asset_base.BaseAsset.close>`.
 
         This ensures the monitoring thread exits before the NATS subscriber and
         other shared resources are released.

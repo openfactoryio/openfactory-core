@@ -92,9 +92,7 @@ class AssetForwarderService(OpenFactoryFastAPIApp):
             test_mode: Enables test mode (disables live Kafka/ksql interaction).
 
         Environment variables:
-            LOG_HTTP_REQUESTS: Enables HTTP request logging when set to one
-                of ``1``, ``true``, ``yes``, or ``on`` (case-insensitive).
-                Defaults to ``false``.
+            LOG_HTTP_REQUESTS: Enables HTTP request logging when set to one of ``1``, ``true``, ``yes``, or ``on`` (case-insensitive). Defaults to ``false``.
             ASSET_FORWARDER_QUEUE_SIZE: Size of the queue of the forwarder (defaults to 10000)
 
         See also:

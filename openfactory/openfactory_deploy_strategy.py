@@ -11,8 +11,9 @@ Key Components:
   for service deployment and removal. Subclasses must implement `deploy` and `remove`.
 - **SwarmDeploymentStrategy**: Deploys services in Docker Swarm mode, supporting
   service replication, placement constraints, networks, mounts, and resource limits.
-- **LocalDockerDeploymentStrategy**: Deploys single Docker containers locally
-  (non-Swarm), primarily for development or testing.
+- **LocalDockerDeploymentStrategy**: Deploys one or more Docker containers
+  locally (non-Swarm), including emulation of Swarm service replication for
+  development and testing.
 
 Features:
 ---------
@@ -77,6 +78,7 @@ from docker.types import Mount, DriverConfig, Ulimit, ContainerSpec, TaskTemplat
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any, Literal
 from openfactory.docker.docker_access_layer import dal
+from openfactory.exceptions import OFAConfigurationException
 
 
 ImagePullPolicy = Literal["missing", "always"]
@@ -122,7 +124,10 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
             open_files (Optional[int]): Maximum number of open file descriptors
                 (RLIMIT_NOFILE) available to the process inside the container.
                 If not specified, the container runtime default is used.
-            mode (Optional[Dict[str, Any]]): Service mode (Swarm only).
+            mode (Optional[Dict[str, Any]]):
+                Deployment mode. Docker Swarm uses this value directly, while the
+                local Docker strategy uses the replica count to emulate replicated
+                services.
             mounts (Optional[List[dict]]): List of Docker mount specifications.
         """
         pass
@@ -218,7 +223,26 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
 
 class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
-    """ Deployment strategy for local Docker containers (non-Swarm). """
+    """
+    Deployment strategy for local Docker containers (non-Swarm).
+
+    Supports deployment of both single-container applications and local
+    emulation of Docker Swarm service replication.
+
+    Replica naming follows the convention:
+
+    - Single replica:
+        - Container name: ``<container-name>``
+        - ``APP_UUID``: unchanged
+
+    - Multiple replicas:
+        - Container names: ``<container-name>-1``, ``<container-name>-2``, ...
+        - ``APP_UUID`` values: ``<app-uuid>-1``, ``<app-uuid>-2``, ...
+
+    The container name and ``APP_UUID`` are treated independently. The original
+    container name is used as the base for replica container names, while the
+    original ``APP_UUID`` is preserved and suffixed with the replica number.
+    """
 
     def swarm_mount_to_container_mount(self, mount_dict: dict) -> Mount:
         """
@@ -254,6 +278,45 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             driver_config=driver_config
         )
 
+    def get_env_var(self, env: List[str], key: str) -> str:
+        """
+        Return the value of an environment variable.
+
+        Args:
+            env: Environment variables in ``KEY=value`` format.
+            key: Environment variable name.
+
+        Returns:
+            The value associated with ``key``.
+
+        Raises:
+            KeyError: If the environment variable does not exist.
+        """
+        prefix = f"{key}="
+        for item in env:
+            if item.startswith(prefix):
+                return item[len(prefix):]
+        raise KeyError(f"Environment variable '{key}' not found.")
+
+    def replace_env_var(self, env: List[str], key: str, value: str) -> List[str]:
+        """
+        Return a copy of an environment variable list with ``key`` set to ``value``.
+
+        Any existing definition of ``key`` is replaced with the supplied value.
+        If the variable does not exist, it is appended.
+
+        Args:
+            env: Environment variables in ``KEY=value`` format.
+            key: Environment variable name.
+            value: New value for the environment variable.
+
+        Returns:
+            A new environment variable list.
+        """
+        new_env = [e for e in env if not e.startswith(f"{key}=")]
+        new_env.append(f"{key}={value}")
+        return new_env
+
     def deploy(self, *,
                image: str,
                image_pull_policy: ImagePullPolicy = "missing",
@@ -270,27 +333,41 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                mode: Optional[Dict[str, Any]] = None,
                mounts: Optional[List[dict]] = None) -> None:
         """
-        Run a local Docker container.
+        Run one or more local Docker containers.
 
         See parent method for argument descriptions.
 
-        Note:
-            - ``constraints`` and ``mode`` are ignored for local containers.
+        Notes:
+            - ``constraints`` are ignored for local containers.
+            - ``mode["Replicated"]["Replicas"]`` determines the number of local containers to create.
+            - Replicated containers are named ``<name>-1``, ``<name>-2``, ... and receive matching ``APP_UUID`` environment variables.
+            - Host port mappings are not supported when deploying multiple replicas.
             - ``image_pull_policy="always"`` forces a Docker image pull before deployment.
             - When ``open_files`` is specified, a ``nofile`` ulimit is configured with identical soft and hard limits.
-            - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """
         client = docker.from_env()
+
+        replicas = mode.get("Replicated", {}).get("Replicas", 1) if mode else 1
+
+        if replicas > 1 and ports:
+            raise OFAConfigurationException(
+                "Host port mappings are not supported when deploying multiple "
+                "replicas with LocalDockerDeploymentStrategy."
+            )
 
         # Convert dict mounts to docker.types.Mount for local Docker
         docker_mounts = []
         if mounts:
             for m in mounts:
                 if m["Type"].lower() == "bind":
-                    docker_mounts.append(Mount(target=m["Target"],
-                                               source=m["Source"],
-                                               type="bind",
-                                               read_only=m.get("ReadOnly", False)))
+                    docker_mounts.append(
+                        Mount(
+                            target=m["Target"],
+                            source=m["Source"],
+                            type="bind",
+                            read_only=m.get("ReadOnly", False),
+                        )
+                    )
                 elif m["Type"].lower() == "volume":
                     docker_mounts.append(self.swarm_mount_to_container_mount(m))
                 else:
@@ -309,39 +386,74 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                 )
             ]
 
-        container = client.containers.run(
-            image=image,
-            user=user,
-            name=name,
-            environment=env,
-            command=command,
-            detach=True,
-            ports={f"{container_port}/tcp": host_port for host_port, container_port in ports.items()} if ports else None,
-            network=networks[0] if networks else None,
-            labels=labels,
-            nano_cpus=resources.get("Limits", {}).get("NanoCPUs") if resources else None,
-            mounts=docker_mounts,
-            ulimits=ulimits
-        )
+        containers = []
+        base_app_uuid = self.get_env_var(env, "APP_UUID")
 
-        # Attach to additional networks
+        for replica in range(replicas):
+
+            if replicas == 1:
+                replica_name = name
+                replica_env = env
+            else:
+                replica_name = f"{name}-{replica + 1}"
+                replica_env = self.replace_env_var(env, "APP_UUID", f"{base_app_uuid}-{replica + 1}")
+
+            container = client.containers.run(
+                image=image,
+                user=user,
+                name=replica_name,
+                environment=replica_env,
+                command=command,
+                detach=True,
+                ports={
+                    f"{container_port}/tcp": host_port
+                    for host_port, container_port in ports.items()
+                } if ports else None,
+                network=networks[0] if networks else None,
+                labels=labels,
+                nano_cpus=resources.get("Limits", {}).get("NanoCPUs")
+                if resources else None,
+                mounts=docker_mounts,
+                ulimits=ulimits,
+            )
+
+            containers.append(container)
+
+        # Attach each container to any additional networks.
         if networks:
-            for net_name in networks[1:]:
-                network = client.networks.get(net_name)
-                network.connect(container)
+            for container in containers:
+                for net_name in networks[1:]:
+                    client.networks.get(net_name).connect(container)
 
     def remove(self, service_name):
         """
-        Remove a Docker container.
+        Remove one or more local Docker containers.
+
+        If the application was deployed as a single container, the container
+        named ``service_name`` is removed.
+
+        If the application was deployed with local replication, all containers
+        whose names follow the ``service_name-N`` naming convention are removed.
 
         Args:
-            service_name (str): Docker container to be removed.
+            service_name (str): Base name of the Docker container(s) to remove.
 
         Raises:
-            docker.errors.NotFound: If the container does not exist.
-            docker.errors.APIError: If removal fails due to a Docker API issue.
+            docker.errors.NotFound: If no matching container exists.
+            docker.errors.APIError: If removal of any matching container fails due to a Docker API issue.
         """
         client = docker.from_env()
-        container = client.containers.get(service_name)
-        container.stop()
-        container.remove()
+
+        containers = [
+            container
+            for container in client.containers.list(all=True)
+            if container.name == service_name
+            or container.name.startswith(f"{service_name}-")
+        ]
+
+        if not containers:
+            raise docker.errors.NotFound(f"No Docker container found for service '{service_name}'.")
+
+        for container in containers:
+            container.stop()
+            container.remove()

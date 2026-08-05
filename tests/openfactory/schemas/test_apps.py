@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from tempfile import NamedTemporaryFile
 from openfactory.schemas.apps import OpenFactoryAppsConfig, RoutingError, get_apps_from_config_file
 from openfactory.schemas.uns import UNSSchema
+from openfactory.schemas.common import Deploy
 
 
 class TestOpenFactoryAppsConfig(unittest.TestCase):
@@ -591,8 +592,8 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
         # Still has UNS enrichment
         self.assertEqual(app.uns["uns_id"], "OpenFactory/WC2/DEMO-APP")
 
-    def test_optional_deploy(self):
-        """ deploy field is optional """
+    def test_default_deploy(self):
+        """ A default Deploy configuration is created when omitted. """
         valid_config = {
             "apps": {
                 "demo1": {
@@ -602,7 +603,12 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
             }
         }
         config = OpenFactoryAppsConfig(**valid_config)
-        self.assertIsNone(config.apps["demo1"].deploy)
+        deploy = config.apps["demo1"].deploy
+
+        self.assertIsInstance(deploy, Deploy)
+        self.assertEqual(deploy.replicas, 1)
+        self.assertIsNone(deploy.resources)
+        self.assertIsNone(deploy.placement)
 
     def test_deploy_with_replicas_and_resources(self):
         """ deploy field with replicas, resources, and placement """

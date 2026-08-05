@@ -797,4 +797,3 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         self.assertEqual(strategy.get_env_var(env, "VAR1"), "value1")
         with self.assertRaises(KeyError):
             strategy.get_env_var(env, "UNKNOWN")
-

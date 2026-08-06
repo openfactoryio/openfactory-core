@@ -103,7 +103,10 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
     Note:
       - When deployed on the OpenFactory Cluster, the environment variables ``KSQLDB_URL``, ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` are set and can be used.
-      - The ``UUID`` of the App is set based on the OpenFactory configuration file of the App during the deployment process.
+      - The UUID of the App is set based on the OpenFactory configuration file
+        during the deployment process. If the App is deployed as a replicated
+        swarm service, the ``SWARM_TASK_SLOT`` is appended to the configured
+        UUID to ensure each replica has a unique asset UUID.
       - Subclasses must implement either :meth:`main_loop` (synchronous) or :meth:`async_main_loop` (asynchronous) to define application behavior.
       - Attributes are automatically added to the OpenFactory asset for version, manufacturer, license, and availability.
       - Use :meth:`OpenFactoryLogger.with_context <openfactory.logging.loggers.OpenFactoryLogger.with_context>` to create loggers
@@ -145,6 +148,10 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             test_mode (bool): If True, disables live Kafka/ksql interaction (useful for unit tests).
 
         Note:
+            - The application UUID is read from the ``APP_UUID`` environment
+              variable. When running as a replicated swarm service
+              (``SWARM_REPLICAS > 1``), the ``SWARM_TASK_SLOT`` is appended to the
+              application UUID so each replica is registered as a unique asset.
             - If ``bootstrap_servers`` is not explicitly provided, the constructor will attempt to read it from the ``KAFKA_BROKER`` environment variable.
             - If ``asset_router_url`` is not explicitly provided, the constructor will attempt to read it from the ``ASSET_ROUTER_URL`` environment variable.
             - Configures the application logger.
@@ -161,7 +168,13 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
            The environment variables ``KSQLDB_URL``, ``KAFKA_BROKER`` and ``ASSET_ROUTER_URL`` will be set when deployed on the OpenFactory Cluster.
         """
         # get APP-UUID from environment (set during deployement by ofa deployment tool)
+        # add task slot in case of a replicated swarm service
         app_uuid = os.getenv('APP_UUID', 'DEV-UUID')
+        swarm_task_slot = os.getenv('SWARM_TASK_SLOT', None)
+        swarm_replicas = int(os.getenv('SWARM_REPLICAS', "1"))
+        if swarm_replicas > 1:
+            app_uuid = f"{app_uuid}-{swarm_task_slot}"
+
         super().__init__(asset_uuid=app_uuid, ksqlClient=ksqlClient,
                          bootstrap_servers=bootstrap_servers, asset_router_url=asset_router_url,
                          test_mode=test_mode)

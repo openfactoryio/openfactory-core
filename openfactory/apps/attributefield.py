@@ -20,7 +20,7 @@ class AttributeField:
             Defaults to ``"Events"``.
         tag (str): Tag used by OpenFactory.
 
-    Notes:
+    Note:
         - ``name`` is assigned automatically when the class is created.
         - This class is typically not used directly; prefer subclasses
           like :class:`EventAttribute` or :class:`SampleAttribute`.
@@ -147,7 +147,7 @@ class OpenFactoryAppMeta(type):
         Returns:
             OpenFactoryAppMeta: A new class object with ``_declared_attributes`` set.
 
-        Notes:
+        Note:
             - Base classes are scanned first, so their declarative attributes
               are inherited by subclasses.
             - Attributes in the current class override any with the same name

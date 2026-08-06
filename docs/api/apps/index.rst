@@ -25,6 +25,40 @@ As such, it exposes:
 
 This module provides a declarative and structured way to define both.
 
+-------------------------------------------------------------------------------
+
+Application Identity
+~~~~~~~~~~~~~~~~~~~~
+
+Each OpenFactory App is assigned a UUID during deployment. The UUID is
+generated from the OpenFactory deployment configuration and made available to
+the application automatically.
+
+For applications deployed as replicated OpenFactory Apps, each replica is
+automatically assigned a unique App UUID. The configured App UUID is used as
+the base identifier, and each replica is assigned a consecutive suffix based
+on its replica index.
+
+For example:
+
++--------------------------------------+------------------+
+| Deployment                           | App UUID         |
++======================================+==================+
+| Single replica                       | ``my-app``       |
++--------------------------------------+------------------+
+| Replica 1 of 3                       | ``my-app-1``     |
++--------------------------------------+------------------+
+| Replica 2 of 3                       | ``my-app-2``     |
++--------------------------------------+------------------+
+| Replica 3 of 3                       | ``my-app-3``     |
++--------------------------------------+------------------+
+
+
+This ensures that every replica is registered as a distinct OpenFactory asset
+while preserving the configured application identity across all replicas.
+
+-------------------------------------------------------------------------------
+
 Declarative Attributes
 ~~~~~~~~~~~~~~~~~~~~~~
 Attributes are defined as class-level fields using subclasses of
@@ -143,7 +177,7 @@ When an app is instantiated:
       app.run()
 
 .. note::
-  - The application UUID is injected via the ``APP_UUID`` environment variable during deployment.
+  - The application UUID is injected during deployment.
   - The environment variables ``KSQLDB_URL`` and ``KAFKA_BROKER`` are
     automatically provided in cluster deployments. The default values can be used for local development.
   - Either ``main_loop`` or ``async_main_loop`` must be implemented by subclasses.

@@ -47,7 +47,26 @@ Each application must define a unique identifier:
 
     uuid: app-scheduler
 
-This value is used by OpenFactory as Asset UUID.
+This value defines the base Asset UUID of the application and is used by
+OpenFactory during deployment.
+
+For applications deployed with multiple replicas, OpenFactory automatically
+enriches the configured UUID by appending a consecutive numeric suffix so that
+each replica is assigned a unique Asset UUID.
+
+For example:
+
++-------------------------+---------------------+
+| Deployment              | Asset UUID          |
++=========================+=====================+
+| Single replica          | ``app-scheduler``   |
++-------------------------+---------------------+
+| Replica 1 of 3          | ``app-scheduler-1`` |
++-------------------------+---------------------+
+| Replica 2 of 3          | ``app-scheduler-2`` |
++-------------------------+---------------------+
+| Replica 3 of 3          | ``app-scheduler-3`` |
++-------------------------+---------------------+
 
 Image
 -----

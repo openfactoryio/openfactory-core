@@ -49,7 +49,6 @@ from openfactory.schemas.devices import get_devices_from_config_file
 from openfactory.schemas.apps import OpenFactoryAppSchema, get_apps_from_config_file, normalize_name
 from openfactory.schemas.uns import UNSSchema
 from openfactory.schemas.common import constraints, resources, open_files_limit
-from openfactory.assets import Asset
 from openfactory.exceptions import OFAException
 from openfactory.models.user_notifications import user_notify
 from openfactory.utils import register_asset, deregister_asset, load_plugin, register_device_connector, deregister_device_connector
@@ -302,8 +301,9 @@ class OpenFactoryManager(OpenFactory):
             user_notify.fail(f"Application {application.uuid} could not be deployed\n{err}")
             return
 
-        register_asset(application.uuid, uns=application.uns, asset_type='OpenFactoryApp',
-                       ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=application.uuid.lower())
+        for app_uuid in application.replicas_uuid():
+            register_asset(app_uuid, uns=application.uns, asset_type='OpenFactoryApp',
+                           ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers, docker_service=app_uuid.lower())
         if application.metrics:
             register_prometheus_target(application, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
         user_notify.success(f"Application {application.uuid} deployed successfully")
@@ -458,29 +458,27 @@ class OpenFactoryManager(OpenFactory):
             deregister_device_connector(device.uuid, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"Device {device.uuid} shut down successfully")
 
-    def tear_down_application(self, app_uuid: str) -> None:
+    def tear_down_application(self, application: OpenFactoryAppSchema) -> None:
         """
-        Tear down a deployed OpenFactory application.
+        Tear down a deployed OpenFactory application and all of its replicas.
 
         Args:
-            app_uuid (str): The UUID of the application to be torn down.
+            application (OpenFactoryAppSchema): Application to be torn down.
 
         Raises:
-            OFAException: If the application cannot be torn down.
+            OFAException: If a Docker API error prevents the application from being torn down.
         """
         try:
-            app = Asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-            self.deployment_strategy.remove(app.DockerService.value)
-            app.close()
+            self.deployment_strategy.remove(application)
         except docker.errors.NotFound:
-            # the application was not running as a Docker swarm service
-            deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+            # The Docker service is already gone. Continue with OpenFactory cleanup.
             pass
         except docker.errors.APIError as err:
             raise OFAException(err)
-        deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        deregister_prometheus_target(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
-        user_notify.success(f"OpenFactory application {app_uuid} shut down successfully")
+        for app_uuid in application.replicas_uuid():
+            deregister_asset(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+            deregister_prometheus_target(app_uuid, ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
+        user_notify.success(f"OpenFactory application {application.uuid} shut down successfully")
 
     def shut_down_apps_from_config_file(self, yaml_config_file: str) -> None:
         """
@@ -515,7 +513,7 @@ class OpenFactoryManager(OpenFactory):
                 user_notify.info(f"No application {app.uuid} deployed in OpenFactory")
                 continue
 
-            self.tear_down_application(app.uuid)
+            self.tear_down_application(app)
 
     def get_asset_uuid_from_docker_service(self, docker_service_name: str) -> str:
         """

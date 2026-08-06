@@ -1,4 +1,5 @@
 import json
+import openfactory.config as config
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.kafka import AssetProducer
 from openfactory.schemas.apps import OpenFactoryAppSchema
@@ -14,27 +15,32 @@ def discover_prometheus_registry(ksqlClient: KSQLDBClient):
     return registry[0]['ASSET_UUID']
 
 
-def register_prometheus_target(target: OpenFactoryAppSchema,
+def register_prometheus_target(app: OpenFactoryAppSchema,
                                ksqlClient: KSQLDBClient, bootstrap_servers: str):
     """
     Register a new Prometheus target
 
     Args:
-        target (OpenFactoryAppSchema): target to register.
+        app (OpenFactoryAppSchema): OpenFactory app to register.
         ksqlClient: (KSQLDBClient) KSQL client for executing queries.
         bootstrap_servers (str): Kafka bootstrap server address.
     """
+    # only for docker deployment platform
+    if not config.DEPLOYMENT_PLATFORM == 'docker':
+        return
+
     topic = ksqlClient.get_kafka_topic('METRICS_TARGETS_SOURCE')
     producer = AssetProducer(ksqlClient=ksqlClient, bootstrap_servers=bootstrap_servers)
-    producer.produce(
-        topic=topic,
-        key=target.uuid,
-        value=json.dumps({
-            "HOST": target.uuid.lower(),
-            "PORT": str(target.metrics.port),
-            "PATH": target.metrics.path
-        })
-    )
+    for rep_uuid in app.replicas_uuid():
+        producer.produce(
+            topic=topic,
+            key=rep_uuid,
+            value=json.dumps({
+                "HOST": rep_uuid.lower(),
+                "PORT": str(app.metrics.port),
+                "PATH": app.metrics.path
+            })
+        )
     producer.flush()
 
 

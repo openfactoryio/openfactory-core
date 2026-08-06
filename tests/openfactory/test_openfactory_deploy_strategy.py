@@ -175,11 +175,13 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
     @patch("openfactory.openfactory_deploy_strategy.dal.docker_client")
     def test_swarm_remove(self, mock_docker_client):
         """ Test Docker Swarm remove method """
+        app = MagicMock()
+        app.uuid = "TEST-SERVICE"
         mock_service = MagicMock()
         mock_docker_client.services.get.return_value = mock_service
 
         strategy = SwarmDeploymentStrategy()
-        strategy.remove("test-service")
+        strategy.remove(app)
 
         mock_docker_client.services.get.assert_called_once_with("test-service")
         mock_service.remove.assert_called_once_with()
@@ -333,13 +335,15 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         """ Test local Docker remove removes a single container """
         mock_client = MagicMock()
         mock_container = MagicMock()
+        app = MagicMock()
 
+        app.uuid = "TEST-CONTAINER"
         mock_container.name = "test-container"
         mock_client.containers.list.return_value = [mock_container]
         mock_from_env.return_value = mock_client
 
         strategy = LocalDockerDeploymentStrategy()
-        strategy.remove("test-container")
+        strategy.remove(app)
 
         mock_client.containers.list.assert_called_once_with(all=True)
 
@@ -355,6 +359,9 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
     def test_local_remove_multiple_replicas(self, mock_from_env):
         """ Test local Docker remove removes all replicated containers """
         mock_client = MagicMock()
+        app = MagicMock()
+
+        app.uuid = "TEST-CONTAINER"
 
         container1 = MagicMock()
         container1.name = "test-container-1"
@@ -374,7 +381,7 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
 
         strategy = LocalDockerDeploymentStrategy()
 
-        strategy.remove("test-container")
+        strategy.remove(app)
 
         mock_client.containers.list.assert_called_once_with(all=True)
 
@@ -394,6 +401,9 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
     def test_local_remove_container_not_found(self, mock_from_env):
         """ Test local Docker remove raises NotFound when no matching container exists """
         mock_client = MagicMock()
+        app = MagicMock()
+
+        app.uuid = "TEST-CONTAINER"
 
         other = MagicMock()
         other.name = "another-container"
@@ -404,7 +414,7 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         strategy = LocalDockerDeploymentStrategy()
 
         with self.assertRaises(docker.errors.NotFound):
-            strategy.remove("test-container")
+            strategy.remove(app)
 
         mock_client.containers.list.assert_called_once_with(all=True)
 

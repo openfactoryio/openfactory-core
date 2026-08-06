@@ -1,6 +1,6 @@
 import json
 from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import call, patch, MagicMock
 from openfactory.monitoring.utils import discover_prometheus_registry, register_prometheus_target, deregister_prometheus_target
 from openfactory.exceptions import OFAException
 
@@ -39,32 +39,69 @@ class TestUtils(TestCase):
 
     @patch("openfactory.monitoring.utils.AssetProducer")
     def test_register_prometheus_target(self, MockAssetProducer):
-        """ Should publish target registration to METRICS_TARGETS_SOURCE. """
+        """ Should publish one Prometheus target registration per replica. """
 
-        target = MagicMock()
-        target.uuid = "APP1"
-        target.metrics = MagicMock()
-        target.metrics.port = 4000
-        target.metrics.path = "/metrics"
+        app = MagicMock()
+        app.replicas_uuid.return_value = ["APP-1", "APP-2"]
+        app.metrics = MagicMock()
+        app.metrics.port = 4000
+        app.metrics.path = "/metrics"
 
         ksql = MagicMock()
         ksql.get_kafka_topic.return_value = "metrics-topic"
         producer = MockAssetProducer.return_value
 
-        register_prometheus_target(target, ksqlClient=ksql, bootstrap_servers="broker:9092")
+        with patch("openfactory.monitoring.utils.config.DEPLOYMENT_PLATFORM", "docker"):
+            register_prometheus_target(app, ksqlClient=ksql, bootstrap_servers="broker:9092")
 
         ksql.get_kafka_topic.assert_called_once_with("METRICS_TARGETS_SOURCE")
         MockAssetProducer.assert_called_once_with(ksqlClient=ksql, bootstrap_servers="broker:9092")
-        producer.produce.assert_called_once_with(
-            topic="metrics-topic",
-            key="APP1",
-            value=json.dumps({
-                "HOST": "app1",
-                "PORT": "4000",
-                "PATH": "/metrics"
-            })
+
+        producer.produce.assert_has_calls(
+            [
+                call(
+                    topic="metrics-topic",
+                    key="APP-1",
+                    value=json.dumps(
+                        {
+                            "HOST": "app-1",
+                            "PORT": "4000",
+                            "PATH": "/metrics",
+                        }
+                    ),
+                ),
+                call(
+                    topic="metrics-topic",
+                    key="APP-2",
+                    value=json.dumps(
+                        {
+                            "HOST": "app-2",
+                            "PORT": "4000",
+                            "PATH": "/metrics",
+                        }
+                    ),
+                ),
+            ]
         )
+        self.assertEqual(producer.produce.call_count, 2)
         producer.flush.assert_called_once()
+
+    @patch("openfactory.monitoring.utils.AssetProducer")
+    def test_register_prometheus_target_non_docker(self, MockAssetProducer):
+        """ Should do nothing when deployment platform is not Docker. """
+
+        app = MagicMock()
+        ksql = MagicMock()
+
+        with patch("openfactory.monitoring.utils.config.DEPLOYMENT_PLATFORM", "not docker"):
+            register_prometheus_target(
+                app,
+                ksqlClient=ksql,
+                bootstrap_servers="broker:9092"
+            )
+
+        ksql.get_kafka_topic.assert_not_called()
+        MockAssetProducer.assert_not_called()
 
     @patch("openfactory.monitoring.utils.AssetProducer")
     def test_deregister_prometheus_target(self, MockAssetProducer):

@@ -950,3 +950,41 @@ class TestOpenFactoryAppsConfig(unittest.TestCase):
 
         self.assertEqual(metrics.port, 4000)
         self.assertEqual(metrics.path, "/metrics")
+
+    def test_replicas_uuid_single_replica(self):
+        """ A single replica should return the original UUID """
+
+        config = OpenFactoryAppsConfig(
+            apps={
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                }
+            }
+        )
+
+        self.assertEqual(config.apps["demo1"].replicas_uuid(), ["DEMO-APP"])
+
+    def test_replicas_uuid_multiple_replicas(self):
+        """ Multiple replicas should receive numbered UUIDs """
+
+        config = OpenFactoryAppsConfig(
+            apps={
+                "demo1": {
+                    "uuid": "DEMO-APP",
+                    "image": "demofact/demo1",
+                    "deploy": {
+                        "replicas": 3,
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(
+            config.apps["demo1"].replicas_uuid(),
+            [
+                "DEMO-APP-1",
+                "DEMO-APP-2",
+                "DEMO-APP-3",
+            ],
+        )

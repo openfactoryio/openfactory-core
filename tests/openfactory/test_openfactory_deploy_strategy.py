@@ -35,8 +35,18 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
         args, kwargs = mock_docker_client.api.create_service.call_args
         task = args[0]
 
+        env = task["ContainerSpec"]["Env"]
+        expected = [
+            "ENV=prod",
+            "SWARM_TASK_SLOT={{.Task.Slot}}",
+            "SWARM_TASK_ID={{.Task.ID}}",
+            "SWARM_SERVICE_NAME={{.Service.Name}}",
+            "SWARM_NODE_HOSTNAME={{.Node.Hostname}}",
+        ]
+        for value in expected:
+            self.assertIn(value, env)
+
         self.assertEqual(task["ContainerSpec"]["Image"], "test-image")
-        self.assertEqual(task["ContainerSpec"]["Env"], ["ENV=prod"])
         self.assertEqual(task["ContainerSpec"]["Labels"], {"role": "web"})
         self.assertEqual(task["ContainerSpec"]["Command"], ["run"])
         self.assertEqual(task["Resources"]["Limits"]["NanoCPUs"], 500000000)

@@ -42,6 +42,7 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
             "SWARM_TASK_ID={{.Task.ID}}",
             "SWARM_SERVICE_NAME={{.Service.Name}}",
             "SWARM_NODE_HOSTNAME={{.Node.Hostname}}",
+            "SWARM_REPLICAS=2",
         ]
         for value in expected:
             self.assertIn(value, env)

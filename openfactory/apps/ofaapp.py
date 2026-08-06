@@ -369,6 +369,7 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
             return
 
         self._shutdown_completed = True
+        self.avail = 'UNAVAILABLE'
         deregister_asset(
             self.asset_uuid,
             ksqlClient=self.ksql,

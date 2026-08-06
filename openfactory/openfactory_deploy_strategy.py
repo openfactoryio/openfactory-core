@@ -173,7 +173,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         See parent method for argument descriptions.
 
-        Notes:
+        Note:
             - ``image_pull_policy`` is currently ignored for Swarm deployments.
             - Docker Swarm task metadata is automatically exposed to the container through
             the ``SWARM_TASK_SLOT``, ``SWARM_TASK_ID``, ``SWARM_SERVICE_NAME``, and
@@ -187,6 +187,9 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         env.append("SWARM_TASK_ID={{.Task.ID}}")
         env.append("SWARM_SERVICE_NAME={{.Service.Name}}")
         env.append("SWARM_NODE_HOSTNAME={{.Node.Hostname}}")
+
+        replicas = mode.get("Replicated", {}).get("Replicas", 1) if mode else 1
+        env.append(f"SWARM_REPLICAS={replicas}")
 
         container = ContainerSpec(
             image=image,
@@ -347,7 +350,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         See parent method for argument descriptions.
 
-        Notes:
+        Note:
             - ``constraints`` are ignored for local containers.
             - ``mode["Replicated"]["Replicas"]`` determines the number of local containers to create.
             - Replicated containers are named ``<name>-1``, ``<name>-2``, ... and receive matching ``APP_UUID`` environment variables.

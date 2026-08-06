@@ -396,6 +396,13 @@ class OpenFactoryAppSchema(AttachUNSMixin, BaseModel):
             )
         return self
 
+    def replicas_uuid(self) -> list[str]:
+        """ Return the ASSET_UUIDs of all application replicas. """
+        if self.deploy.replicas == 1:
+            return [self.uuid]
+
+        return [f"{self.uuid}-{i}" for i in range(1, self.deploy.replicas + 1)]
+
 
 class OpenFactoryAppsConfig(BaseModel):
     """

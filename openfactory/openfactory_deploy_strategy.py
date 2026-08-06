@@ -78,6 +78,7 @@ from docker.types import Mount, DriverConfig, Ulimit, ContainerSpec, TaskTemplat
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any, Literal
 from openfactory.docker.docker_access_layer import dal
+from openfactory.schemas.apps import OpenFactoryAppSchema
 from openfactory.exceptions import OFAConfigurationException
 
 
@@ -133,12 +134,12 @@ class OpenFactoryServiceDeploymentStrategy(ABC):
         pass
 
     @abstractmethod
-    def remove(self, service_name):
+    def remove(self, application: OpenFactoryAppSchema):
         """
         Remove a service.
 
         Args:
-            service_name (str): Service to be removed.
+            application (OpenFactoryAppSchema): The application to be removed.
         """
         pass
 
@@ -211,14 +212,14 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             endpoint_spec=EndpointSpec(ports=ports) if ports else None
         )
 
-    def remove(self, service_name):
+    def remove(self, application: OpenFactoryAppSchema):
         """
         Remove a Docker service from a Docker Swarm cluster.
 
         Args:
-            service_name (str): Docker swarm service to be removed.
+            appliacation (OpenFactoryAppSchema): OpenFactory application to be removed.
         """
-        service = dal.docker_client.services.get(service_name)
+        service = dal.docker_client.services.get(application.uuid.lower())
         service.remove()
 
 
@@ -425,18 +426,18 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
                 for net_name in networks[1:]:
                     client.networks.get(net_name).connect(container)
 
-    def remove(self, service_name):
+    def remove(self, application: OpenFactoryAppSchema):
         """
         Remove one or more local Docker containers.
 
         If the application was deployed as a single container, the container
-        named ``service_name`` is removed.
+        named ``application.uuid.lower()`` is removed.
 
         If the application was deployed with local replication, all containers
-        whose names follow the ``service_name-N`` naming convention are removed.
+        whose names follow the ``application.uuid.lower()-N`` naming convention are removed.
 
         Args:
-            service_name (str): Base name of the Docker container(s) to remove.
+            application (OpenFactoryAppSchema): application to remove.
 
         Raises:
             docker.errors.NotFound: If no matching container exists.
@@ -447,12 +448,12 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         containers = [
             container
             for container in client.containers.list(all=True)
-            if container.name == service_name
-            or container.name.startswith(f"{service_name}-")
+            if container.name == application.uuid.lower()
+            or container.name.startswith(f"{application.uuid.lower()}-")
         ]
 
         if not containers:
-            raise docker.errors.NotFound(f"No Docker container found for service '{service_name}'.")
+            raise docker.errors.NotFound(f"No Docker container found for application '{application.uuid}'.")
 
         for container in containers:
             container.stop()

@@ -173,11 +173,20 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
 
         See parent method for argument descriptions.
 
-        Note:
+        Notes:
             - ``image_pull_policy`` is currently ignored for Swarm deployments.
+            - Docker Swarm task metadata is automatically exposed to the container through
+            the ``SWARM_TASK_SLOT``, ``SWARM_TASK_ID``, ``SWARM_SERVICE_NAME``, and
+            ``SWARM_NODE_HOSTNAME`` environment variables.
             - When ``open_files`` is specified, the service is deployed with a ``nofile`` ulimit using identical soft and hard limits.
             - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """
+
+        # Docker Swarm Go template variables
+        env.append("SWARM_TASK_SLOT={{.Task.Slot}}")
+        env.append("SWARM_TASK_ID={{.Task.ID}}")
+        env.append("SWARM_SERVICE_NAME={{.Service.Name}}")
+        env.append("SWARM_NODE_HOSTNAME={{.Node.Hostname}}")
 
         container = ContainerSpec(
             image=image,
@@ -217,7 +226,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         Remove a Docker service from a Docker Swarm cluster.
 
         Args:
-            appliacation (OpenFactoryAppSchema): OpenFactory application to be removed.
+            application (OpenFactoryAppSchema): OpenFactory application to be removed.
         """
         service = dal.docker_client.services.get(application.uuid.lower())
         service.remove()

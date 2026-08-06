@@ -1499,99 +1499,104 @@ class TestOpenFactoryManager(unittest.TestCase):
         assert "Device device-fail-1 could not be torn down" in fail_msg
         assert "Mocked teardown failure" in fail_msg
 
-    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
-    @patch("openfactory.openfactory_manager.Asset")
     @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
     @patch("openfactory.openfactory_manager.deregister_asset")
-    def test_tear_down_application(self, mock_deregister_asset, mock_user_notify, MockAsset, mock_deregister_prometheus_target):
+    def test_tear_down_application(self, mock_deregister_asset, mock_deregister_prometheus_target, mock_user_notify):
         """ Test tear_down_application """
 
-        # Mock Asset instance and its DockerService value
-        mock_app_instance = MagicMock()
-        mock_app_instance.DockerService.value = "mock-service-name"
-        MockAsset.return_value = mock_app_instance
+        app = MagicMock()
+        app.uuid = "APP123"
+        app.replicas_uuid.return_value = ["APP123-1", "APP123-2"]
 
-        # Call the method under test
-        app_uuid = 'app-uuid-123'
-        self.manager.tear_down_application(app_uuid)
+        self.manager.tear_down_application(app)
 
-        # Check that the correct service was removed
-        self.manager.deployment_strategy.remove.assert_called_once_with("mock-service-name")
+        self.manager.deployment_strategy.remove.assert_called_once_with(app)
 
-        # Check that the correct notifications were sent
-        mock_user_notify.success.assert_any_call(f"OpenFactory application {app_uuid} shut down successfully")
+        mock_deregister_asset.assert_has_calls([
+            call(
+                "APP123-1",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+            call(
+                "APP123-2",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+        ])
 
-        # Ensure Prometheus target was deregistered
-        mock_deregister_prometheus_target.assert_called_once_with(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
+        mock_deregister_prometheus_target.assert_has_calls([
+            call(
+                "APP123-1",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+            call(
+                "APP123-2",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+        ])
 
-        # Ensure asset was deregistered
-        mock_deregister_asset.assert_called_once_with(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
+        self.assertEqual(mock_deregister_asset.call_count, 2)
+        self.assertEqual(mock_deregister_prometheus_target.call_count, 2)
 
-    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
-    @patch("openfactory.openfactory_manager.Asset")
+        mock_user_notify.success.assert_called_once_with("OpenFactory application APP123 shut down successfully")
+
     @patch("openfactory.openfactory_manager.user_notify")
+    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
     @patch("openfactory.openfactory_manager.deregister_asset")
-    def test_tear_down_application_deregisters_prometheus_target(
+    def test_tear_down_application_service_not_found(
         self,
         mock_deregister_asset,
-        mock_user_notify,
-        MockAsset,
-        mock_deregister_prometheus_target
+        mock_deregister_prometheus_target,
+        mock_user_notify
     ):
-        """ Metrics target should be deregistered when an application is torn down """
+        """ Test tear_down_application when the Docker service no longer exists """
 
-        mock_app_instance = MagicMock()
-        mock_app_instance.DockerService.value = "mock-service-name"
-        MockAsset.return_value = mock_app_instance
-
-        app_uuid = "app-uuid-123"
-
-        self.manager.tear_down_application(app_uuid)
-
-        mock_deregister_prometheus_target.assert_called_once_with(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
-
-    @patch("openfactory.openfactory_manager.deregister_prometheus_target")
-    @patch("openfactory.openfactory_manager.Asset")
-    @patch("openfactory.openfactory_manager.user_notify")
-    @patch("openfactory.openfactory_manager.deregister_asset")
-    def test_tear_down_application_no_docker_service_still_deregisters_prometheus_target(
-        self,
-        mock_deregister_asset,
-        mock_user_notify,
-        MockAsset,
-        mock_deregister_prometheus_target
-    ):
-        """ Metrics target should still be deregistered when the Docker service no longer exists """
-
-        mock_app_instance = MagicMock()
-        mock_app_instance.DockerService.value = "mock-service-name"
-        MockAsset.return_value = mock_app_instance
+        app = MagicMock()
+        app.uuid = "APP123"
+        app.replicas_uuid.return_value = ["APP123-1", "APP123-2"]
 
         self.manager.deployment_strategy.remove.side_effect = (
             docker.errors.NotFound("Service not found")
         )
 
-        app_uuid = "app-uuid-123"
+        self.manager.tear_down_application(app)
 
-        self.manager.tear_down_application(app_uuid)
+        self.manager.deployment_strategy.remove.assert_called_once_with(app)
 
-        mock_deregister_prometheus_target.assert_called_once_with(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
+        mock_deregister_asset.assert_has_calls([
+            call(
+                "APP123-1",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+            call(
+                "APP123-2",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+        ])
+
+        mock_deregister_prometheus_target.assert_has_calls([
+            call(
+                "APP123-1",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+            call(
+                "APP123-2",
+                ksqlClient=self.manager.ksql,
+                bootstrap_servers=self.manager.bootstrap_servers
+            ),
+        ])
+
+        self.assertEqual(mock_deregister_asset.call_count, 2)
+        self.assertEqual(mock_deregister_prometheus_target.call_count, 2)
+
+        mock_user_notify.success.assert_called_once_with("OpenFactory application APP123 shut down successfully")
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.user_notify')
@@ -1638,67 +1643,38 @@ class TestOpenFactoryManager(unittest.TestCase):
         # Should not continue to loading apps
         mock_get_apps_from_config_file.assert_not_called()
 
+    @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.deregister_prometheus_target")
-    @patch("openfactory.openfactory_manager.Asset")
-    @patch("openfactory.openfactory_manager.user_notify")
     @patch("openfactory.openfactory_manager.deregister_asset")
-    def test_tear_down_application_no_docker_service(self, mock_deregister_asset, mock_user_notify, MockAsset, mock_deregister_prometheus_target):
-        """ Test tear_down_application when application is not deployed as a Docker service """
+    def test_tear_down_application_docker_api_error(
+        self,
+        mock_deregister_asset,
+        mock_deregister_prometheus_target,
+        mock_user_notify
+    ):
+        """ Test tear_down_application handles Docker API errors """
 
-        # Mock Asset instance and its DockerService value
-        mock_app_instance = MagicMock()
-        mock_app_instance.DockerService.value = "mock-service-name"
-        MockAsset.return_value = mock_app_instance
-
-        # Simulate missing Docker service
-        self.manager.deployment_strategy.remove.side_effect = (
-            docker.errors.NotFound("Service not found")
-        )
-
-        app_uuid = "app-uuid-123"
-
-        self.manager.tear_down_application(app_uuid)
-
-        # Ensure Prometheus target was deregistered
-        mock_deregister_prometheus_target.assert_called_once_with(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
-
-        # Ensure asset was deregistered
-        mock_deregister_asset.assert_any_call(
-            app_uuid,
-            ksqlClient=self.manager.ksql,
-            bootstrap_servers=self.manager.bootstrap_servers
-        )
-
-        # No success notification
-        mock_user_notify.assert_not_called()
-
-    @patch("openfactory.openfactory_manager.Asset")
-    @patch("openfactory.openfactory_manager.user_notify")
-    @patch("openfactory.openfactory_manager.deregister_asset")
-    def test_tear_down_application_docker_api_error(self, mock_deregister_asset, mock_user_notify, MockAsset):
-        """ Test tear_down_application handels Docker API errors """
-
-        # Mock Asset instance and its DockerService value
-        mock_app_instance = MagicMock()
-        mock_app_instance.DockerService.value = "mock-service-name"
-        MockAsset.return_value = mock_app_instance
+        app = MagicMock()
+        app.uuid = "APP123"
+        app.replicas_uuid.return_value = ["APP123-1", "APP123-2"]
 
         # Setup deployment_strategy.remove to raise APIError
-        self.manager.deployment_strategy.remove.side_effect = docker.errors.APIError("Docker error")
+        self.manager.deployment_strategy.remove.side_effect = (
+            docker.errors.APIError("Docker error")
+        )
 
         # Call the method to test
         with self.assertRaises(OFAException):
-            self.manager.tear_down_application('app-uuid-123')
+            self.manager.tear_down_application(app)
 
-        # Ensure deregister_asset was not called
+        self.manager.deployment_strategy.remove.assert_called_once_with(app)
+
+        # Ensure cleanup was not performed
         mock_deregister_asset.assert_not_called()
+        mock_deregister_prometheus_target.assert_not_called()
 
         # No success message
-        mock_user_notify.assert_not_called()
+        mock_user_notify.success.assert_not_called()
 
     @patch("openfactory.openfactory_manager.get_apps_from_config_file")
     @patch("openfactory.openfactory_manager.user_notify")
@@ -1734,9 +1710,12 @@ class TestOpenFactoryManager(unittest.TestCase):
         manager.tear_down_application = MagicMock()
 
         # Mock the YAML config file content
+        app1 = OpenFactoryAppSchema(uuid='app-uuid-1', image='app1-image', environment=None, uns=None)
+        app2 = OpenFactoryAppSchema(uuid='app-uuid-3', image='app2-image', environment=None, uns=None)
+
         mock_get_apps_from_config_file.return_value = {
-            'App1': OpenFactoryAppSchema(uuid='app-uuid-1', image='app1-image', environment=None, uns=None),
-            'App2': OpenFactoryAppSchema(uuid='app-uuid-3', image='app2-image', environment=None, uns=None)
+            'App1': app1,
+            'App2': app2
         }
 
         # Call the method
@@ -1747,7 +1726,7 @@ class TestOpenFactoryManager(unittest.TestCase):
         mock_user_notify.info.assert_any_call('App1:')
         mock_user_notify.info.assert_any_call('App2:')
         mock_user_notify.info.assert_any_call('No application app-uuid-3 deployed in OpenFactory')
-        manager.tear_down_application.assert_called_once_with('app-uuid-1')
+        manager.tear_down_application.assert_called_once_with(app1)
 
     @patch('openfactory.openfactory_manager.get_apps_from_config_file')
     @patch('openfactory.openfactory_manager.UNSSchema')

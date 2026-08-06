@@ -369,6 +369,16 @@ class TestOpenFactoryApp(unittest.TestCase):
         app.app_event_loop_stopped.assert_called_once()
         self.assertTrue(app._shutdown_completed)
 
+    def test_shutdown_sets_availability_to_unavailable(self):
+        """ Test shutdown() marks the app as unavailable """
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url"
+        )
+        app.shutdown()
+        self.assertEqual(app.avail.value, "UNAVAILABLE")
+
     def test_shutdown_after_signal_handler_is_noop(self):
         """ Verify shutdown() becomes a no-op after signal_handler already performed cleanup. """
         app = OpenFactoryApp(

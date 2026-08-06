@@ -599,7 +599,7 @@ class BaseAsset:
         - If the value is a raw value (e.g., int, str, etc.), it wraps the value in an
         `AssetAttribute` using the current attribute’s metadata (tag, type) and sends it.
 
-        Notes:
+        Note:
             If a new class attribute has to be defined in the constructor of the child class, one has to use
             ```python
             object.__setattr__(self, 'new_class_attribute', <some value>)

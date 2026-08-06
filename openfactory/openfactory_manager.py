@@ -43,6 +43,7 @@ Important:
 import os
 import docker
 import json
+import re
 import openfactory.config as config
 from openfactory import OpenFactory
 from openfactory.schemas.devices import get_devices_from_config_file
@@ -509,7 +510,10 @@ class OpenFactoryManager(OpenFactory):
 
         for app_name, app in apps.items():
             user_notify.info(f"{app_name}:")
-            if app.uuid not in self.assets_uuid():
+            if not any(
+                re.fullmatch(rf"{re.escape(app.uuid)}(?:-\d+)?", asset_uuid)
+                for asset_uuid in self.assets_uuid()
+            ):
                 user_notify.info(f"No application {app.uuid} deployed in OpenFactory")
                 continue
 

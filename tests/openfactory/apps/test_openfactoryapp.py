@@ -63,6 +63,40 @@ class TestOpenFactoryApp(unittest.TestCase):
         from openfactory.assets import Asset
         self.assertTrue(issubclass(OpenFactoryApp, Asset), "OpenFactoryApp should derive from Asset")
 
+    def test_initialization_with_replicated_swarm_service(self):
+        """ App UUID is enriched with the swarm task slot for replicated services. """
+
+        with patch.dict(os.environ, {
+            "APP_UUID": "env-uuid",
+            "SWARM_REPLICAS": "2",
+            "SWARM_TASK_SLOT": "3",
+        }):
+            app = OpenFactoryApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mocked_broker",
+                asset_router_url="mocked_asset_url",
+                test_mode=True,
+            )
+
+        self.assertEqual(app.asset_uuid, "env-uuid-3")
+
+    def test_initialization_with_single_replica_keeps_uuid(self):
+        """ App UUID is unchanged for a single replica. """
+
+        with patch.dict(os.environ, {
+            "APP_UUID": "env-uuid",
+            "SWARM_REPLICAS": "1",
+            "SWARM_TASK_SLOT": "3",
+        }):
+            app = OpenFactoryApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mocked_broker",
+                asset_router_url="mocked_asset_url",
+                test_mode=True,
+            )
+
+        self.assertEqual(app.asset_uuid, "env-uuid")
+
     def test_initialization_with_env_vars(self):
         """ Test initialization with external environment variables set """
 

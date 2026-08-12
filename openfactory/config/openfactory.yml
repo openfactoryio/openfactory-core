@@ -12,7 +12,6 @@ OPENFACTORY_VERSION: ${OPENFACTORY_VERSION}
 OPENFACTORY_LOG_LEVEL: INFO
 KSQLDB_LOG_LEVEL: WARNING
 KAFKA_LOG_LEVEL: WARNING
-OPCUA_PRODUCER_LOG_LEVEL: INFO
 OPENFACTORY_LOG_BACKEND: ${OPENFACTORY_LOG_BACKEND:-text}
 
 # OpenFactory UNS definiton
@@ -61,10 +60,6 @@ ASSET_ROUTER_URL: ${ASSET_ROUTER_URL}
 
 MTCONNECT_AGENT_IMAGE: ghcr.io/openfactoryio/mtcagent:v2.5.0.11
 MTCONNECT_PRODUCER_IMAGE: ghcr.io/openfactoryio/kafka-mtc-producer:${OPENFACTORY_VERSION}
-
-# ---------------------------------------------------------------------------
-# OPC UA Connector
-OPCUA_CONNECTOR_COORDINATOR: ${OPCUA_CONNECTOR_COORDINATOR}
 
 # Colors for ofa cli
 OFA_SUCCSESS: "\e[0;32m"   # Green for success

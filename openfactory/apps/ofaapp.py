@@ -348,12 +348,18 @@ class OpenFactoryApp(Asset, metaclass=OpenFactoryAppMeta):
 
     def register_prometheus_metrics(self, metrics_port: int, metrics_path: str = '/metrics') -> None:
         """
-        Register Prometheus metrics with the OpenFactory Prometheus metrics registry
+        Register Prometheus metrics with the OpenFactory Prometheus metrics registry.
+
+        Metrics are registered only for Docker deployments. In Docker Swarm,
+        Prometheus discovers application tasks directly through Swarm service discovery.
 
         Args:
-            metrics_port (int): Port on which metrics is published
-            metrics_path (str): Endpoint of metrics. Defaults to ``/metrics``
+            metrics_port (int): Port on which metrics is published.
+            metrics_path (str): Endpoint of metrics. Defaults to ``/metrics``.
         """
+        if os.getenv("DEPLOYMENT_PLATFORM") != "docker":
+            return
+
         registry_uuid = discover_prometheus_registry(self.ksql)
         self.logger.info(f"Registering metrics with OpenFactory Prometheus metrics registry {registry_uuid}")
         topic = self.ksql.get_kafka_topic('METRICS_TARGETS_SOURCE')

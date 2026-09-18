@@ -174,6 +174,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         See parent method for argument descriptions.
 
         Note:
+            - The ``DEPLOYMENT_PLATFORM`` environment variable is set to ``swarm``.
             - ``image_pull_policy`` is currently ignored for Swarm deployments.
             - Docker Swarm task metadata is automatically exposed to the container through
             the ``SWARM_TASK_SLOT``, ``SWARM_TASK_ID``, ``SWARM_SERVICE_NAME``, and
@@ -181,6 +182,7 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             - When ``open_files`` is specified, the service is deployed with a ``nofile`` ulimit using identical soft and hard limits.
             - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """
+        env.append("DEPLOYMENT_PLATFORM=swarm")
 
         # Docker Swarm Go template variables
         env.append("SWARM_TASK_SLOT={{.Task.Slot}}")
@@ -351,6 +353,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
         See parent method for argument descriptions.
 
         Note:
+            - The ``DEPLOYMENT_PLATFORM`` environment variable is set to ``docker``.
             - ``constraints`` are ignored for local containers.
             - ``mode["Replicated"]["Replicas"]`` determines the number of local containers to create.
             - Replicated containers are named ``<name>-1``, ``<name>-2``, ... and receive matching ``APP_UUID`` environment variables.
@@ -358,6 +361,7 @@ class LocalDockerDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             - ``image_pull_policy="always"`` forces a Docker image pull before deployment.
             - When ``open_files`` is specified, a ``nofile`` ulimit is configured with identical soft and hard limits.
         """
+        env.append("DEPLOYMENT_PLATFORM=docker")
         client = docker.from_env()
 
         replicas = mode.get("Replicated", {}).get("Replicas", 1) if mode else 1

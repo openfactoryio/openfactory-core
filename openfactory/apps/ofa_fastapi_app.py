@@ -140,8 +140,10 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         .. code-block:: python
 
             import asyncio
+            import os
             from prometheus_client import Counter
             from openfactory.apps import OpenFactoryFastAPIApp
+            from openfactory.kafka import KSQLDBClient
 
             REQUESTS = Counter(
                 "requests_total",

@@ -133,7 +133,8 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
     Prometheus metrics can be exposed by calling :meth:`expose_metrics`.
     By default, the global Prometheus registry is exposed, allowing both
     OpenFactory metrics and application-defined metrics to be scraped
-    through the same endpoint.
+    through the same endpoint. The metrics endpoint is configured through
+    the ``METRICS_ENDPOINT`` environment variable and defaults to ``/metrics``.
 
     .. admonition:: Exposing Prometheus metrics
 
@@ -174,7 +175,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
       - Only asynchronous execution is supported. Subclasses may optionally implement :meth:`async_main_loop` for background tasks.
       - The synchronous :meth:`OpenFactoryApp.main_loop() <openfactory.apps.ofaapp.OpenFactoryApp.main_loop>` is not supported in this class.
       - OpenFactory features such as attributes, methods, and asset communication remain unchanged.
-      - When deployed on the OpenFactory platform, the ``PORT`` environment variable is set automatically by the deployment tool.
+      - When deployed on the OpenFactory platform, the ``PORT`` and ``METRICS_ENDPOINT`` environment variables are set automatically according to the application configuration.
 
     .. seealso::
         - :class:`openfactory.apps.ofaapp.OpenFactoryApp`
@@ -274,7 +275,7 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         """
         pass
 
-    def expose_metrics(self, path: str = "/metrics", registry: CollectorRegistry = REGISTRY) -> None:
+    def expose_metrics(self, registry: CollectorRegistry = REGISTRY) -> None:
         """
         Expose Prometheus metrics through the embedded FastAPI application.
 
@@ -288,17 +289,21 @@ class OpenFactoryFastAPIApp(OpenFactoryApp):
         By default, the global Prometheus registry is exposed, allowing both OpenFactory metrics
         and user-defined Prometheus metrics to be scraped through the same endpoint.
 
-        This method is idempotent. Calling it multiple times with the same
-        ``path`` has no effect.
+        The metrics endpoint and port are configured through the ``METRICS_ENDPOINT`` and
+        ``PORT`` environment variables, defaulting to ``"/metrics"`` and ``4000``,
+        respectively.
+
+        This method is idempotent.
 
         Args:
-            path: URL path where metrics are exposed. Defaults to ``"/metrics"``.
             registry: Prometheus registry to expose. Defaults to the global Prometheus registry.
 
         Raises:
             ValueError:
-                If another endpoint is already registered for ``path``.
+                If another endpoint is already registered for the configured metrics path.
         """
+
+        path = os.getenv("METRICS_ENDPOINT", "/metrics")
 
         # Already registered by this method -> do nothing
         if getattr(self, "_metrics_path", None) == path:

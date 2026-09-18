@@ -275,6 +275,44 @@ class TestOpenFactoryManager(unittest.TestCase):
     @patch("openfactory.openfactory_manager.register_prometheus_target")
     @patch("openfactory.openfactory_manager.register_asset")
     @patch("openfactory.openfactory_manager.user_notify")
+    def test_deploy_openfactory_application_with_metrics(
+        self,
+        mock_user_notify,
+        mock_register_asset,
+        mock_register_prometheus_target
+    ):
+        """ Metrics configuration should be passed to the deployed application. """
+
+        app = OpenFactoryAppSchema(
+            uuid="APP123",
+            image="app_image",
+            metrics={
+                "port": 5000,
+                "path": "/prometheus"
+            }
+        )
+
+        self.manager.deploy_openfactory_application(app)
+
+        deploy_call = self.manager.deployment_strategy.deploy.call_args
+        kwargs = deploy_call.kwargs
+
+        self.assertIn("PORT=5000", kwargs["env"])
+        self.assertIn("METRICS_ENDPOINT=/prometheus", kwargs["env"])
+
+        self.assertEqual(
+            kwargs["labels"],
+            {
+                "prometheus.scrape": "true",
+                "prometheus.job": "openfactory-application",
+                "prometheus.path": "/prometheus",
+                "prometheus.port": "5000",
+            }
+        )
+
+    @patch("openfactory.openfactory_manager.register_prometheus_target")
+    @patch("openfactory.openfactory_manager.register_asset")
+    @patch("openfactory.openfactory_manager.user_notify")
     def test_deploy_openfactory_application_registers_prometheus_target(
         self,
         mock_user_notify,
@@ -488,9 +526,12 @@ class TestOpenFactoryManager(unittest.TestCase):
         self.assertIn("open_files", kwargs)
         self.assertIsNone(kwargs["open_files"])
 
-        # labels should be present (empty because no routing)
+        # Prometheus scraping should be explicitly disabled when metrics are not configured
         self.assertIn("labels", kwargs)
-        self.assertEqual(kwargs["labels"], {})
+        self.assertEqual(
+            kwargs["labels"],
+            {"prometheus.scrape": "false"}
+        )
 
         # register_asset call check
         mock_register_asset.assert_called_once_with(

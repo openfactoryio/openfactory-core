@@ -107,6 +107,31 @@ class OpenFactoryManager(OpenFactory):
         self.deployment_strategy: OpenFactoryServiceDeploymentStrategy = platform_cls()
         self.deployment_strategy = platform_cls()
 
+    def _build_prometheus_labels(self, application: OpenFactoryAppSchema) -> dict[str, str]:
+        """
+        Build Prometheus labels for exposing OpenFactory application metrics.
+
+        Args:
+            application (OpenFactoryAppSchema): The application configuration containing
+                metrics configuration.
+
+        Returns:
+            dict[str, str]: A dictionary of Prometheus labels to be applied to the container or service.
+                Prometheus scraping is disabled if metrics are not configured.
+        """
+        if application.metrics:
+            labels = {
+                "prometheus.scrape": "true",
+                "prometheus.job": "openfactory-application",
+                "prometheus.path": application.metrics.path,
+                "prometheus.port": str(application.metrics.port),
+                }
+        else:
+            labels = {
+                "prometheus.scrape": "false",
+            }
+        return labels
+
     def _build_traefik_labels(self, application: OpenFactoryAppSchema) -> dict[str, str]:
         """
         Build Traefik labels for exposing an OpenFactory application.
@@ -190,7 +215,9 @@ class OpenFactoryManager(OpenFactory):
         Deploy an OpenFactory application.
 
         The application image and image pull policy are forwarded to the
-        configured deployment strategy.
+        configured deployment strategy. If metrics are configured, the metrics
+        endpoint and port are provided to the application through environment
+        variables and Prometheus service discovery is configured automatically.
 
         Args:
             application (OpenFactoryAppSchema): The application configuration.
@@ -212,6 +239,11 @@ class OpenFactoryManager(OpenFactory):
                f"KSQLDB_URL={self.ksql.ksqldb_url}",
                f"ASSET_ROUTER_URL={config.ASSET_ROUTER_URL}",
                f"DOCKER_SERVICE={application.uuid.lower()}"]
+
+        # add metrics configuration if configured
+        if application.metrics:
+            env.append(f"METRICS_ENDPOINT={application.metrics.path}")
+            env.append(f"PORT={application.metrics.port}")
 
         # add logging configuration if configured
         backend = getattr(config, "OPENFACTORY_LOG_BACKEND", None)
@@ -296,7 +328,10 @@ class OpenFactoryManager(OpenFactory):
                 constraints=constraints(application.deploy),
                 networks=application.networks,
                 mounts=mounts,
-                labels=self._build_traefik_labels(application),
+                labels={
+                    **self._build_traefik_labels(application),
+                    **self._build_prometheus_labels(application),
+                },
             )
         except docker.errors.APIError as err:
             user_notify.fail(f"Application {application.uuid} could not be deployed\n{err}")

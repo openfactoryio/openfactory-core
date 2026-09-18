@@ -107,6 +107,34 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
 
         mock_register.assert_not_called()
 
+    @patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
+    def test_expose_metrics_uses_environment_configuration(self, mock_register):
+        """ Should use the metrics endpoint and port from environment variables. """
+
+        with patch.dict(
+            "os.environ",
+            {
+                "METRICS_ENDPOINT": "/prometheus",
+                "PORT": "5000"
+            }
+        ):
+            app = OpenFactoryFastAPIApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock",
+                test_mode=True
+            )
+
+            app.expose_metrics()
+
+        paths = [route.path for route in app.api.routes]
+        self.assertIn("/prometheus", paths)
+
+        mock_register.assert_called_once_with(
+            metrics_port=5000,
+            metrics_path="/prometheus"
+        )
+
 
 class TestOpenFactoryFastAPIAppAsync(unittest.IsolatedAsyncioTestCase):
     """

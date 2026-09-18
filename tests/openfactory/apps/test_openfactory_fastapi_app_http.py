@@ -75,3 +75,24 @@ class TestOpenFactoryFastAPIAppHTTP(unittest.TestCase):
         response = self.client.get("/metrics")
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/plain", response.headers["content-type"])
+
+    def test_metrics_endpoint_from_environment(self):
+        """ Should expose Prometheus metrics at the endpoint configured by METRICS_ENDPOINT. """
+
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/mock_metrics"}):
+            app = _HTTPTestApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock",
+                test_mode=True
+            )
+
+            client = TestClient(app.api)
+
+            response = client.get("/mock_metrics")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/plain", response.headers["content-type"])
+
+            # default endpoint should not have been registered
+            response = client.get("/metrics")
+            self.assertEqual(response.status_code, 404)

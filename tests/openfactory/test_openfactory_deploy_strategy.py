@@ -38,6 +38,7 @@ class TestSwarmDeploymentStrategy(unittest.TestCase):
         env = task["ContainerSpec"]["Env"]
         expected = [
             "ENV=prod",
+            "DEPLOYMENT_PLATFORM=swarm",
             "SWARM_TASK_SLOT={{.Task.Slot}}",
             "SWARM_TASK_ID={{.Task.ID}}",
             "SWARM_SERVICE_NAME={{.Service.Name}}",
@@ -267,7 +268,7 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         args, kwargs = mock_run.call_args
         self.assertEqual(kwargs["image"], "test-image")
         self.assertEqual(kwargs["name"], "test-container")
-        self.assertEqual(kwargs["environment"], ["APP_UUID=test-container", "ENV=dev"])
+        self.assertEqual(kwargs["environment"], ["APP_UUID=test-container", "ENV=dev", "DEPLOYMENT_PLATFORM=docker"])
         self.assertEqual(kwargs["command"], "start")
         self.assertTrue(kwargs["detach"])
         self.assertEqual(kwargs["ports"], {"80/tcp": 8080})
@@ -701,7 +702,14 @@ class TestLocalDockerDeploymentStrategy(unittest.TestCase):
         _, kwargs = mock_client.containers.run.call_args
 
         self.assertEqual(kwargs["name"], "test-container")
-        self.assertEqual(kwargs["environment"], ["APP_UUID=test-container", "ENV=dev"])
+        self.assertEqual(
+            kwargs["environment"],
+            [
+                "APP_UUID=test-container",
+                "ENV=dev",
+                "DEPLOYMENT_PLATFORM=docker",
+            ]
+        )
 
     @patch("openfactory.openfactory_deploy_strategy.docker.from_env")
     def test_local_deploy_multiple_replicas_with_ports_fails(self, mock_from_env):

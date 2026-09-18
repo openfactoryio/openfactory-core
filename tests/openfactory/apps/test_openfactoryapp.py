@@ -534,7 +534,8 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
         )
         app.producer = MagicMock()
 
-        app.register_prometheus_metrics(metrics_port=8000, metrics_path="/metrics")
+        with patch.dict(os.environ, {"DEPLOYMENT_PLATFORM": "docker"}):
+            app.register_prometheus_metrics(metrics_port=8000, metrics_path="/metrics")
 
         mock_discover_registry.assert_called_once_with(self.ksql_mock)
         self.ksql_mock.get_kafka_topic.assert_called_once_with("METRICS_TARGETS_SOURCE")
@@ -548,3 +549,23 @@ class TestOpenFactoryAppAsync(unittest.IsolatedAsyncioTestCase):
             })
         )
         app.producer.flush.assert_called_once()
+
+    @patch("openfactory.apps.ofaapp.discover_prometheus_registry")
+    def test_register_prometheus_metrics_skipped_for_swarm(self, mock_discover_registry):
+        """ Metrics target registration is skipped for Docker Swarm deployments. """
+
+        app = OpenFactoryApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock_bootstrap",
+            asset_router_url="mocked_asset_url",
+            test_mode=True
+        )
+        app.producer = MagicMock()
+
+        with patch.dict(os.environ, {"DEPLOYMENT_PLATFORM": "swarm"}):
+            app.register_prometheus_metrics(metrics_port=8000, metrics_path="/metrics")
+
+        mock_discover_registry.assert_not_called()
+        self.ksql_mock.get_kafka_topic.assert_not_called()
+        app.producer.produce.assert_not_called()
+        app.producer.flush.assert_not_called()

@@ -50,7 +50,6 @@ if __name__ == "__main__":
         python openfactory/kafka/asset_uns_consumer.py
     """
 
-    from openfactory.kafka.ksql import KSQLDBClient
     from openfactory.kafka.kafka_logger import kafka_logger
 
     kafka_logger.level = 'INFO'

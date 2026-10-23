@@ -108,9 +108,37 @@ class TestOpenFactoryCluster(TestCase):
 
         mock_dockerclient.assert_any_call(base_url='ssh://mock_user@123.123.1.1')
         mock_dockerclient.assert_any_call(base_url='ssh://mock_user@123.123.2.2')
+        user_notify.info.assert_any_call('Adding manager node manager1 on ssh://mock_user@123.123.1.1')
+        user_notify.info.assert_any_call('Adding manager node manager2 on ssh://mock_user@123.123.2.2')
         user_notify.success.assert_any_call('Node "manager1 (123.123.1.1)" setup')
         user_notify.success.assert_any_call('Node "manager2 (123.123.2.2)" setup')
         self.assertIn(call(['manager node ip'], join_token='manager token'), mock.docker_swarm.join.call_args_list)
+
+    @patch('openfactory.openfactory_cluster.user_notify')
+    @patch('openfactory.openfactory_cluster.config')
+    @patch.object(OpenFactoryCluster, 'add_label')
+    def test_create_manager_already_in_swarm(self, mock_add_label, mock_config,
+                                             mock_notify, mock_dockerclient):
+        """ An existing Swarm manager is logged and not provisioned again """
+        managers = {'manager1': {'ip': IPv4Address('123.123.1.1')}}
+        mock_config.OPENFACTORY_USER = 'mock_user'
+        remote_client = Mock()
+        remote_client.info.return_value = {'Swarm': {'NodeID': 'existing-node-id'}}
+        mock_dockerclient.return_value = remote_client
+
+        self.cluster.create_managers(managers)
+
+        mock_dockerclient.assert_called_once_with(
+            base_url='ssh://mock_user@123.123.1.1')
+        mock_notify.info.assert_has_calls([
+            call('Adding manager node manager1 on ssh://mock_user@123.123.1.1'),
+            call('Node "manager1 (123.123.1.1)" is already part of the cluster'),
+        ])
+        self.assertEqual(mock_notify.info.call_count, 2)
+        remote_client.swarm.join.assert_not_called()
+        mock_add_label.assert_not_called()
+        mock_notify.success.assert_not_called()
+        mock_notify.fail.assert_not_called()
 
     @patch.object(OpenFactoryCluster, 'add_label')
     def test_create_manager_label(self, mock_add_label, *args):
@@ -135,9 +163,37 @@ class TestOpenFactoryCluster(TestCase):
 
         mock_dockerclient.assert_any_call(base_url='ssh://mock_user@123.123.1.1')
         mock_dockerclient.assert_any_call(base_url='ssh://mock_user@123.123.2.2')
+        user_notify.info.assert_any_call('Adding worker node worker1 on ssh://mock_user@123.123.1.1')
+        user_notify.info.assert_any_call('Adding worker node worker2 on ssh://mock_user@123.123.2.2')
         user_notify.success.assert_any_call('Node "worker1 (123.123.1.1)" setup')
         user_notify.success.assert_any_call('Node "worker2 (123.123.2.2)" setup')
         self.assertIn(call(['manager node ip'], join_token='worker token'), mock.docker_swarm.join.call_args_list)
+
+    @patch('openfactory.openfactory_cluster.user_notify')
+    @patch('openfactory.openfactory_cluster.config')
+    @patch.object(OpenFactoryCluster, 'add_label')
+    def test_create_worker_already_in_swarm(self, mock_add_label, mock_config,
+                                            mock_notify, mock_dockerclient):
+        """ An existing Swarm worker is logged and not provisioned again """
+        workers = {'worker1': {'ip': IPv4Address('123.123.1.1')}}
+        mock_config.OPENFACTORY_USER = 'mock_user'
+        remote_client = Mock()
+        remote_client.info.return_value = {'Swarm': {'NodeID': 'existing-node-id'}}
+        mock_dockerclient.return_value = remote_client
+
+        self.cluster.create_workers(workers)
+
+        mock_dockerclient.assert_called_once_with(
+            base_url='ssh://mock_user@123.123.1.1')
+        mock_notify.info.assert_has_calls([
+            call('Adding worker node worker1 on ssh://mock_user@123.123.1.1'),
+            call('Node "worker1 (123.123.1.1)" is already part of the cluster'),
+        ])
+        self.assertEqual(mock_notify.info.call_count, 2)
+        remote_client.swarm.join.assert_not_called()
+        mock_add_label.assert_not_called()
+        mock_notify.success.assert_not_called()
+        mock_notify.fail.assert_not_called()
 
     @patch.object(OpenFactoryCluster, 'add_label')
     def test_create_worker_label(self, mock_add_label, *args):

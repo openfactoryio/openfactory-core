@@ -144,8 +144,10 @@ class OpenFactoryCluster():
                 ip = details['ip']
                 docker_url = f"ssh://{config.OPENFACTORY_USER}@{ip}"
                 client = docker.DockerClient(base_url=docker_url)
+                user_notify.info(f"Adding manager node {manager} on {docker_url}")
                 info = client.info()
                 if 'Swarm' in info and info['Swarm']['NodeID']:
+                    user_notify.info(f'Node "{manager} ({ip})" is already part of the cluster')
                     continue
                 client.swarm.join([dal.leader_ip], join_token=dal.manager_token)
                 self.add_label(manager, details)
@@ -177,9 +179,11 @@ class OpenFactoryCluster():
             try:
                 ip = details['ip']
                 docker_url = f"ssh://{config.OPENFACTORY_USER}@{ip}"
+                user_notify.info(f"Adding worker node {worker} on {docker_url}")
                 client = docker.DockerClient(base_url=docker_url)
                 info = client.info()
                 if 'Swarm' in info and info['Swarm']['NodeID']:
+                    user_notify.info(f'Node "{worker} ({ip})" is already part of the cluster')
                     continue
                 client.swarm.join([dal.leader_ip], join_token=dal.worker_token)
                 self.add_label(worker, details)

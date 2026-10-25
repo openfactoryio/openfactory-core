@@ -250,8 +250,9 @@ class TestMTConnectConnector(unittest.TestCase):
         """ Test tear_down raise OFAException on APIError when adapter is removed """
 
         # Raise APIError on adapter removal
-        def remove_side_effect(name):
-            if name.endswith("-adapter"):
+
+        def remove_side_effect(app):
+            if app.uuid == "DEVICE-123-ADAPTER":
                 raise APIError("Adapter API error")
             return None
         self.deployment_strategy.remove.side_effect = remove_side_effect
@@ -264,8 +265,8 @@ class TestMTConnectConnector(unittest.TestCase):
     @patch("openfactory.connectors.mtconnect.mtc_connector.deregister_asset")
     def test_tear_down_producer_api_error_raises_ofaexception(self, mock_deregister_asset):
         """ Test tear_down raise OFAException on APIError when producer is removed """
-        def side_effect(name):
-            if name.endswith("-producer"):
+        def side_effect(app):
+            if app.uuid == "DEVICE-123-PRODUCER":
                 raise APIError("Producer API error")
             return None
         self.deployment_strategy.remove.side_effect = side_effect
@@ -278,8 +279,8 @@ class TestMTConnectConnector(unittest.TestCase):
     @patch("openfactory.connectors.mtconnect.mtc_connector.deregister_asset")
     def test_tear_down_agent_api_error_raises_ofaexception(self, mock_deregister_asset):
         """ Test tear_down raise OFAException on APIError when agent is removed """
-        def side_effect(name):
-            if name.endswith("-agent"):
+        def side_effect(app):
+            if app.uuid == "DEVICE-123-AGENT":
                 raise APIError("Agent API error")
             return None
         self.deployment_strategy.remove.side_effect = side_effect

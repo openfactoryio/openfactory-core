@@ -28,6 +28,7 @@ from openfactory.models.user_notifications import user_notify
 from openfactory.utils import register_asset, deregister_asset
 from openfactory.kafka.ksql import KSQLDBClient
 from openfactory.schemas.devices import Device
+from openfactory.schemas.apps import OpenFactoryAppSchema
 from openfactory.schemas.common import constraints, cpus_limit, cpus_reservation
 from openfactory.schemas.connectors.mtconnect import MTConnectConnectorSchema
 from openfactory.openfactory_deploy_strategy import OpenFactoryServiceDeploymentStrategy
@@ -114,7 +115,8 @@ class MTConnectConnector(Connector):
                 image=config.MTCONNECT_PRODUCER_IMAGE,
                 name=service_name,
                 mode={"Replicated": {"Replicas": 1}},
-                env=[f'KAFKA_BROKER={config.KAFKA_BROKER}',
+                env=[f"APP_UUID={producer_uuid}",
+                     f'KAFKA_BROKER={config.KAFKA_BROKER}',
                      f'KAFKA_PRODUCER_UUID={producer_uuid}',
                      f'MTC_AGENT={self._get_mtc_agent_url(device)}'],
                 constraints=constraints(device.connector.agent.deploy),
@@ -146,7 +148,11 @@ class MTConnectConnector(Connector):
         """
         # Tear down adapter
         try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-adapter')
+            adapter = OpenFactoryAppSchema(
+                uuid=device_uuid.upper() + '-ADAPTER',
+                image="not important"
+            )
+            self.deployment_strategy.remove(adapter)
             user_notify.success(f"Adapter for device {device_uuid} shut down successfully")
         except docker.errors.NotFound:
             # no adapter running as a Docker swarm service
@@ -156,7 +162,11 @@ class MTConnectConnector(Connector):
 
         # Tear down Producer
         try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-producer')
+            producer = OpenFactoryAppSchema(
+                uuid=device_uuid.upper() + '-PRODUCER',
+                image="not important"
+                )
+            self.deployment_strategy.remove(producer)
             deregister_asset(device_uuid + '-PRODUCER', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"Kafka producer for device {device_uuid} shut down successfully")
         except docker.errors.NotFound:
@@ -166,7 +176,11 @@ class MTConnectConnector(Connector):
 
         # Tear down MTConnect agent
         try:
-            self.deployment_strategy.remove(device_uuid.lower() + '-agent')
+            agent = OpenFactoryAppSchema(
+                uuid=device_uuid.upper() + '-AGENT',
+                image="not important"
+                )
+            self.deployment_strategy.remove(agent)
             deregister_asset(device_uuid.upper() + '-AGENT', ksqlClient=self.ksql, bootstrap_servers=self.bootstrap_servers)
             user_notify.success(f"MTConnect Agent for device {device_uuid} shut down successfully")
         except docker.errors.NotFound:

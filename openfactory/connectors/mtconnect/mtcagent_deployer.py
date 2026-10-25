@@ -107,6 +107,7 @@ class MTConnectAgentDeployer:
         agent = self.device.connector.agent
         adapter_ip = agent.adapter.ip if agent.adapter and agent.adapter.ip else self.device.uuid.lower() + '-adapter'
         return [
+            f'APP_UUID={self.device.uuid.upper()}-AGENT',
             f'MTC_AGENT_UUID={self.device.uuid.upper()}-AGENT',
             f'ADAPTER_UUID={self.device.uuid.upper()}',
             f'ADAPTER_IP={adapter_ip}',
@@ -128,7 +129,7 @@ class MTConnectAgentDeployer:
         Handles deployment failures by notifying the user.
         """
         adapter = self.device.connector.agent.adapter
-        env = []
+        env = [f"APP_UUID={self.device.uuid.upper() + '-ADAPTER'}"]
         if adapter.environment is not None:
             for item in adapter.environment:
                 var, val = item.split('=')

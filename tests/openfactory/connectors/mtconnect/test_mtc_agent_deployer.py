@@ -97,12 +97,18 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
 
         env = self.deployer.prepare_env()
 
-        self.assertIn("MTC_AGENT_UUID=DEVICE-123-AGENT", env)
-        self.assertIn("ADAPTER_UUID=DEVICE-123", env)
-        self.assertIn("ADAPTER_IP=1.2.3.4", env)
-        self.assertIn("ADAPTER_PORT=8080", env)
-        self.assertIn("XML_MODEL=<xml></xml>", env)
-        self.assertIn("AGENT_CFG_FILE=agent cfg content", env)
+        self.assertEqual(env, [
+            "APP_UUID=DEVICE-123-AGENT",
+            "MTC_AGENT_UUID=DEVICE-123-AGENT",
+            "ADAPTER_UUID=DEVICE-123",
+            "ADAPTER_IP=1.2.3.4",
+            "ADAPTER_PORT=8080",
+            "XML_MODEL=<xml></xml>",
+            "AGENT_CFG_FILE=agent cfg content",
+        ])
+
+        mock_load_xml.assert_called_once_with()
+        mock_load_cfg.assert_called_once_with()
 
     @patch.object(MTConnectAgentDeployer, "load_agent_config", return_value="agent cfg content")
     @patch.object(MTConnectAgentDeployer, "load_device_xml", return_value="<xml></xml>")
@@ -115,12 +121,18 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
 
         env = self.deployer.prepare_env()
 
-        self.assertIn("MTC_AGENT_UUID=DEVICE-123-AGENT", env)
-        self.assertIn("ADAPTER_UUID=DEVICE-123", env)
-        self.assertIn(f"ADAPTER_IP={self.device.uuid.lower()}-adapter", env)
-        self.assertIn("ADAPTER_PORT=1234", env)
-        self.assertIn("XML_MODEL=<xml></xml>", env)
-        self.assertIn("AGENT_CFG_FILE=agent cfg content", env)
+        self.assertEqual(env, [
+            "APP_UUID=DEVICE-123-AGENT",
+            "MTC_AGENT_UUID=DEVICE-123-AGENT",
+            "ADAPTER_UUID=DEVICE-123",
+            "ADAPTER_IP=device-123-adapter",
+            "ADAPTER_PORT=1234",
+            "XML_MODEL=<xml></xml>",
+            "AGENT_CFG_FILE=agent cfg content",
+        ])
+
+        mock_load_xml.assert_called_once_with()
+        mock_load_cfg.assert_called_once_with()
 
     @patch.object(MTConnectAgentDeployer, "deploy_adapter")
     def test_deploy_adapter_if_needed_with_image(self, mock_deploy_adapter):
@@ -168,7 +180,8 @@ class TestMTConnectAgentDeployer(unittest.TestCase):
         assert call_kwargs["image"] == "adapter-image"
         assert call_kwargs["name"] == self.device.uuid.lower() + "-adapter"
         assert call_kwargs["mode"] == {"Replicated": {"Replicas": 1}}
-        assert call_kwargs["env"] == ["FOO=BAR", "BAZ=QUX"]
+        assert call_kwargs["env"] == ["APP_UUID=" + self.device.uuid.upper() + "-ADAPTER",
+                                      "FOO=BAR", "BAZ=QUX"]
         assert call_kwargs["constraints"] == ["node.role == worker"]
         assert call_kwargs["networks"] == ["test_network"]
 

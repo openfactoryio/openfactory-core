@@ -5,4 +5,5 @@ OpenFactory applications
     :maxdepth: 1
 
     applications/definition.rst
+    applications/routing.rst
     

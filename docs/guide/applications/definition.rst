@@ -163,6 +163,8 @@ Multiple storage backends are supported.
 
    :ref:`filelayer-index`.
 
+.. _routing-http-exposure:
+
 Routing (HTTP Exposure)
 -----------------------
 

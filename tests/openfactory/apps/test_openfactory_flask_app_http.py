@@ -7,6 +7,7 @@ from urllib.request import urlopen, Request
 from unittest.mock import patch, MagicMock
 from flask import jsonify, request
 from openfactory.apps import OpenFactoryFlaskApp
+from prometheus_client import CollectorRegistry, Counter, CONTENT_TYPE_LATEST
 
 
 class _HTTPTestApp(OpenFactoryFlaskApp):
@@ -125,6 +126,53 @@ class TestOpenFactoryFlaskAppHTTP(unittest.TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/my-app/")
+
+    def test_get_metrics(self):
+        """ Should expose Prometheus metrics at the default endpoint. """
+
+        registry = CollectorRegistry()
+
+        counter = Counter(
+            "test_requests_total",
+            "Number of test requests",
+            registry=registry
+        )
+        counter.inc()
+
+        with patch.object(self.app, "register_prometheus_metrics"):
+            self.app.expose_metrics(registry=registry)
+
+        response = self.client.get("/metrics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content_type, CONTENT_TYPE_LATEST)
+        self.assertIn(b"test_requests_total 1.0", response.data)
+
+    def test_get_metrics_custom_endpoint(self):
+        """ Should expose metrics at the configured endpoint. """
+
+        registry = CollectorRegistry()
+
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/custom-metrics"}):
+
+            with patch.object(self.app, "register_prometheus_metrics"):
+                self.app.expose_metrics(registry=registry)
+
+        response = self.client.get("/custom-metrics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content_type, CONTENT_TYPE_LATEST)
+
+        # Default endpoint should not exist.
+        response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 404)
+
+    def test_metrics_not_exposed_by_default(self):
+        """ Metrics endpoint should not exist unless explicitly enabled. """
+
+        response = self.client.get("/metrics")
+
+        self.assertEqual(response.status_code, 404)
 
 
 class TestOpenFactoryFlaskAppConcurrency(unittest.TestCase):

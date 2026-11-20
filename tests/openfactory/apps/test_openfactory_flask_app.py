@@ -261,6 +261,116 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
             self.assertTrue(asyncio.iscoroutine(coro))
 
+    def test_expose_metrics_default_endpoint(self):
+        """ Should register the default Prometheus metrics endpoint. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        with patch.dict("os.environ", {}, clear=True):
+            with patch.object(app, "register_prometheus_metrics") as mock_register:
+                app.expose_metrics()
+
+        routes = [rule.rule for rule in app.app.url_map.iter_rules()]
+
+        self.assertIn("/metrics", routes)
+        self.assertEqual(app._metrics_path, "/metrics")
+
+        mock_register.assert_called_once_with(
+            metrics_port=4000,
+            metrics_path="/metrics"
+        )
+
+    def test_expose_metrics_custom_endpoint(self):
+        """ Should register the configured Prometheus metrics endpoint. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/custom-metrics"}):
+            with patch.object(app, "register_prometheus_metrics"):
+                app.expose_metrics()
+
+        routes = [rule.rule for rule in app.app.url_map.iter_rules()]
+
+        self.assertIn("/custom-metrics", routes)
+        self.assertNotIn("/metrics", routes)
+        self.assertEqual(app._metrics_path, "/custom-metrics")
+
+    def test_expose_metrics_registers_with_openfactory(self):
+        """ Should register the metrics endpoint with OpenFactory. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        with patch.dict(
+            "os.environ",
+            {"METRICS_ENDPOINT": "/custom-metrics", "PORT": "5555"}
+        ):
+            with patch.object(app, "register_prometheus_metrics") as mock_register:
+                app.expose_metrics()
+
+        mock_register.assert_called_once_with(
+            metrics_port=5555,
+            metrics_path="/custom-metrics"
+        )
+
+    def test_expose_metrics_idempotent(self):
+        """ Should not register the metrics endpoint more than once. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/metrics"}):
+            with patch.object(app, "register_prometheus_metrics") as mock_register:
+
+                app.expose_metrics()
+                app.expose_metrics()
+
+        routes = [
+            rule for rule in app.app.url_map.iter_rules()
+            if rule.rule == "/metrics"
+        ]
+
+        self.assertEqual(len(routes), 1)
+        mock_register.assert_called_once()
+
+    def test_expose_metrics_existing_route(self):
+        """ Should reject an already registered metrics endpoint. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock"
+        )
+
+        @app.app.route("/metrics")
+        def existing_metrics():
+            return "existing"
+
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/metrics"}):
+            with patch.object(app, "register_prometheus_metrics") as mock_register:
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "A route is already registered for '/metrics'"
+                ):
+                    app.expose_metrics()
+
+        mock_register.assert_not_called()
+
 
 class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
     """

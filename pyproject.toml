@@ -49,7 +49,7 @@ dev = [
 
 docs = [
     "sphinx==9.2.0",
-    "myst-parser==5.1.0",
+    "myst-parser==5.2.0",
     "pydata-sphinx-theme==0.24.0",
     "sphinx-autodoc-typehints==3.17.5",
     "sphinx-design==0.8.0",

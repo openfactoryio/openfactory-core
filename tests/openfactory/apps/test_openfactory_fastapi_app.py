@@ -46,19 +46,24 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
 
     @patch.object(OpenFactoryFastAPIApp, "register_prometheus_metrics")
     def test_expose_metrics_registers_route(self, mock_register):
-        """ Should register the Prometheus metrics endpoint. """
+        """ Should register the default Prometheus metrics endpoint. """
 
-        app = OpenFactoryFastAPIApp(
-            ksqlClient=self.ksql_mock,
-            bootstrap_servers="mock",
-            asset_router_url="mock",
-            test_mode=True
-        )
+        with patch.dict("os.environ", {}, clear=True):
 
-        app.expose_metrics()
+            app = OpenFactoryFastAPIApp(
+                ksqlClient=self.ksql_mock,
+                bootstrap_servers="mock",
+                asset_router_url="mock",
+                test_mode=True
+            )
+
+            app.expose_metrics()
 
         paths = [route.path for route in app.api.routes]
+
         self.assertIn("/metrics", paths)
+        self.assertEqual(app._metrics_path, "/metrics")
+
         mock_register.assert_called_once_with(
             metrics_port=4000,
             metrics_path="/metrics"
@@ -128,7 +133,10 @@ class TestOpenFactoryFastAPIApp(unittest.TestCase):
             app.expose_metrics()
 
         paths = [route.path for route in app.api.routes]
+
         self.assertIn("/prometheus", paths)
+        self.assertNotIn("/metrics", paths)
+        self.assertEqual(app._metrics_path, "/prometheus")
 
         mock_register.assert_called_once_with(
             metrics_port=5000,

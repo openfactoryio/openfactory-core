@@ -74,6 +74,29 @@ class TestOpenFactoryFlaskApp(unittest.TestCase):
 
         self.assertIsInstance(app.app, Flask)
 
+    def test_threaded_disabled_by_default(self):
+        """ Threaded HTTP request handling should be disabled by default. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+        )
+
+        self.assertFalse(app.threaded)
+
+    def test_threaded_enabled(self):
+        """ Should store threaded HTTP request handling configuration. """
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            threaded=True,
+        )
+
+        self.assertTrue(app.threaded)
+
     def test_application_root_not_set_when_env_missing(self):
         """ Should not inject APPLICATION_ROOT if env var is absent """
 
@@ -422,6 +445,41 @@ class TestOpenFactoryFlaskAppAsync(unittest.IsolatedAsyncioTestCase):
             _, kwargs = mock_make_server.call_args
             self.assertEqual(kwargs["port"], 5555)
             self.assertIsNone(kwargs["request_handler"])
+
+    @patch("openfactory.apps.ofa_flask_app.make_server")
+    async def test_run_flask_threaded_disabled_by_default(self, mock_make_server):
+        """ Should disable threaded HTTP request handling by default. """
+
+        mock_make_server.return_value = MagicMock()
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+        )
+
+        await asyncio.to_thread(app._run_flask)
+
+        _, kwargs = mock_make_server.call_args
+        self.assertFalse(kwargs["threaded"])
+
+    @patch("openfactory.apps.ofa_flask_app.make_server")
+    async def test_run_flask_threaded_enabled(self, mock_make_server):
+        """ Should enable threaded HTTP request handling when requested. """
+
+        mock_make_server.return_value = MagicMock()
+
+        app = OpenFactoryFlaskApp(
+            ksqlClient=self.ksql_mock,
+            bootstrap_servers="mock",
+            asset_router_url="mock",
+            threaded=True,
+        )
+
+        await asyncio.to_thread(app._run_flask)
+
+        _, kwargs = mock_make_server.call_args
+        self.assertTrue(kwargs["threaded"])
 
     async def test_thread_wrapper_captures_exception(self):
         """ Thread wrapper should propagate exceptions """

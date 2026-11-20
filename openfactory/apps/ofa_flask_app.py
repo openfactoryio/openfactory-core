@@ -183,6 +183,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         by the deployment tool.
       - OpenFactory automatically enables Werkzeug ProxyFix to support reverse-proxy deployments through
         the OpenFactory Traefik routing gateway, including localhost path-prefix routing in development mode.
+      - Threaded HTTP request handling can be enabled using the ``threaded`` constructor parameter (default: ``False``).
+        This is useful for applications exposing long-lived HTTP connections such as Server-Sent Events (SSE).
       - When deployed on OpenFactory, ``APPLICATION_ROOT`` is automatically configured from the
         ``OPENFACTORY_ROOT_PATH`` environment variable injected by the OpenFactory deployment tool,
         unless explicitly defined by the child class in :meth:`create_flask_app`.
@@ -202,6 +204,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         asset_router_url: str | None = None,
         loglevel: str = "INFO",
         log_http_requests: bool = True,
+        threaded: bool = False,
         test_mode: bool = False,
     ):
         """
@@ -226,6 +229,10 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             asset_router_url: Asset Router URL.
             loglevel: Logging level (e.g., ``INFO``, ``DEBUG``).
             log_http_requests: Enables logging of incoming HTTP requests handled by the embedded Flask server.
+            threaded: Enables threaded HTTP request handling.
+                Defaults to False to preserve sequential request handling.
+                Set to True for applications requiring concurrent requests,
+                such as those exposing Server-Sent Events (SSE) endpoints.
             test_mode: Enables test mode (disables live Kafka/ksql interaction).
 
         See also:
@@ -241,6 +248,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         )
 
         self.log_http_requests = log_http_requests
+        self.threaded = threaded
 
         # Flask application
         self.app = self.create_flask_app()
@@ -383,6 +391,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             port=port,
             app=self.app,
             request_handler=handler,
+            threaded=self.threaded,
         )
 
         self.logger.info(f"Starting Flask server on port {port}")

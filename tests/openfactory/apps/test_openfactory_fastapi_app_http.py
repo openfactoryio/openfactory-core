@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+from prometheus_client import CollectorRegistry, Counter, CONTENT_TYPE_LATEST
 from openfactory.apps import OpenFactoryFastAPIApp
 
 
@@ -14,9 +15,6 @@ class _HTTPTestApp(OpenFactoryFastAPIApp):
 
         # expose OFA app for router-style access if needed
         self.api.state.ofa_app = self
-
-        # expose prometheus metrics
-        self.expose_metrics()
 
         @self.api.get("/")
         async def root():
@@ -70,29 +68,46 @@ class TestOpenFactoryFastAPIAppHTTP(unittest.TestCase):
         response = self.client.get("/unknown")
         self.assertEqual(response.status_code, 404)
 
-    def test_metrics_endpoint(self):
-        """ Should expose Prometheus metrics. """
+    def test_get_metrics(self):
+        """ Should expose Prometheus metrics at the default endpoint. """
+
+        registry = CollectorRegistry()
+
+        counter = Counter(
+            "test_requests_total",
+            "Number of test requests",
+            registry=registry
+        )
+        counter.inc()
+
+        self.app.expose_metrics(registry=registry)
+
         response = self.client.get("/metrics")
+
         self.assertEqual(response.status_code, 200)
-        self.assertIn("text/plain", response.headers["content-type"])
+        self.assertEqual(response.headers["content-type"], CONTENT_TYPE_LATEST)
+        self.assertIn(b"test_requests_total 1.0", response.content)
 
-    def test_metrics_endpoint_from_environment(self):
-        """ Should expose Prometheus metrics at the endpoint configured by METRICS_ENDPOINT. """
+    def test_get_metrics_custom_endpoint(self):
+        """ Should expose metrics at the configured endpoint. """
 
-        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/mock_metrics"}):
-            app = _HTTPTestApp(
-                ksqlClient=self.ksql_mock,
-                bootstrap_servers="mock",
-                asset_router_url="mock",
-                test_mode=True
-            )
+        registry = CollectorRegistry()
 
-            client = TestClient(app.api)
+        with patch.dict("os.environ", {"METRICS_ENDPOINT": "/custom-metrics"}):
+            self.app.expose_metrics(registry=registry)
 
-            response = client.get("/mock_metrics")
-            self.assertEqual(response.status_code, 200)
-            self.assertIn("text/plain", response.headers["content-type"])
+        response = self.client.get("/custom-metrics")
 
-            # default endpoint should not have been registered
-            response = client.get("/metrics")
-            self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], CONTENT_TYPE_LATEST)
+
+        # Default endpoint should not exist.
+        response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 404)
+
+    def test_metrics_not_exposed_by_default(self):
+        """ Metrics endpoint should not exist unless explicitly enabled. """
+
+        response = self.client.get("/metrics")
+
+        self.assertEqual(response.status_code, 404)

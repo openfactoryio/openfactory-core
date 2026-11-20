@@ -863,7 +863,7 @@ class BaseAsset:
         self._subscriber = NATSSubscriber(
             self.loop_thread,
             get_nats_cluster_url(asset_uuid, self.asset_router_url),
-            f"{asset_uuid.upper()}.*",
+            f"{asset_uuid}.*",
             self._on_message,
         )
         self._subscriber.start()

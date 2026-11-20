@@ -1479,7 +1479,7 @@ class TestBaseAsset(TestCase):
 
     def test___start_nats_consumer(self, MockAssetProducer):
         """ Test that __start_nats_consumer creates and starts the asset subscriber. """
-        asset = ValidAsset("uuid-123", ksqlClient=MagicMock())
+        asset = ValidAsset("uuID-123", ksqlClient=MagicMock())
 
         mock_loop = MagicMock()
         object.__setattr__(asset, "loop_thread", mock_loop)
@@ -1495,7 +1495,7 @@ class TestBaseAsset(TestCase):
             MockSubscriber.assert_called_once_with(
                 mock_loop,
                 "nats://mocked_cluster",
-                "UUID-123.*",
+                "uuID-123.*",
                 asset._on_message,
             )
 

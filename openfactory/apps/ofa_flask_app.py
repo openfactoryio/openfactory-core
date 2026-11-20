@@ -1,5 +1,5 @@
 try:
-    from flask import Flask
+    from flask import Flask, Response
 except ImportError as e:
     raise ImportError(
         "Flask is required for OpenFactoryFlaskApp. "
@@ -12,6 +12,7 @@ import threading
 from werkzeug.serving import make_server
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.serving import WSGIRequestHandler
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, CollectorRegistry, generate_latest
 from openfactory.apps import OpenFactoryApp
 from openfactory.kafka import KSQLDBClient
 from openfactory.assets import AssetAttribute
@@ -170,6 +171,44 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
 
             app.run()
 
+    Prometheus metrics can be exposed by calling :meth:`expose_metrics`.
+    By default, the global Prometheus registry is exposed, allowing both
+    OpenFactory metrics and application-defined metrics to be scraped
+    through the same endpoint. The metrics endpoint is configured through
+    the ``METRICS_ENDPOINT`` environment variable and defaults to ``/metrics``.
+
+    .. admonition:: Exposing Prometheus metrics
+
+        .. code-block:: python
+
+            import asyncio
+            import os
+            from prometheus_client import Counter
+            from openfactory.apps import OpenFactoryFlaskApp
+            from openfactory.kafka import KSQLDBClient
+
+            REQUESTS = Counter(
+                "requests_total",
+                "Number of processed requests"
+            )
+
+            class DemoFlaskApp(OpenFactoryFlaskApp):
+
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.expose_metrics()
+
+                async def async_main_loop(self):
+                    while True:
+                        REQUESTS.inc()
+                        await asyncio.sleep(1)
+
+            app = DemoFlaskApp(
+                ksqlClient=KSQLDBClient(os.getenv("KSQLDB_URL", "http://localhost:8088")),
+                bootstrap_servers=os.getenv("KAFKA_BROKER", "localhost:9092"),
+            )
+            app.run()
+
     Note:
       - The Flask application is accessible via :attr:`app` and behaves like a standard Flask instance.
       - HTTP access logging can be enabled or disabled using the ``log_http_requests`` constructor parameter.
@@ -181,6 +220,8 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
       - OpenFactory features such as attributes, methods, and asset communication remain unchanged.
       - When deployed on the OpenFactory platform, the ``PORT`` environment variable is set automatically
         by the deployment tool.
+      - Prometheus metrics can be exposed through the embedded Flask server using :meth:`expose_metrics`.
+        The endpoint is registered with OpenFactory automatically for discovery and scraping.
       - OpenFactory automatically enables Werkzeug ProxyFix to support reverse-proxy deployments through
         the OpenFactory Traefik routing gateway, including localhost path-prefix routing in development mode.
       - Threaded HTTP request handling can be enabled using the ``threaded`` constructor parameter (default: ``False``).
@@ -195,6 +236,7 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
         - :class:`openfactory.apps.ofaapp.OpenFactoryApp`
         - :class:`flask.Flask`
         - `Flask documentation <https://flask.palletsprojects.com/>`_
+        - `Prometheus Python Client documentation <https://prometheus.github.io/client_python/>`_
     """
 
     def __init__(
@@ -351,6 +393,59 @@ class OpenFactoryFlaskApp(OpenFactoryApp):
             of defining all routes inline.
         """
         pass
+
+    def expose_metrics(self, registry: CollectorRegistry = REGISTRY) -> None:
+        """
+        Expose Prometheus metrics through the embedded Flask application.
+
+        Registers an HTTP endpoint that returns all metrics contained in the
+        specified Prometheus registry using the standard Prometheus exposition
+        format.
+
+        Calling this method also registers the metrics endpoint with the OpenFactory
+        platform, allowing other OpenFactory components to discover and scrape it
+        automatically.
+
+        By default, the global Prometheus registry is exposed, allowing both OpenFactory metrics
+        and user-defined Prometheus metrics to be scraped through the same endpoint.
+
+        The metrics endpoint and port are configured through the ``METRICS_ENDPOINT`` and
+        ``PORT`` environment variables, defaulting to ``"/metrics"`` and ``4000``,
+        respectively.
+
+        This method is idempotent.
+
+        Args:
+            registry: Prometheus registry to expose. Defaults to the global Prometheus registry.
+
+        Raises:
+            ValueError:
+                If another endpoint is already registered for the configured metrics path.
+        """
+
+        path = os.getenv("METRICS_ENDPOINT", "/metrics")
+
+        # Already registered by this method -> do nothing
+        if getattr(self, "_metrics_path", None) == path:
+            return
+
+        # Prevent overriding an existing route
+        for rule in self.app.url_map.iter_rules():
+            if rule.rule == path:
+                raise ValueError(f"A route is already registered for '{path}'.")
+
+        @self.app.route(path, methods=["GET"])
+        def metrics():
+            return Response(
+                generate_latest(registry),
+                content_type=CONTENT_TYPE_LATEST,
+            )
+
+        self._metrics_path = path
+        self.register_prometheus_metrics(
+            metrics_port=int(os.getenv("PORT", "4000")),
+            metrics_path=path,
+        )
 
     def _thread_wrapper(self, target):
         """

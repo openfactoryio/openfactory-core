@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from openfactory.apps.ofa_fastapi_app import OpenFactoryFastAPIApp
     from openfactory.apps.ofa_flask_app import OpenFactoryFlaskApp
+    from openfactory.apps.ofa_streamlit_app import OpenFactoryStreamlitApp
 
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "SampleAttribute",
     "OpenFactoryFastAPIApp",
     "OpenFactoryFlaskApp",
+    "OpenFactoryStreamlitApp",
 ]
 
 
@@ -34,7 +36,7 @@ def __getattr__(name):
 
         globals()[name] = OpenFactoryFastAPIApp  # cache it
         return OpenFactoryFastAPIApp
-    
+
     if name == "OpenFactoryFlaskApp":
         try:
             from openfactory.apps.ofa_flask_app import OpenFactoryFlaskApp
@@ -46,5 +48,17 @@ def __getattr__(name):
 
         globals()[name] = OpenFactoryFlaskApp
         return OpenFactoryFlaskApp
+
+    if name == "OpenFactoryStreamlitApp":
+        try:
+            from openfactory.apps.ofa_streamlit_app import OpenFactoryStreamlitApp
+        except ImportError as e:
+            raise ImportError(
+                "OpenFactoryStreamlitApp requires optional dependencies. "
+                "Install it with `pip install openfactory[streamlit]`."
+            ) from e
+
+        globals()[name] = OpenFactoryStreamlitApp
+        return OpenFactoryStreamlitApp
 
     raise AttributeError(f"module {__name__} has no attribute {name}")

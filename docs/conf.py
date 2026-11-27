@@ -109,6 +109,27 @@ suppress_warnings = [
 ]
 
 
+def resolve_streamlit_reference(app, env, node, contnode):
+    from docutils import nodes
+
+    if (
+        node.get("refdomain") == "py"
+        and node.get("reftype") == "class"
+        and node.get("reftarget") in (
+            "streamlit.App",
+            "streamlit.web.server.starlette.starlette_app.App",
+        )
+    ):
+        return nodes.reference(
+            "",
+            "",
+            contnode,
+            refuri="https://docs.streamlit.io/develop/api-reference/server/st.app",
+        )
+
+    return None
+
+
 def setup(app):
     from sphinx.domains.python import PythonDomain
 
@@ -121,3 +142,6 @@ def setup(app):
         return original(self, env, fromdocname, builder, typ, target, node, contnode)
 
     PythonDomain.resolve_xref = resolve_xref
+
+    # Resolve Streamlit references not available through Intersphinx
+    app.connect("missing-reference", resolve_streamlit_reference)

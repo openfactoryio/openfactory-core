@@ -196,3 +196,4 @@ See Also
    ofa_method
    ofa_fastapi_app
    ofa_flask_app
+   ofa_streamlit_app

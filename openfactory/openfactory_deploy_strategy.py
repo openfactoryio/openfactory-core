@@ -177,8 +177,8 @@ class SwarmDeploymentStrategy(OpenFactoryServiceDeploymentStrategy):
             - The ``DEPLOYMENT_PLATFORM`` environment variable is set to ``swarm``.
             - ``image_pull_policy`` is currently ignored for Swarm deployments.
             - Docker Swarm task metadata is automatically exposed to the container through
-            the ``SWARM_TASK_SLOT``, ``SWARM_TASK_ID``, ``SWARM_SERVICE_NAME``, and
-            ``SWARM_NODE_HOSTNAME`` environment variables.
+              the ``SWARM_TASK_SLOT``, ``SWARM_TASK_ID``, ``SWARM_SERVICE_NAME``, and
+              ``SWARM_NODE_HOSTNAME`` environment variables.
             - When ``open_files`` is specified, the service is deployed with a ``nofile`` ulimit using identical soft and hard limits.
             - If ``open_files`` is not specified, the Docker Engine default file descriptor limit is used.
         """

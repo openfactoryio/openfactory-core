@@ -6,7 +6,7 @@ build:
     python: "3.13"
   jobs:
     pre_build:
-      - pip install .[fastapi,flask,docs]
+      - pip install .[streamlit,fastapi,flask,docs]
 
 sphinx:
   configuration: docs/conf.py
